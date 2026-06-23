@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
-  Home, BookOpen, MessageSquare, QrCode, Grid, Shuffle,Library, User, Search, Send, Menu,CheckCircle, Clock, Plus, Upload, Download,FileText, Hash, Paperclip,RefreshCw, Trophy,GraduationCap, LogOut, X, Edit2, Trash2, Save,UserPlus, Settings, Eye, EyeOff,AlertTriangle, Check, GripVertical,Users, School, Key,Shield, Phone, Calendar, ChevronLeft, ChevronRight,BarChart2, Bell, UserCheck, UserX, LayoutGrid
+  Home, BookOpen, MessageSquare, QrCode, Grid, Shuffle,Library, User, Search, Send, Menu,CheckCircle, Clock, Plus, Upload, Download,FileText, Hash, Paperclip,RefreshCw, Trophy,GraduationCap, LogOut, X, Edit2, Trash2, Save,UserPlus, Settings, Eye, EyeOff,AlertTriangle, Check, GripVertical,Users, School, Key,Shield, Phone, Calendar, ChevronLeft, ChevronRight,BarChart2, Bell, UserCheck, UserX, LayoutGrid, Camera
 } from "lucide-react";
 
 
@@ -10,74 +10,202 @@ const CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{overflow-x:hidden;margin:0;padding:0} html{scroll-behavior:smooth}
 
-.ecp{font-family:'Outfit',-apple-system,sans-serif;background:#050C1A;color:#E2EAF4;min-height:100vh;overflow-x:hidden} 
-.hfont{font-family:'DM Serif Display',serif} 
-.gtext{background:linear-gradient(135deg,#4FACFE 0%,#00F2FE 50%,#43E97B 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:200%;animation:gshift 6s ease infinite}
-
-@keyframes gshift{0%,100%{background-position:0%}50%{background-position:100%}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+/* ─── KEYFRAMES ─── */
+@keyframes gshift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes scanline{0%{top:-4px}100%{top:100%}}
-@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}60%{transform:translateX(6px)}}
-@keyframes pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
-@keyframes glowbeat{0%,100%{box-shadow:0 0 20px rgba(79,172,254,.18)}50%{box-shadow:0 0 40px rgba(79,172,254,.45)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-5px)}80%{transform:translateX(4px)}}
+@keyframes pop{0%{transform:scale(.82) translateY(12px);opacity:0}55%{transform:scale(1.04) translateY(-2px)}80%{transform:scale(.98)}100%{transform:scale(1) translateY(0);opacity:1}}
+@keyframes glowbeat{0%,100%{box-shadow:0 0 18px rgba(79,172,254,.2),0 0 0 0 rgba(79,172,254,.15)}50%{box-shadow:0 0 48px rgba(79,172,254,.55),0 0 0 6px rgba(79,172,254,.08)}}
 @keyframes spin360{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-@keyframes pulse-ring{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.55);opacity:0}}
+@keyframes float{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-9px) rotate(1deg)}}
+@keyframes pulse-ring{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.7);opacity:0}}
+@keyframes slideInLeft{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideInRight{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+@keyframes orbit{from{transform:rotate(0deg) translateX(70px) rotate(0deg)}to{transform:rotate(360deg) translateX(70px) rotate(-360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.08);opacity:1}}
+@keyframes countUp{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes borderGlow{0%,100%{border-color:rgba(79,172,254,.12)}50%{border-color:rgba(79,172,254,.45)}}
+@keyframes ripple{0%{transform:scale(0);opacity:.7}100%{transform:scale(3);opacity:0}}
+@keyframes particleFly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--px),var(--py)) scale(0);opacity:0}}
+@keyframes typewriter{from{width:0}to{width:100%}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes winnerGlow{0%,100%{box-shadow:0 0 0 0 rgba(79,172,254,0),0 8px 32px rgba(0,0,0,.5)}50%{box-shadow:0 0 0 8px rgba(79,172,254,.15),0 8px 48px rgba(79,172,254,.3)}}
+@keyframes navActive{from{width:0;opacity:0}to{width:3px;opacity:1}}
+@keyframes stagger1{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes stagger2{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes stagger3{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes stagger4{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes morphGrad{0%{background-position:0% 50%}33%{background-position:100% 50%}66%{background-position:50% 0%}100%{background-position:0% 50%}}
+@keyframes cardReveal{from{opacity:0;transform:scale(.93) translateY(16px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes toastIn{from{opacity:0;transform:translateX(100%) scale(.9)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes rotateGlow{from{filter:hue-rotate(0deg)}to{filter:hue-rotate(360deg)}}
+@keyframes glowPulseGreen{0%,100%{box-shadow:0 0 12px rgba(52,211,153,.25)}50%{box-shadow:0 0 28px rgba(52,211,153,.6)}}
+@keyframes dash{to{stroke-dashoffset:0}}
+@keyframes logoEntrance{0%{opacity:0;transform:scale(.5) rotate(-15deg)}60%{transform:scale(1.08) rotate(3deg)}80%{transform:scale(.97) rotate(-1deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
 
-.page{animation:fadeUp .32s ease forwards;min-height:calc(100vh - 60px)}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(12px);z-index:300;display:flex;align-items:center;justify-content:center;animation:fadeIn .18s ease}
-.modal{background:#0A1628;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px;min-width:320px;max-width:95vw;max-height:92vh;overflow-y:auto;animation:pop .22s ease;box-shadow:0 40px 80px rgba(0,0,0,.6)}
-.modal-flex{background:#0A1628;border:1px solid rgba(255,255,255,.1);border-radius:20px;min-width:320px;max-width:95vw;max-height:90vh;overflow:hidden;animation:pop .22s ease;box-shadow:0 40px 80px rgba(0,0,0,.6);display:flex;flex-direction:column}
+/* ─── BASE ─── */
+.ecp{font-family:'Outfit',-apple-system,sans-serif;background:#050C1A;color:#E2EAF4;min-height:100vh;overflow-x:hidden}
+.hfont{font-family:'DM Serif Display',serif}
+.gtext{background:linear-gradient(135deg,#4FACFE 0%,#00F2FE 35%,#43E97B 70%,#A78BFA 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:300% 300%;animation:gshift 5s ease infinite}
 
-.inp{width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#E2EAF4;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
-.inp:focus{border-color:rgba(79,172,254,.55);box-shadow:0 0 0 3px rgba(79,172,254,.1)}
-.inp::placeholder{color:#2E4A6A}
-.inp:disabled{opacity:.5;cursor:not-allowed}
+/* ─── PAGE TRANSITIONS ─── */
+.page{animation:fadeUp .45s cubic-bezier(.22,.68,0,1.2) forwards;min-height:calc(100vh - 60px)}
+.page > *:nth-child(1){animation:stagger1 .4s .05s cubic-bezier(.22,.68,0,1.2) both}
+.page > *:nth-child(2){animation:stagger2 .4s .12s cubic-bezier(.22,.68,0,1.2) both}
+.page > *:nth-child(3){animation:stagger3 .4s .19s cubic-bezier(.22,.68,0,1.2) both}
+.page > *:nth-child(4){animation:stagger4 .4s .26s cubic-bezier(.22,.68,0,1.2) both}
 
-select.inp{cursor:pointer}
+/* ─── MODALS ─── */
+.modal-bg{position:fixed;inset:0;background:rgba(2,6,18,.85);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);z-index:300;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+.modal{background:linear-gradient(145deg,#0B1B32,#080F21);border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:28px;min-width:320px;max-width:95vw;max-height:92vh;overflow-y:auto;animation:pop .38s cubic-bezier(.34,1.56,.64,1);box-shadow:0 50px 100px rgba(0,0,0,.7),0 0 0 1px rgba(79,172,254,.07),inset 0 1px 0 rgba(255,255,255,.07)}
+.modal-flex{background:linear-gradient(145deg,#0B1B32,#080F21);border:1px solid rgba(255,255,255,.1);border-radius:22px;min-width:320px;max-width:95vw;max-height:90vh;overflow:hidden;animation:pop .38s cubic-bezier(.34,1.56,.64,1);box-shadow:0 50px 100px rgba(0,0,0,.7),0 0 0 1px rgba(79,172,254,.07),inset 0 1px 0 rgba(255,255,255,.07);display:flex;flex-direction:column}
 
-.nbtn{transition:all .2s;cursor:pointer;border-radius:10px;border:none;background:transparent}
-.nbtn:hover{background:rgba(79,172,254,.07)!important;color:#4FACFE!important}
-.nbtn.act{background:rgba(79,172,254,.12)!important;color:#4FACFE!important}
+/* ─── INPUTS ─── */
+.inp{width:100%;padding:10px 14px;border-radius:11px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);color:#E2EAF4;font-size:13px;font-family:inherit;outline:none;transition:all .25s cubic-bezier(.4,0,.2,1)}
+.inp:focus{border-color:rgba(79,172,254,.6);box-shadow:0 0 0 3px rgba(79,172,254,.12),0 2px 12px rgba(79,172,254,.1);background:rgba(79,172,254,.04)}
+.inp::placeholder{color:#1E3450}
+.inp:disabled{opacity:.45;cursor:not-allowed}
+.inp:hover:not(:focus):not(:disabled){border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.055)}
+select.inp{cursor:pointer;color-scheme:dark}
+select.inp option{background:#0A1628;color:#E2EAF4}
 
-.glass{background:rgba(255,255,255,.028);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.08)}
+/* ─── NAV BUTTONS ─── */
+.nbtn{transition:all .25s cubic-bezier(.4,0,.2,1);cursor:pointer;border-radius:11px;border:none;background:transparent;position:relative;overflow:hidden}
+.nbtn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(79,172,254,.1),rgba(167,139,250,.06));opacity:0;transition:opacity .25s;border-radius:inherit}
+.nbtn:hover::before{opacity:1}
+.nbtn:hover{color:#4FACFE!important;transform:translateX(2px)}
+.nbtn.act{background:linear-gradient(135deg,rgba(79,172,254,.14),rgba(167,139,250,.08))!important;color:#4FACFE!important;box-shadow:inset 0 0 0 1px rgba(79,172,254,.2)}
+.nbtn:active{transform:scale(.97) translateX(1px)}
 
-.cglow{transition:all .24s ease}
-.cglow:hover{border-color:rgba(79,172,254,.25)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important;transform:translateY(-1px)}
+/* ─── GLASS ─── */
+.glass{background:rgba(255,255,255,.025);backdrop-filter:blur(24px) saturate(1.3);-webkit-backdrop-filter:blur(24px) saturate(1.3);border:1px solid rgba(255,255,255,.075)}
 
-.bprimary{background:linear-gradient(135deg,#1D6CF5,#7B3FE4);transition:all .22s;cursor:pointer;border:none;color:#fff;font-family:inherit;font-weight:600}
-.bprimary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 24px rgba(29,108,245,.4)}
-.bprimary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+/* ─── CARDS ─── */
+.cglow{transition:all .3s cubic-bezier(.4,0,.2,1)}
+.cglow:hover{transform:translateY(-2px) scale(1.005);box-shadow:0 16px 48px rgba(0,0,0,.55),0 0 0 1px rgba(79,172,254,.15)!important;border-color:rgba(79,172,254,.22)!important}
 
-.scard{background:#0A1628;border:1px solid rgba(255,255,255,.07);border-radius:14px;transition:all .22s}
-.scard:hover{border-color:rgba(79,172,254,.15)}
+/* ─── PRIMARY BUTTON ─── */
+.bprimary{background:linear-gradient(135deg,#1D6CF5,#7B3FE4);transition:all .28s cubic-bezier(.4,0,.2,1);cursor:pointer;border:none;color:#fff;font-family:inherit;font-weight:600;position:relative;overflow:hidden}
+.bprimary::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.2),transparent);opacity:0;transition:opacity .2s}
+.bprimary::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(255,255,255,.3),transparent 70%);opacity:0;transition:opacity .3s;transform:translateY(-50%)}
+.bprimary:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 12px 32px rgba(29,108,245,.5),0 4px 16px rgba(123,63,228,.3)}
+.bprimary:hover::before{opacity:1}
+.bprimary:hover::after{opacity:1}
+.bprimary:active{transform:translateY(0) scale(.98);box-shadow:0 4px 12px rgba(29,108,245,.4)}
+.bprimary:disabled{opacity:.38;cursor:not-allowed;transform:none;box-shadow:none}
 
-.shake{animation:shake .3s ease}
+/* ─── CARDS ─── */
+.scard{background:linear-gradient(145deg,#0A1628,#07101F);border:1px solid rgba(255,255,255,.065);border-radius:15px;transition:all .28s cubic-bezier(.4,0,.2,1)}
+.scard:hover{border-color:rgba(79,172,254,.18);background:linear-gradient(145deg,#0C1D30,#090F1E)}
 
-.tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;letter-spacing:.04em;text-transform:uppercase}
+/* ─── ANIMATIONS ─── */
+.shake{animation:shake .4s cubic-bezier(.36,.07,.19,.97)}
 
-.drag-over{background:rgba(79,172,254,.1)!important;border-color:rgba(79,172,254,.55)!important}
+.tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;letter-spacing:.04em;text-transform:uppercase;transition:all .2s}
+.tag:hover{filter:brightness(1.15) saturate(1.2);transform:scale(1.04)}
 
-.seat-cell{transition:all .2s ease;position:relative}
-.seat-cell.occupied:hover{transform:scale(1.07);z-index:5}
+.drag-over{background:rgba(79,172,254,.1)!important;border-color:rgba(79,172,254,.55)!important;box-shadow:0 0 0 2px rgba(79,172,254,.3),inset 0 0 20px rgba(79,172,254,.05)!important}
 
-.sidebar-ind{position:absolute;right:0;top:50%;transform:translateY(-50%);width:3px;height:18px;background:linear-gradient(180deg,#4FACFE,#00F2FE);border-radius:2px 0 0 2px}
+/* ─── SEAT CELLS ─── */
+.seat-cell{transition:all .25s cubic-bezier(.34,1.56,.64,1);position:relative}
+.seat-cell.occupied:hover{transform:scale(1.1) translateY(-2px);z-index:5;filter:brightness(1.1)}
+.seat-cell::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 0 rgba(79,172,254,0);transition:box-shadow .25s}
+.seat-cell.occupied:hover::after{box-shadow:inset 0 0 0 2px rgba(79,172,254,.4),0 8px 24px rgba(79,172,254,.2)}
 
-::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+/* ─── SIDEBAR INDICATOR ─── */
+.sidebar-ind{position:absolute;right:0;top:50%;transform:translateY(-50%);width:3px;height:0;background:linear-gradient(180deg,#4FACFE,#00F2FE,#43E97B);border-radius:2px 0 0 2px;animation:navActive .3s cubic-bezier(.34,1.56,.64,1) forwards;box-shadow:0 0 8px rgba(79,172,254,.6)}
 
-.tooltip{position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:#0D1E38;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:9px 13px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:200;animation:fadeUp .15s ease;box-shadow:0 10px 24px rgba(0,0,0,.55)}
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,rgba(79,172,254,.25),rgba(167,139,250,.25));border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,rgba(79,172,254,.5),rgba(167,139,250,.5))}
 
-.row-hover:hover{background:rgba(255,255,255,.02)!important}
+/* ─── TOOLTIP ─── */
+.tooltip{position:absolute;bottom:calc(100%+10px);left:50%;transform:translateX(-50%);background:linear-gradient(145deg,#0E2040,#091628);border:1px solid rgba(79,172,254,.2);border-radius:10px;padding:9px 14px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:200;animation:slideDown .18s cubic-bezier(.34,1.56,.64,1);box-shadow:0 12px 32px rgba(0,0,0,.6),0 0 0 1px rgba(79,172,254,.08)}
+.tooltip::before{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:8px;height:8px;background:linear-gradient(145deg,#0E2040,#091628);border-right:1px solid rgba(79,172,254,.2);border-bottom:1px solid rgba(79,172,254,.2);transform:translateX(-50%) rotate(45deg)}
 
-.cal-day{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;transition:all .18s;border:1px solid transparent}
-.cal-day:hover{background:rgba(79,172,254,.1);border-color:rgba(79,172,254,.28)}
-.cal-day.present{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.45);color:#34D399}
-.cal-day.absent{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.28);color:#EF4444}
-.cal-day.today-mark{box-shadow:0 0 0 2px #4FACFE}
-.cal-day.no-session{opacity:.28;cursor:default}
-.notification-dot{position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#EF4444;border:2px solid #050C1A;animation:glowbeat 2s infinite}`;
+/* ─── TABLE ROWS ─── */
+.row-hover{transition:background .18s}
+.row-hover:hover{background:linear-gradient(90deg,rgba(79,172,254,.04),rgba(79,172,254,.025),transparent)!important}
+
+/* ─── CALENDAR ─── */
+.cal-day{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;transition:all .22s cubic-bezier(.34,1.56,.64,1);border:1px solid transparent;position:relative;overflow:hidden}
+.cal-day::before{content:'';position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(79,172,254,.3),transparent);transition:opacity .2s}
+.cal-day:hover{background:rgba(79,172,254,.12);border-color:rgba(79,172,254,.35);transform:scale(1.12)}
+.cal-day:hover::before{opacity:1}
+.cal-day:active{transform:scale(.95)}
+.cal-day.present{background:linear-gradient(135deg,rgba(52,211,153,.18),rgba(52,211,153,.08));border-color:rgba(52,211,153,.5);color:#34D399;box-shadow:0 0 12px rgba(52,211,153,.15)}
+.cal-day.absent{background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(239,68,68,.06));border-color:rgba(239,68,68,.35);color:#EF4444}
+.cal-day.today-mark{box-shadow:0 0 0 2px #4FACFE,0 0 12px rgba(79,172,254,.3);color:#4FACFE!important;font-weight:800!important}
+.cal-day.no-session{opacity:.25;cursor:default}
+
+/* ─── NOTIFICATION DOT ─── */
+.notification-dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,#EF4444,#DC2626);border:2px solid #050C1A;animation:glowbeat 1.8s ease-in-out infinite;box-shadow:0 0 8px rgba(239,68,68,.6)}
+
+/* ─── SPECIAL EFFECTS ─── */
+.shimmer{background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);background-size:800px 100%;animation:shimmer 2s infinite linear}
+
+.pulse-green{animation:glowPulseGreen 2s ease-in-out infinite}
+
+.card-reveal{animation:cardReveal .5s cubic-bezier(.22,.68,0,1.2) both}
+
+/* ─── LOGO ANIMATION ─── */
+.logo-entrance{animation:logoEntrance .8s cubic-bezier(.34,1.56,.64,1) both}
+
+/* ─── RIPPLE ─── */
+.ripple-host{position:relative;overflow:hidden}
+.ripple-host .ripple-el{position:absolute;border-radius:50%;background:rgba(255,255,255,.25);animation:ripple .55s ease-out forwards;pointer-events:none;transform:scale(0)}
+
+/* ─── WINNER HIGHLIGHT ─── */
+.winner-card{animation:winnerGlow 1.5s ease-in-out infinite}
+
+/* ─── GRADIENT BORDERS ─── */
+.grad-border{position:relative;transition:box-shadow .3s,border-color .3s}
+.grad-border:hover{border-color:rgba(79,172,254,.28)!important;box-shadow:0 0 0 1px rgba(79,172,254,.18),0 16px 48px rgba(0,0,0,.55)!important}
+
+/* ─── QR GLOW ─── */
+.qr-glow{box-shadow:0 0 0 1px rgba(79,172,254,.3),0 0 32px rgba(79,172,254,.2),0 0 64px rgba(79,172,254,.08);animation:borderGlow 3s ease-in-out infinite}
+
+/* ─── NAV ITEMS STAGGER ─── */
+.nav-item-0{animation:slideInLeft .35s .05s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-1{animation:slideInLeft .35s .09s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-2{animation:slideInLeft .35s .13s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-3{animation:slideInLeft .35s .17s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-4{animation:slideInLeft .35s .21s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-5{animation:slideInLeft .35s .25s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-6{animation:slideInLeft .35s .29s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-7{animation:slideInLeft .35s .33s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-8{animation:slideInLeft .35s .37s cubic-bezier(.22,.68,0,1.2) both}
+.nav-item-9{animation:slideInLeft .35s .41s cubic-bezier(.22,.68,0,1.2) both}
+
+/* ─── STAT COUNTERS ─── */
+.stat-val{animation:countUp .5s cubic-bezier(.22,.68,0,1.2) both}
+
+/* ─── TOPBAR ─── */
+.topbar{animation:slideDown .4s cubic-bezier(.22,.68,0,1.2) both}
+
+/* ─── BADGE HOVER ─── */
+.tag{transition:all .2s cubic-bezier(.34,1.56,.64,1)}
+
+/* ─── PROGRESS BAR ─── */
+.progress-fill{transition:width 1.4s cubic-bezier(.25,.46,.45,.94)!important}
+
+/* ─── WHEEL WINNER ─── */
+@keyframes confettiBurst{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}100%{transform:translateY(-80px) rotate(720deg) scale(0);opacity:0}}
+.confetti{animation:confettiBurst .8s ease-out both}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .modal{padding:20px!important;max-height:88vh!important;border-radius:18px 18px 0 0!important}
+  .modal-bg{align-items:flex-end!important}
+  .modal-flex{max-height:88vh!important;border-radius:18px 18px 0 0!important}
+}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,12,26,.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(79,172,254,.08);padding:6px 0 max(6px,env(safe-area-inset-bottom));gap:0}
+`;
 
 // Logo E-Class P2K 
 const LOGO_SM = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAIAAADajyQQAAANjElEQVR42u1ae3RV1Zn/7b3PuY/c3OQmIbkkEEx5ybMS2yqiZVgKiLSMqPVBa9VRi3ZVbEuXM1OXq+rqqFM60+mq4xraLsbHSH3D6FgRxcUbAZ0oQkHehFdIQi43uc9zzt7fN3+cBEGx5SaQOqx8a/9x1znnnnN+e3/f7/u+39mCiHAumsQ5al9QYOJcBcZ9rvh5q30OAuM+8ugDdjZZ7gsKjHt9+s4pV+S+GPt/bNZf/Q2IQcwApBBS9DowcRYIwDCDYSmpusJeGxKAPBP4rG7EZc9DnIilFJaUAPYezT219jCI7pw4sLYiDMAYYkD1DJ7ozX6MGMxsqc7AXrmr/ferD73a0Jxuy8HTsYi88eKa2VPqLhxaDoCZjWEphRB/bWB/3l2F6Mw0yZxetDmxYF3Tuh3HkHOlxQEmeMbJaW7PWhZPHxf//owR08YPPO6f3Vi97gMjBn2um/KnYDKgCQ1NuVe3JV/+oHXfwRRcD0bD1XA1PA1jAA5LZtfLJ7PQZvzIfnddM/rGacPDQYuZewkYA1IUXCrd/cf9v13VhA4HMNEA6mKBWEBYRE7ea0/mWtqyrUczSOUhURQQ2VQebelYRdHD906455avAVyQU3YHGANSiO0p88xer8MhQcQEEMMwiGHIDyYwCwaIYDp/RwTXlIqNjUmjzeXnx4605VN5TdrYbCIBFbEEjGlqzazceGD9xv0wZvTQim9NHnrttBFjhld2OfNZA8aAEKIxQ/VvpiVxXRG0R8IQNMEwDLFhYYgNgSGIYJgNCSIQs6cHRK3rLiiZMDhy0WMb061ZeBquhjYgA0HxYntMTWT6JbX5tFNVFqwf1V9KUT+iyhgqNAdYhScf2AKLD+mAFPtnRoOq0LBmV/N7e9vTyXwwJKCksJQ0QhhBrm47lnunMfHO8j1bX7t55JfK316/v/Fwx7jzKwsPscKBEYMYbXkuVxxUwjNc0FQSccCSjqvRnnNsAa3hGjgeHA1XQ1CoyPYEtyaywwbFmChoCSG6Ux0UDCyoAOCW89RV8RAAJSGAU8yoOIlYjp+XUjDz6AHRpQ9fWhqxFeB4pj3lNrVldjQmG7a1rP3wiHG8YEBZStZWl8RKwoVGV8HAfArfnuasR/VlVjxktiW8keV2F0OefDGzIfbzDzGUPKlnisdCU+v7n/Ip/7u1ZerdrzmuAfDW+gP7DiYvGhMnZlkgA8uCogtCLNjlPPpRDkDC4dasAeB6Ju9ox+0annZcLYSwlGSGEFBSOAbHR153LqE2ZAwZQ65n/EMdaXfcyKrx9fFU1gOwZNWexW9+DEBJeRZXzBIQwLxxYQDLD+RKbTFxYAjAXY+8sWjJVqtf1CgLAQsB2woH6+Ild08f+b3Lzkt79O1VmZWNjiRmj+Cx8sywYvVPk0snDwkZYiIO2GrD7sS9TzS0tGVeefBvwgHlc+Cjcybkcg4zn0VXZEACrTmzdFd2VL9AQIrjgVVbFR07tNIqi5BSbCkZsFOGG3YnZj+xYUy8SJaVH064X45J8oi1lJpSWblhR+6GZm/HT6rLwsK25PqdiaseWJFsST/74MQLB8cyOe0v0YWj4r5Xd6syOj3zDDHzssYcbt/yrf/az8xpx7zwUTrtGD6VzX22QX7zqbnPf8jMzPSps1MXNOMHe1btyjLzmo+PRq97CVc8vWhdIzMT8TfmvLZ03T5mdlztaUPdMquQWOTzY+qR6/t9ta4IQFuOHlt2bOKgYMgSny1SS0IWXM2GfCbZkTQdeQJDAGmH97W4YNSWBd7dfvRvf7ZSut6LD0265pJBedeEAgrcSaNKim73ZqfdaAowY2CJff+0OMBrd7XXlgU++PEAIkgplm7Y998rd+cBllIolXL1q+8fItCVoyoN49bXkwsbcsgYeAYewQNc3HJFtK5c3vRoQ2Jn66zrR15/2SDHM5af7rt8rydNYGF5TBuCEPva8pfNWXXP9XWP3z5WCLy5ds9V338BhlESgpKwLNiqul/xnNkXXTlu4HNbMgvXZUfVWrMmRkAsGcLQ8Hho5peLmLFw7vjpTcnnnts8vF/4oe9d5HjGUgCTj030GjAlhQDixfb8H439ypeifqZ6fsk2lcz+9P6pd868wBhSSgqgvDRcHLYZ2NpGdl7fd0nstvriz07TkJqSN+ZNm3L34ocfWxG25D/83VcBdDpwL4s5DETD1l1X1jFgNEGKdCprErn6YZXn9S858cq8RyFbOo7xND/wZvJfl6dYs2AWxOSh2MZr91RXRGjIgJI3n7h62p0v/ePcxfms++APJjAzuKdaRMGJTxMY+Jd17ZOfabEsAWDIgNjo0ZUhSxCx6xlDZIiI2JICQHWRHFETLFaiI63TOZPKUCZrUu3ulJHhqqgSEJ42wwfF3ph/zZVXj/3DC+9t/PBgJGQR9VhkKZRGXU3M/NDy5OjfHNSGXd1ZPRhD+tPDdA5tyBgm+mQwMbPWRmujjXE97acBz/EyWfebs19+a80e/wLqrnVTV1RENoySUH8uwv9C8KuuCvJ4JWkFLAsgZjLUq6x43CqK5Ka9+T9uS42KBw2xOA7ieGwwAAaDmbVhgAWglACzf0qgs3ZhsGCfMlgJsWXn0eVr9j7yo6/3kBUL76AZQojmtJ7w6717d2cQFCACGWgDIhiCNjD+EV+ioUDEYqO1S9yRBRF0V8usDdj/l4HWIAIIrR3X3vyVF5+4RhQocpwJzYMhpWhOea9vSnW4RoAFMxODWYJDlr8szERKYtfh9LxXdsKjukr7/ptGMnWlKSYy5OS1/xvMAsyaBsSLr54yTHV1Br3qikKAiONR+47Lyj97tjnt+SCNYVuJjR+recZA61gkPOPiaiLy/ZaIi8J2aTT4OXPHomc6d/d1RWaYE7KNMWxZ8oHXD/1icSOkQd6F48LT8LQECSLWhhwX2oM2MBraKFe/9eR1Ey+qNZpkl3YiACml6LF6f8aUYL+/bkw4HRmtJPyCHsziOKN0zgKDfC4R2tODakpiJaEeel1PgZEfSADESS2tIfKJWQgopQrP+D5sMKAkiD4RkaUEMZSAYYhTCRBnBtinOMrv/5hZngDS/4xiiMgwsU/xkpj9SsJSkuiT4wCEFCe7HePTIpA4QTthcWaBGSJLqSXLNj/1zPJgcVHAlr98+MaSaJiIbVu9veJP8/9zBRPf/t2JI4fHf/n4kvm/uu1kGhCnpgeAgB8vad/VoknT2JrQz64o/vmK1KaDroCYNS405fzwvNWZf7uqZMn23CubnV/PKIkExJlkRSZAYfW72z3iuXdcrrWJFoeUkkph05b9d/7wyX//xc1G0+atB2v6l36w+QCAZSu3rlm1rW5Yza03jt+5p+WlRRuCIfuu2yZt+tOBd5ZtGTwsPuu68UoKZl60Of/PU6Njq+0ZC45WFbEt8ci00saEe/fijicjcvXu3Nvb7dufSzz97YrioDR0ujJmAXRfHivas6flP3731oxvXHi0LT33J09fOmlUKp2fPnnMjGnjAMwEGjY1RouDABLHUtJWP5+3+MIxAxYsXL3pw33fmXWpkOKHP/1D/YiaUWMGSiWZGRBl0ry/12lKGDdPF9cG97ebx1em2zNmYq0aVGrns+aq+S3P31Y1dXjIM2zL062zCgDWnsrX19c9+PczAwGrOBKcc8+0yqrY7n3Nzzz/bktrh6fN+vf31A4oz+W8fN5b+NL6m2Z+LRoJ7T90bPYtk/6nX8MLi94bdf6ARx+4ds3aHb9/ds1l44fHq0qZKZvlrMOZvHn6OxVVUTXld0cX3FAWscSEwYEDx3QY4rc3lN/3cuvoePXI/vYZXjE/Rs4bWLF06ab7HnxRCMz/1a2XjB8OYOjgqhuv3XXdd38jhLxi0qjLvz5Ca1qx5uPy0nDD5oNDh/TfvedIRyq3v7E1HA5Ylnrvg32JtlRxUTAQUAAz8+CYemh6aXWpBeCjQ/khJeLFjSnXNQs3WHMmRavDdMcl0WSG7n0h8fLsymhI8OnVkAWwIjO7rtaahBRF4cCJfJhO5wEUF4cAeJ4BYNuq6Uiyun/M76mbmo716xe1bQvA4cOJmpryExO9T3ZMrKQwhJzHfskfUMwM/9Nu3mMlYcmzQPdak6eNlIKJlSWVlE3N7UVhWymVyeRDITuX86qqomQom/VCITsYtNo7ss0tHQHbrh1Y7rheJuMwUBQOOI6uKC9uPdoRCtmpjpwmKotFisLBdCavPVMUtj1tslm3pqbcdbXragJsJWzbUkqeUVZkSIFUOn+kOamU0sb0ryotjgQ3bzlQUR4JBgOZrBOwZeJYtrJyxM5dzZFIsCpYun1nMzMnkxlmrqosOdR0LJFIM6RtyUhRsKI8sn1HU7yq5FgyEw4HDh9uv2DswMNH2ltaOkpKwmDK53V1dVmyPXc00WEppQ1Vx2Ox0vBplindT9AAex4pJYjYspSfTJnZ88iyhJTS87SUUoqT9qU4jhcMWlqTUp37AYwhIvYlRGIQkZTCt8/mwNNXhQurFU+4rxACXV+uxInP81+oayIYAFHXHDOE7Hxd9sn+k90EzAzRyVSf3K+zFz31zPbWdogvlPXtfusD1msmzlVg3OeKfcD6gPU+Z/xlYOKLCox7CIz7XLEPWB+wPmCnC0ycQ8D+DwGa1y+LooAHAAAAAElFTkSuQmCC"; // 72×72 — dùng ở sidebar
@@ -120,6 +248,7 @@ const FILE_ICONS = { pdf:"📄",docx:"📝",pptx:"📊",xlsx:"📈",mp4:"🎬",m
 const FILE_COLORS = { pdf:"#EF4444",docx:"#3B82F6",pptx:"#F59E0B",xlsx:"#10B981",mp4:"#8B5CF6",mp3:"#EC4899",jpg:"#06B6D4",png:"#06B6D4",zip:"#F97316",txt:"#94A3B8",other:"#64748B" };
 
 const SEAT_ROWS = 8;
+const dragIdRef_global = { current: null };
 const SEAT_COLS = 4;
 const TO_ROWS = 4;
 const TO_COLS = 4;
@@ -230,33 +359,46 @@ function useAppState() {
 // component nhỏ
 
 const Badge = ({ children, c = "blue" }) => {
-  const m = { blue:"rgba(79,172,254,.13):#4FACFE", green:"rgba(52,211,153,.13):#34D399", amber:"rgba(245,158,11,.13):#F59E0B", red:"rgba(239,68,68,.13):#EF4444", violet:"rgba(167,139,250,.13):#A78BFA", gray:"rgba(100,116,139,.13):#94A3B8" };
-  const [bg, col] = (m[c] || m.blue).split(":");
-  return <span className="tag" style={{ background: bg, color: col }}>{children}</span>;
+  const m = { blue:"rgba(79,172,254,.12):#4FACFE:rgba(79,172,254,.25)", green:"rgba(52,211,153,.12):#34D399:rgba(52,211,153,.25)", amber:"rgba(245,158,11,.12):#F59E0B:rgba(245,158,11,.25)", red:"rgba(239,68,68,.12):#EF4444:rgba(239,68,68,.25)", violet:"rgba(167,139,250,.12):#A78BFA:rgba(167,139,250,.25)", gray:"rgba(100,116,139,.12):#94A3B8:rgba(100,116,139,.2)" };
+  const [bg, col, border] = (m[c] || m.blue).split(":");
+  return <span className="tag" style={{ background: bg, color: col, border: `1px solid ${border}` }}>{children}</span>;
 };
 
 const Av = ({ em, photo, sz = 34, glow }) => (
-  <div style={{ width: sz, height: sz, borderRadius: "50%", overflow: "hidden", background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: sz * 0.44, flexShrink: 0, boxShadow: glow ? "0 0 16px rgba(79,172,254,.55)" : "none", transition: "box-shadow .3s", border: glow ? "2px solid rgba(79,172,254,.4)" : "2px solid transparent" }}>
+  <div style={{ width: sz, height: sz, borderRadius: "50%", overflow: "hidden", background: "linear-gradient(135deg,rgba(79,172,254,.12),rgba(167,139,250,.08))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: sz * 0.44, flexShrink: 0, boxShadow: glow ? "0 0 0 2px rgba(79,172,254,.5),0 0 20px rgba(79,172,254,.4),0 0 40px rgba(79,172,254,.15)" : "0 2px 8px rgba(0,0,0,.3)", transition: "all .35s cubic-bezier(.34,1.56,.64,1)", border: glow ? "2px solid rgba(79,172,254,.55)" : "2px solid rgba(255,255,255,.08)", animation: glow ? "glowPulseGreen 2s ease-in-out infinite" : "none" }}>
     {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (em || "👤")}
   </div>
 );
 
 const Bar = ({ val, max = 100, col = "#4FACFE", h = 4 }) => (
-  <div style={{ background: "rgba(255,255,255,.07)", borderRadius: 99, height: h, overflow: "hidden" }}>
-    <div style={{ height: "100%", borderRadius: 99, background: col, width: `${Math.min((val / (max || 1)) * 100, 100)}%`, transition: "width 1.1s ease", boxShadow: `0 0 7px ${col}55` }} />
+  <div style={{ background: "rgba(255,255,255,.06)", borderRadius: 99, height: h, overflow: "hidden", boxShadow: "inset 0 1px 3px rgba(0,0,0,.3)" }}>
+    <div className="progress-fill" style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg,${col},${col}CC)`, width: `${Math.min((val / (max || 1)) * 100, 100)}%`, boxShadow: `0 0 10px ${col}66, 0 0 20px ${col}22` }} />
   </div>
 );
 
 const Card = ({ children, style = {} }) => (
-  <div className="scard cglow" style={{ padding: 20, ...style }}>{children}</div>
+  <div className="scard cglow grad-border" style={{ padding: 20, isolation: "isolate", ...style }}>{children}</div>
 );
 
 const Btn = ({ children, onClick, style = {}, variant = "primary", disabled, small }) => {
-  const base = { padding: small ? "6px 13px" : "9px 20px", borderRadius: 10, fontSize: small ? 11 : 13, fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5, cursor: disabled ? "not-allowed" : "pointer", transition: "all .2s", border: "none", ...style };
-  if (variant === "primary") return <button onClick={onClick} disabled={disabled} className="bprimary" style={base}>{children}</button>;
-  if (variant === "ghost")   return <button onClick={onClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", color: "#94A3B8" }}>{children}</button>;
-  if (variant === "danger")  return <button onClick={onClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(239,68,68,.28)", background: "rgba(239,68,68,.08)", color: "#EF4444" }}>{children}</button>;
-  if (variant === "success") return <button onClick={onClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(52,211,153,.28)", background: "rgba(52,211,153,.08)", color: "#34D399" }}>{children}</button>;
+  const handleClick = (e) => {
+    if (disabled) return;
+    const btn = e.currentTarget;
+    const ripple = document.createElement("span");
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2;
+    ripple.className = "ripple-el";
+    ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size/2}px;top:${e.clientY - rect.top - size/2}px;`;
+    btn.classList.add("ripple-host");
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 600);
+    onClick && onClick(e);
+  };
+  const base = { padding: small ? "6px 13px" : "9px 20px", borderRadius: 11, fontSize: small ? 11 : 13, fontWeight: 600, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 5, cursor: disabled ? "not-allowed" : "pointer", transition: "all .28s cubic-bezier(.4,0,.2,1)", border: "none", ...style };
+  if (variant === "primary") return <button onClick={handleClick} disabled={disabled} className="bprimary" style={base}>{children}</button>;
+  if (variant === "ghost")   return <button onClick={handleClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(255,255,255,.09)", background: "rgba(255,255,255,.035)", color: "#94A3B8", transition: "all .25s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,.07)"; e.currentTarget.style.borderColor = "rgba(255,255,255,.18)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,.035)"; e.currentTarget.style.borderColor = "rgba(255,255,255,.09)"; }}>{children}</button>;
+  if (variant === "danger")  return <button onClick={handleClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(239,68,68,.3)", background: "rgba(239,68,68,.07)", color: "#EF4444", transition: "all .25s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,.14)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(239,68,68,.25)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,.07)"; e.currentTarget.style.boxShadow = ""; }}>{children}</button>;
+  if (variant === "success") return <button onClick={handleClick} disabled={disabled} style={{ ...base, border: "1px solid rgba(52,211,153,.3)", background: "rgba(52,211,153,.07)", color: "#34D399", transition: "all .25s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(52,211,153,.14)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(52,211,153,.25)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(52,211,153,.07)"; e.currentTarget.style.boxShadow = ""; }}>{children}</button>;
   return null;
 };
 
@@ -278,8 +420,8 @@ const Sel = ({ label, value, onChange, options, required }) => (
 );
 
 const ErrBox = ({ msg }) => msg ? (
-  <div style={{ fontSize: 12, color: "#EF4444", marginBottom: 12, padding: "9px 13px", borderRadius: 9, background: "rgba(239,68,68,.09)", border: "1px solid rgba(239,68,68,.22)", display: "flex", alignItems: "center", gap: 6 }}>
-    <AlertTriangle size={12} />{msg}
+  <div style={{ fontSize: 12, color: "#EF4444", marginBottom: 12, padding: "10px 14px", borderRadius: 11, background: "linear-gradient(135deg,rgba(239,68,68,.1),rgba(239,68,68,.06))", border: "1px solid rgba(239,68,68,.25)", display: "flex", alignItems: "center", gap: 7, animation: "slideDown .3s cubic-bezier(.34,1.56,.64,1)", boxShadow: "0 4px 16px rgba(239,68,68,.1)" }}>
+    <AlertTriangle size={13} style={{ flexShrink: 0 }} />{msg}
   </div>
 ) : null;
 
@@ -350,10 +492,14 @@ function StudentRegisterPage({ state, onBack }) {
         <Inp label="SỐ ĐIỆN THOẠI" value={phone} onChange={setPhone} placeholder="0912..." />
       </div>
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 7, letterSpacing: ".05em" }}>AVATAR</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 10, letterSpacing: ".05em" }}>AVATAR</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,rgba(79,172,254,.15),rgba(167,139,250,.1))", border: "2px solid rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0, boxShadow: "0 0 16px rgba(79,172,254,.2)" }}>{em}</div>
+          <div style={{ fontSize: 11, color: "#3D5A78" }}>Chọn avatar của bạn</div>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {EMOJIS.slice(0, 20).map(e => (
-            <button key={e} onClick={() => setEm(e)} style={{ width: 30, height: 30, borderRadius: 7, border: `2px solid ${em === e ? "#4FACFE" : "rgba(255,255,255,.08)"}`, background: em === e ? "rgba(79,172,254,.12)" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 15 }}>{e}</button>
+            <button key={e} onClick={() => setEm(e)} style={{ width: 38, height: 38, borderRadius: 10, border: `2px solid ${em === e ? "rgba(79,172,254,.7)" : "rgba(255,255,255,.07)"}`, background: em === e ? "linear-gradient(135deg,rgba(79,172,254,.18),rgba(79,172,254,.08))" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .22s cubic-bezier(.34,1.56,.64,1)", transform: em===e ? "scale(1.12)" : "scale(1)", boxShadow: em===e ? "0 4px 14px rgba(79,172,254,.25)" : "none" }}>{e}</button>
           ))}
         </div>
       </div>
@@ -392,6 +538,8 @@ function LoginPage({ state, onLogin }) {
     } else {
       const cls = state.classes.find(c => c.id === sClass);
       if (!cls) { setErr("Không tìm thấy lớp này"); shake(); return; }
+      const pending = state.pendingStudents.find(s => s.classId === cls.id && s.code.toUpperCase() === sCode.trim().toUpperCase());
+      if (pending) { setErr("Tài khoản chưa được giáo viên xét duyệt. Vui lòng chờ!"); shake(); return; }
       const st = state.students.find(s => s.classId === cls.id && s.code.toUpperCase() === sCode.trim().toUpperCase());
       if (!st) { setErr("Mã học sinh không đúng hoặc không thuộc lớp này"); shake(); return; }
       onLogin({ role: "student", data: st, classId: cls.id });
@@ -412,25 +560,26 @@ function LoginPage({ state, onLogin }) {
 
   return (
     <div className="ecp" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle,rgba(29,108,245,.13),transparent 70%)", top: -200, left: -200, filter: "blur(80px)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", width: 450, height: 450, borderRadius: "50%", background: "radial-gradient(circle,rgba(123,63,228,.1),transparent 70%)", bottom: -150, right: -100, filter: "blur(70px)", pointerEvents: "none" }} />
-      <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle,rgba(255,255,255,.022) 1px,transparent 1px)", backgroundSize: "30px 30px", pointerEvents: "none" }} />
-      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 420, padding: "0 20px", animation: "fadeUp .4s ease" }}>
+      <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle,rgba(29,108,245,.18),transparent 70%)", top: -200, left: -200, filter: "blur(80px)", animation: "breathe 4s ease-in-out infinite", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: 450, height: 450, borderRadius: "50%", background: "radial-gradient(circle,rgba(123,63,228,.15),transparent 70%)", bottom: -150, right: -100, filter: "blur(70px)", animation: "breathe 5s 1s ease-in-out infinite", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle,rgba(255,255,255,.018) 1px,transparent 1px)", backgroundSize: "30px 30px", pointerEvents: "none" }} />
+      <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 420, padding: "0 20px", animation: "fadeUp .5s cubic-bezier(.22,.68,0,1.2)" }}>
         <div style={{ textAlign: "center", marginBottom: 30 }}>
-
-          <div style={{ marginBottom: 16, animation: "float 4s ease-in-out infinite", display: "inline-block" }}>
-            <img src={LOGO_LG} alt="E-Class P2K" style={{ width: 96, height: 96, borderRadius: 22, boxShadow: "0 12px 36px rgba(29,108,245,.45)", display: "block" }} />
+          <div style={{ marginBottom: 18, display: "inline-block", position: "relative", animation: "float 4s ease-in-out infinite" }}>
+            <img src={LOGO_LG} alt="E-Class P2K" className="logo-entrance" style={{ width: 96, height: 96, borderRadius: 24, boxShadow: "0 16px 48px rgba(29,108,245,.55),0 0 0 1px rgba(79,172,254,.15)", display: "block" }} />
+            <div style={{ position: "absolute", inset: -10, borderRadius: 34, border: "1.5px solid rgba(79,172,254,.2)", animation: "glowbeat 2.5s ease-in-out infinite", pointerEvents: "none" }} />
+            <div style={{ position: "absolute", inset: -20, borderRadius: 44, border: "1px solid rgba(79,172,254,.08)", animation: "glowbeat 2.5s .5s ease-in-out infinite", pointerEvents: "none" }} />
           </div>
-          <h1 className="hfont" style={{ fontSize: 32, fontWeight: 400, letterSpacing: "-.01em", color: "#E2EAF4" }}>
-            E-Class <span style={{ color: "#4FACFE" }}>P2K</span>
+          <h1 className="hfont" style={{ fontSize: 33, fontWeight: 400, letterSpacing: "-.01em", color: "#E2EAF4", animation: "fadeUp .5s .15s both" }}>
+            E-Class <span className="gtext">P2K</span>
           </h1>
-          <p style={{ fontSize: 12, color: "#2E4A6A", marginTop: 5 }}>Nền tảng quản lý lớp học thông minh</p>
+          <p style={{ fontSize: 12, color: "#2E4A6A", marginTop: 6, animation: "fadeUp .5s .25s both", letterSpacing: ".03em" }}>Nền tảng quản lý lớp học thông minh</p>
         </div>
-        <div style={{ background: "#0A1628", border: "1px solid rgba(255,255,255,.09)", borderRadius: 22, padding: 28, boxShadow: "0 30px 80px rgba(0,0,0,.6)" }}>
-          <div style={{ display: "flex", borderRadius: 12, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.07)", overflow: "hidden", marginBottom: 24 }}>
+        <div style={{ background: "linear-gradient(145deg,#0B1B32,#080F21)", border: "1px solid rgba(255,255,255,.09)", borderRadius: 24, padding: 28, boxShadow: "0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(79,172,254,.05),inset 0 1px 0 rgba(255,255,255,.06)", animation: "fadeUp .5s .3s both" }}>
+          <div style={{ display: "flex", borderRadius: 13, background: "rgba(255,255,255,.035)", border: "1px solid rgba(255,255,255,.07)", overflow: "hidden", marginBottom: 24 }}>
             {[["teacher","👨‍🏫","Giáo viên"],["student","👨‍🎓","Học sinh"]].map(([r, ic, label]) => (
-              <button key={r} onClick={() => { setRole(r); setErr(""); }} style={{ flex: 1, padding: "10px", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, background: role === r ? "rgba(79,172,254,.15)" : "transparent", color: role === r ? "#4FACFE" : "#2E4A6A", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                <span>{ic}</span>{label}
+              <button key={r} onClick={() => { setRole(r); setErr(""); }} style={{ flex: 1, padding: "11px", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, background: role === r ? "linear-gradient(135deg,rgba(79,172,254,.2),rgba(123,63,228,.12))" : "transparent", color: role === r ? "#4FACFE" : "#2E4A6A", transition: "all .28s cubic-bezier(.4,0,.2,1)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, boxShadow: role === r ? "inset 0 0 0 1px rgba(79,172,254,.25)" : "none" }}>
+                <span style={{ transition: "transform .28s cubic-bezier(.34,1.56,.64,1)", transform: role === r ? "scale(1.2)" : "scale(1)" }}>{ic}</span>{label}
               </button>
             ))}
           </div>
@@ -442,7 +591,7 @@ function LoginPage({ state, onLogin }) {
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU <span style={{ color: "#EF4444" }}>*</span></div>
                   <div style={{ position: "relative" }}>
                     <input className="inp" type={showPass ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key === "Enter" && doLogin()} placeholder="Nhập mật khẩu" style={{ display: "block", paddingRight: 42 }} />
-                    <button onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#2E4A6A" }}>
+                    <button onClick={() => setShowPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#2E4A6A", transition: "color .2s" }}>
                       {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
@@ -461,16 +610,16 @@ function LoginPage({ state, onLogin }) {
               </>
             )}
             <ErrBox msg={err} />
-            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 4, justifyContent: "center" }} disabled={role === "teacher" ? (!uname || !pass) : (!sClass || !sCode)}>
+            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 6, justifyContent: "center", padding: "11px 20px", fontSize: 14, letterSpacing: ".02em" }} disabled={role === "teacher" ? (!uname || !pass) : (!sClass || !sCode)}>
               {role === "teacher" ? "Đăng nhập →" : "Vào lớp học →"}
             </Btn>
           </div>
           {role === "student" && (
-            <button onClick={() => setShowRegister(true)} style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 10, border: "1px dashed rgba(79,172,254,.3)", background: "transparent", color: "#4FACFE", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <button onClick={() => setShowRegister(true)} style={{ width: "100%", marginTop: 12, padding: "10px", borderRadius: 11, border: "1px dashed rgba(79,172,254,.35)", background: "transparent", color: "#4FACFE", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .28s cubic-bezier(.4,0,.2,1)" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(79,172,254,.07)"; e.currentTarget.style.borderStyle = "solid"; e.currentTarget.style.transform = "translateY(-1px)"; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderStyle = "dashed"; e.currentTarget.style.transform = ""; }}>
               <UserPlus size={13} />Đăng ký tài khoản mới
             </button>
           )}
-          <div style={{ marginTop: 18, padding: 12, borderRadius: 10, background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, color: "#2E4A6A", lineHeight: 1.9 }}>
+          <div style={{ marginTop: 18, padding: 13, borderRadius: 12, background: "linear-gradient(135deg,rgba(255,255,255,.025),rgba(255,255,255,.015))", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, color: "#2E4A6A", lineHeight: 1.9 }}>
             <div style={{ fontWeight: 700, color: "#3D5A78", marginBottom: 4 }}>Demo:</div>
             <div>👔 Admin: <span style={{ color: "#7FA8C8" }}>admin / admin123</span></div>
           </div>
@@ -501,7 +650,6 @@ const NAV_STUDENT = [
   { id: "attendance",  Ic: QrCode,        l: "Điểm danh" },
   { id: "chat",        Ic: MessageSquare, l: "Chat lớp" },
   { id: "assignments", Ic: BookOpen,      l: "Bài tập" },
-  { id: "wheel",       Ic: Shuffle,       l: "Lucky Wheel" },
   { id: "library",     Ic: Library,       l: "Tài liệu" },
   { id: "profile",     Ic: User,          l: "Hồ sơ" },
 ];
@@ -509,28 +657,30 @@ const NAV_STUDENT = [
 function Sidebar({ view, setView, col, user, pendingCount }) {
   const nav = user.role === "teacher" ? NAV_TEACHER : NAV_STUDENT;
   return (
-    <div style={{ width: col ? 58 : 224, height: "100vh", background: "#060D1E", borderRight: "1px solid rgba(255,255,255,.055)", display: "flex", flexDirection: "column", transition: "width .3s cubic-bezier(.4,0,.2,1)", position: "fixed", left: 0, top: 0, zIndex: 50, overflow: "hidden" }}>
-      <div style={{ height: 60, display: "flex", alignItems: "center", padding: col ? "0 11px" : "0 16px", borderBottom: "1px solid rgba(255,255,255,.045)", gap: 11, flexShrink: 0 }}>
-        <img src={LOGO_SM} alt="E-Class P2K" style={{ width: 36, height: 36, borderRadius: 11, flexShrink: 0, boxShadow: "0 4px 16px rgba(29,108,245,.4)", display: "block", objectFit: "cover" }} />
-        {!col && <span className="hfont" style={{ fontSize: 15, fontWeight: 400, whiteSpace: "nowrap", color: "#E2EAF4" }}>E-Class <span style={{ color: "#4FACFE" }}>P2K</span></span>}
+    <div style={{ width: col ? 58 : 224, height: "100vh", background: "linear-gradient(180deg,#06101E 0%,#050C1A 100%)", borderRight: "1px solid rgba(79,172,254,.07)", display: "flex", flexDirection: "column", transition: "width .32s cubic-bezier(.4,0,.2,1)", position: "fixed", left: 0, top: 0, zIndex: 50, overflow: "hidden", boxShadow: "4px 0 32px rgba(0,0,0,.4)" }}>
+      <div style={{ height: 60, display: "flex", alignItems: "center", padding: col ? "0 11px" : "0 16px", borderBottom: "1px solid rgba(79,172,254,.06)", gap: 11, flexShrink: 0, background: "rgba(79,172,254,.02)" }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <img src={LOGO_SM} alt="E-Class P2K" style={{ width: 36, height: 36, borderRadius: 11, display: "block", objectFit: "cover", boxShadow: "0 4px 20px rgba(29,108,245,.5),0 0 0 1px rgba(79,172,254,.2)", transition: "transform .3s cubic-bezier(.34,1.56,.64,1)" }} onMouseEnter={e => e.target.style.transform = "scale(1.1) rotate(3deg)"} onMouseLeave={e => e.target.style.transform = ""} />
+        </div>
+        {!col && <span className="hfont" style={{ fontSize: 15, fontWeight: 400, whiteSpace: "nowrap", color: "#E2EAF4", animation: "fadeIn .3s ease" }}>E-Class <span className="gtext">P2K</span></span>}
       </div>
       {!col && (
         <div style={{ padding: "8px 10px 2px" }}>
-          <div style={{ padding: "5px 10px", borderRadius: 9, background: user.role === "teacher" ? "rgba(167,139,250,.1)" : "rgba(79,172,254,.08)", border: `1px solid ${user.role === "teacher" ? "rgba(167,139,250,.22)" : "rgba(79,172,254,.18)"}`, display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: user.role === "teacher" ? "#A78BFA" : "#4FACFE" }}>
-            {user.role === "teacher" ? <GraduationCap size={11} /> : <Trophy size={11} />}
+          <div style={{ padding: "5px 10px", borderRadius: 9, background: user.role === "teacher" ? "linear-gradient(135deg,rgba(167,139,250,.12),rgba(167,139,250,.06))" : "linear-gradient(135deg,rgba(79,172,254,.1),rgba(79,172,254,.05))", border: `1px solid ${user.role === "teacher" ? "rgba(167,139,250,.25)" : "rgba(79,172,254,.22)"}`, display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: user.role === "teacher" ? "#A78BFA" : "#4FACFE", boxShadow: user.role === "teacher" ? "0 2px 12px rgba(167,139,250,.1)" : "0 2px 12px rgba(79,172,254,.1)" }}>
+            {user.role === "teacher" ? <GraduationCap size={11} style={{ filter: "drop-shadow(0 0 4px rgba(167,139,250,.8))" }} /> : <Trophy size={11} style={{ filter: "drop-shadow(0 0 4px rgba(79,172,254,.8))" }} />}
             {user.role === "teacher" ? "Giáo Viên" : "Học Sinh"}
           </div>
         </div>
       )}
       <div style={{ flex: 1, padding: col ? "6px 0" : "2px 8px", display: "flex", flexDirection: "column", gap: 1, overflowY: "auto" }}>
-        {nav.map(({ id, Ic, l }) => (
-          <div key={id} className={`nbtn ${view === id ? "act" : ""}`} onClick={() => setView(id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: col ? "10px 0" : "7px 10px", justifyContent: col ? "center" : "flex-start", position: "relative", color: view === id ? "#4FACFE" : "#3D5A78" }}>
-            <div style={{ position: "relative" }}>
-              <Ic size={15} strokeWidth={view === id ? 2.5 : 1.8} />
+        {nav.map(({ id, Ic, l }, idx) => (
+          <div key={id} className={`nbtn nav-item-${idx} ${view === id ? "act" : ""}`} onClick={() => setView(id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: col ? "10px 0" : "7px 10px", justifyContent: col ? "center" : "flex-start", position: "relative", color: view === id ? "#4FACFE" : "#3D5A78" }}>
+            <div style={{ position: "relative", transition: "transform .25s cubic-bezier(.34,1.56,.64,1)", ...(view === id ? { transform: "scale(1.15)" } : {}) }}>
+              <Ic size={15} strokeWidth={view === id ? 2.5 : 1.8} style={{ filter: view === id ? "drop-shadow(0 0 6px rgba(79,172,254,.7))" : "none", transition: "filter .3s" }} />
               {id === "pending" && pendingCount > 0 && <div className="notification-dot" />}
             </div>
-            {!col && <span style={{ fontSize: 12, fontWeight: view === id ? 600 : 400, whiteSpace: "nowrap" }}>{l}</span>}
-            {!col && id === "pending" && pendingCount > 0 && <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 99, background: "rgba(239,68,68,.18)", color: "#EF4444" }}>{pendingCount}</span>}
+            {!col && <span style={{ fontSize: 12, fontWeight: view === id ? 700 : 400, whiteSpace: "nowrap", transition: "all .2s", letterSpacing: view === id ? ".01em" : "0" }}>{l}</span>}
+            {!col && id === "pending" && pendingCount > 0 && <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 99, background: "rgba(239,68,68,.18)", color: "#EF4444", animation: "glowbeat 2s infinite" }}>{pendingCount}</span>}
             {view === id && !col && <div className="sidebar-ind" />}
           </div>
         ))}
@@ -548,11 +698,12 @@ function Sidebar({ view, setView, col, user, pendingCount }) {
   );
 }
 
-function TopBar({ view, toggleSide, user, onLogout, classInfo }) {
+function TopBar({ view, toggleSide, toggleMobile, user, onLogout, classInfo }) {
   const LBL = { dashboard:"Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt học sinh" };
   return (
-    <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "rgba(6,13,30,.95)", backdropFilter: "blur(20px)", borderBottom: "1px solid rgba(255,255,255,.05)", position: "sticky", top: 0, zIndex: 40 }}>
-      <button onClick={toggleSide} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.05)", color: "#3D5A78", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Menu size={14} /></button>
+    <div className="topbar" style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "rgba(5,12,26,.92)", backdropFilter: "blur(24px) saturate(1.5)", WebkitBackdropFilter: "blur(24px) saturate(1.5)", borderBottom: "1px solid rgba(79,172,254,.06)", position: "sticky", top: 0, zIndex: 40, boxShadow: "0 4px 24px rgba(0,0,0,.4)" }}>
+      <button onClick={toggleSide} className="hide-mobile" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "rgba(255,255,255,.05)", color: "#3D5A78", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}><Menu size={14} /></button>
+      <button onClick={toggleMobile} className="hide-desktop" style={{ width: 32, height: 32, borderRadius: 9, border: "none", background: "rgba(255,255,255,.05)", color: "#3D5A78", cursor: "pointer", display: "none", alignItems: "center", justifyContent: "center" }}><Menu size={16} /></button>
       <h1 className="hfont" style={{ fontSize: 15, fontWeight: 400, color: "#E2EAF4" }}>{LBL[view] || view}</h1>
       {classInfo && <Badge c="blue">{classInfo.name}</Badge>}
       <div style={{ flex: 1 }} />
@@ -917,11 +1068,15 @@ function StudentsPage({ state, user }) {
               <Inp label="SỐ ĐIỆN THOẠI" value={newSt.phone} onChange={v => setNewSt(p => ({ ...p, phone: v }))} placeholder="0912345678" />
             </div>
             {!newSt.photo && (
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 8, letterSpacing: ".05em" }}>EMOJI AVATAR</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 10, letterSpacing: ".05em" }}>EMOJI AVATAR</div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 15, background: "linear-gradient(135deg,rgba(79,172,254,.15),rgba(167,139,250,.1))", border: "2px solid rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0, boxShadow: "0 0 16px rgba(79,172,254,.2)" }}>{newSt.em}</div>
+                  <div style={{ fontSize: 11, color: "#3D5A78" }}>Chọn avatar cho học sinh</div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {EMOJIS.map(em => (
-                    <button key={em} onClick={() => setNewSt(p => ({ ...p, em }))} style={{ width: 32, height: 32, borderRadius: 7, border: `2px solid ${newSt.em === em ? "#4FACFE" : "rgba(255,255,255,.08)"}`, background: newSt.em === em ? "rgba(79,172,254,.12)" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 16 }}>{em}</button>
+                    <button key={em} onClick={() => setNewSt(p => ({ ...p, em }))} style={{ width: 38, height: 38, borderRadius: 10, border: `2px solid ${newSt.em === em ? "rgba(79,172,254,.7)" : "rgba(255,255,255,.07)"}`, background: newSt.em === em ? "linear-gradient(135deg,rgba(79,172,254,.18),rgba(79,172,254,.08))" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .22s cubic-bezier(.34,1.56,.64,1)", transform: newSt.em===em ? "scale(1.12)" : "scale(1)", boxShadow: newSt.em===em ? "0 4px 14px rgba(79,172,254,.25)" : "none" }}>{em}</button>
                   ))}
                 </div>
               </div>
@@ -941,7 +1096,97 @@ function StudentsPage({ state, user }) {
 
 // sơ đồ lớp
 
-function SeatingPage({ state, user }) {
+function SeatCell({ slotI, compact, cellSz, cellH, editMode, dragId, hovSlot, getStudentAt, attKey, attendance, handleDragStart, handleDragEnd, handleDrop, setHovSlot, clearSlot, showTooltip, moveTooltip, hideTooltip }) {
+  const st = getStudentAt(slotI);
+  const isDragging = st && dragId === st.id;
+  const isHov = hovSlot === slotI;
+  const present = st && (attendance[attKey] || []).includes(st.id);
+  const isDropTarget = isHov && dragId !== null && dragId !== st?.id;
+  const sz = cellSz || (compact ? 58 : 64);
+  const h  = cellH  || (compact ? 64 : 70);
+  const avSz = Math.round(sz * 0.47);
+  const fSize = Math.round(sz * 0.26);
+
+  const onTouchStart = e => {
+    if (!editMode || !st) return;
+    e.preventDefault();
+    handleDragStart(st.id);
+    setHovSlot(slotI);
+  };
+
+  const onTouchMove = e => {
+    if (!dragIdRef_global.current) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    window._dragX = touch.clientX;
+    window._dragY = touch.clientY;
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cell = el?.closest("[data-slot]");
+    const targetSlot = cell ? Number(cell.dataset.slot) : null;
+    setHovSlot(targetSlot);
+  };
+
+  const onTouchEnd = e => {
+    if (!dragIdRef_global.current) return;
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const cell = el?.closest("[data-slot]");
+    if (cell) handleDrop(Number(cell.dataset.slot));
+    else { dragIdRef_global.current = null; setHovSlot(null); }
+  };
+
+  return (
+    <div
+      data-slot={slotI}
+      className={`seat-cell${st ? " occupied" : ""}`}
+      draggable={editMode && !!st}
+      onDragStart={e => {
+        if (!editMode || !st) return;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", st.id);
+        handleDragStart(st.id);
+      }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onContextMenu={e => { if (editMode && st) { e.preventDefault(); clearSlot(slotI); } }}
+      onMouseEnter={e => {
+        if (editMode && dragIdRef_global.current) { setHovSlot(slotI); return; }
+        if (!editMode && st) { setHovSlot(slotI); showTooltip(st, present, e.clientX, e.clientY); }
+      }}
+      onMouseMove={e => { if (!editMode && st) moveTooltip(e.clientX, e.clientY); }}
+      onMouseLeave={() => { setHovSlot(null); if (!editMode) hideTooltip(); }}
+      style={{ width: sz, height: h, borderRadius: Math.round(sz*0.18), background: isDropTarget ? "rgba(79,172,254,.14)" : st ? (present ? "linear-gradient(135deg,rgba(52,211,153,.08),rgba(52,211,153,.04))" : "linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.03))") : "rgba(255,255,255,.012)", border: `1px solid ${isDropTarget ? "rgba(79,172,254,.7)" : st ? (present ? "rgba(52,211,153,.4)" : "rgba(255,255,255,.1)") : "rgba(255,255,255,.04)"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2, position: "relative", opacity: isDragging ? 0.3 : 1, cursor: editMode ? (st ? "grab" : "default") : "default", transition: "all .28s cubic-bezier(.34,1.56,.64,1)", flexShrink: 0, touchAction: editMode ? "none" : "auto", userSelect: "none", boxShadow: isDropTarget ? "0 0 20px rgba(79,172,254,.3),0 0 0 3px rgba(79,172,254,.15)" : present ? "0 0 14px rgba(52,211,153,.15)" : "none" }}
+    >
+      {st ? (
+        <>
+          <div style={{ width: avSz, height: avSz, borderRadius: "50%", overflow: "hidden", background: "linear-gradient(135deg,rgba(79,172,254,.15),rgba(167,139,250,.1))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: fSize, flexShrink: 0, border: present ? "1.5px solid rgba(52,211,153,.4)" : "1.5px solid rgba(255,255,255,.08)" }}>
+            {st.photo ? <img src={st.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : st.em}
+          </div>
+          <div style={{ fontSize: Math.max(7, Math.round(sz*0.13)), color: "#94A3B8", textAlign: "center", padding: "0 2px", lineHeight: 1.2, maxWidth: sz - 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {st.name.split(" ").pop()}
+          </div>
+          <div style={{ position: "absolute", top: 3, right: 3, width: Math.max(5,Math.round(sz*0.11)), height: Math.max(5,Math.round(sz*0.11)), borderRadius: "50%", background: present ? "#34D399" : "#EF4444", boxShadow: present ? "0 0 8px rgba(52,211,153,.8)" : "0 0 6px rgba(239,68,68,.5)", transition: "all .3s" }} />
+          {editMode && sz >= 48 && <GripVertical size={7} style={{ position: "absolute", top: 2, left: 2, color: "#3D5A78", opacity: .6 }} />}
+        </>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+          <div style={{ width: Math.round(sz*0.28), height: Math.round(sz*0.28), borderRadius: "50%", background: "rgba(255,255,255,.025)", border: "1px dashed rgba(255,255,255,.06)" }} />
+          {isDropTarget && <div style={{ fontSize: 7, color: "#4FACFE", fontWeight: 700, animation: "breathe .8s ease-in-out infinite" }}>Thả</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SeatingPage({ state, user, isMobile }) {
+  const cellSz    = isMobile ? 44 : 64;
+  const cellH     = isMobile ? 50 : 70;
+  const compactSz = isMobile ? 40 : 58;
+  const compactH  = isMobile ? 46 : 64;
+  const gridMinW  = isMobile ? 0 : 580;
+  const toMinW    = isMobile ? 0 : 520;
   const myClasses = useMemo(() => user.role === "teacher"
     ? state.classes.filter(c => c.teacherId === user.data.id)
     : state.classes.filter(c => c.id === user.classId), [state.classes, user]);
@@ -950,7 +1195,84 @@ function SeatingPage({ state, user }) {
   const [seatTab, setSeatTab] = useState("overview");
   const [editMode, setEditMode] = useState(false);
   const [dragId, setDragId] = useState(null);
+  const dragIdRef = useRef(null);
   const [hovSlot, setHovSlot] = useState(null);
+
+  const seatsRef = useRef(null);
+  const stateRef = useRef(state);
+  const seatKeyRef = useRef(null);
+
+  useEffect(() => {
+    const onMouseUp = () => {
+      if (!dragIdRef.current) return;
+      const el = document.elementFromPoint(window._dragX || 0, window._dragY || 0);
+      const cell = el?.closest("[data-slot]");
+      if (cell) {
+        const targetSlot = Number(cell.dataset.slot);
+        const activeDragId = dragIdRef.current;
+        const seatsNow = seatsRef.current;
+        const targetOccupant = seatsNow[targetSlot];
+        const sourceSlot = Object.entries(seatsNow).find(([, v]) => v === activeDragId);
+        const srcIdx = sourceSlot ? Number(sourceSlot[0]) : -1;
+        stateRef.current.setSeats(prev => {
+          const next = { ...(prev[seatKeyRef.current] || {}) };
+          next[targetSlot] = activeDragId;
+          if (srcIdx >= 0) {
+            if (targetOccupant !== undefined && targetOccupant !== activeDragId) next[srcIdx] = targetOccupant;
+            else delete next[srcIdx];
+          }
+          return { ...prev, [seatKeyRef.current]: next };
+        });
+      }
+      dragIdRef.current = null;
+      dragIdRef_global.current = null;
+      setDragId(null);
+      setHovSlot(null);
+    };
+    const onMouseMove = (e) => { window._dragX = e.clientX; window._dragY = e.clientY; };
+    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("mousemove", onMouseMove);
+    return () => { document.removeEventListener("mouseup", onMouseUp); document.removeEventListener("mousemove", onMouseMove); };
+  }, []);
+
+  const tooltipElRef = useRef(null);
+
+  useEffect(() => {
+    const el = document.createElement("div");
+    el.style.cssText = "position:fixed;z-index:99999;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .12s;background:linear-gradient(145deg,#0E2040,#091628);border:1px solid rgba(79,172,254,.25);border-radius:12px;padding:10px 14px;font-size:11px;white-space:nowrap;box-shadow:0 16px 40px rgba(0,0,0,.7),0 0 0 1px rgba(79,172,254,.1);left:-9999px;top:-9999px";
+    el.innerHTML = `<div class="tt-name" style="font-weight:700;color:#E2EAF4;margin-bottom:4px"></div><div class="tt-code" style="color:#4A6580;font-size:10px"></div><div class="tt-status" style="margin-top:5px;font-size:10px;font-weight:600"></div>`;
+    document.body.appendChild(el);
+    tooltipElRef.current = el;
+    return () => { document.body.removeChild(el); tooltipElRef.current = null; };
+  }, []);
+
+  const showTooltip = useCallback((st, present, x, y) => {
+    const el = tooltipElRef.current;
+    if (!el) return;
+    el.querySelector(".tt-name").textContent = st.name;
+    el.querySelector(".tt-code").textContent = st.code;
+    const status = el.querySelector(".tt-status");
+    status.textContent = present ? "✓ Có mặt" : "✗ Vắng";
+    status.style.color = present ? "#34D399" : "#EF4444";
+    el.style.left = (x + 5) + "px";
+    el.style.top = (y - 5) + "px";
+    el.style.opacity = "1";
+    el.style.visibility = "visible";
+  }, []);
+
+  const moveTooltip = useCallback((x, y) => {
+    const el = tooltipElRef.current;
+    if (!el) return;
+    el.style.left = (x + 5) + "px";
+    el.style.top = (y - 5) + "px";
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    const el = tooltipElRef.current;
+    if (!el) return;
+    el.style.opacity = "0";
+    el.style.visibility = "hidden";
+  }, []);
 
   const seatKey = selClass;
   const classStudents = useMemo(() => state.students.filter(s => s.classId === selClass), [state.students, selClass]);
@@ -972,6 +1294,9 @@ function SeatingPage({ state, user }) {
   }, [selClass, classStudents.length]);
 
   const seats = state.seats[seatKey] || {};
+  useEffect(() => { seatsRef.current = seats; });
+  useEffect(() => { stateRef.current = state; });
+  useEffect(() => { seatKeyRef.current = seatKey; });
   const assignedIds = useMemo(() => new Set(Object.values(seats).filter(id => validIds.has(id))), [seats, validIds]);
   const unassigned = useMemo(() => classStudents.filter(s => !assignedIds.has(s.id)), [classStudents, assignedIds]);
   const getStudentAt = useCallback((idx) => classStudents.find(s => s.id === seats[idx]) || null, [classStudents, seats]);
@@ -980,27 +1305,28 @@ function SeatingPage({ state, user }) {
   const today = new Date().toISOString().slice(0, 10);
   const attKey = `${selClass}_${today}`;
 
-  const handleDragStart = useCallback((sid) => setDragId(sid), []);
-  const handleDragEnd = useCallback(() => { setDragId(null); setHovSlot(null); }, []);
+  const handleDragStart = useCallback((sid) => { dragIdRef.current = sid; dragIdRef_global.current = sid; setDragId(sid); }, []);
+  const handleDragEnd = useCallback(() => { /* handled by mouseup/touchend */ }, []);
 
   const handleDrop = useCallback((targetSlot) => {
-    if (!editMode || dragId === null) return;
-    const targetOccupant = seats[targetSlot];
-    const sourceSlot = getSlotOf(dragId);
-    state.setSeats(prev => {
-      const next = { ...(prev[seatKey] || {}) };
-      next[targetSlot] = dragId;
-      if (sourceSlot >= 0) {
-        if (targetOccupant !== undefined && targetOccupant !== dragId) {
-          next[sourceSlot] = targetOccupant;
-        } else {
-          delete next[sourceSlot];
-        }
+    const activeDragId = dragIdRef.current || dragIdRef_global.current;
+    if (!editMode || !activeDragId) return;
+    const seatsNow = seatsRef.current;
+    const targetOccupant = seatsNow[targetSlot];
+    const srcEntry = Object.entries(seatsNow).find(([, v]) => v === activeDragId);
+    const srcIdx = srcEntry ? Number(srcEntry[0]) : -1;
+    stateRef.current.setSeats(prev => {
+      const next = { ...(prev[seatKeyRef.current] || {}) };
+      next[targetSlot] = activeDragId;
+      if (srcIdx >= 0) {
+        if (targetOccupant !== undefined && targetOccupant !== activeDragId) next[srcIdx] = targetOccupant;
+        else delete next[srcIdx];
       }
-      return { ...prev, [seatKey]: next };
+      return { ...prev, [seatKeyRef.current]: next };
     });
+    dragIdRef.current = null; dragIdRef_global.current = null;
     setDragId(null); setHovSlot(null);
-  }, [editMode, dragId, seats, seatKey, state, getSlotOf]);
+  }, [editMode]);
 
   const clearSlot = useCallback((slot) => {
     state.setSeats(prev => {
@@ -1031,56 +1357,6 @@ function SeatingPage({ state, user }) {
     state.setSeats(p => ({ ...p, [seatKey]: init }));
   };
 
-  const SeatCell = ({ slotI, compact = false }) => {
-    const st = getStudentAt(slotI);
-    const isHov = hovSlot === slotI && editMode;
-    const isDragging = st && dragId === st.id;
-    const present = st && (state.attendance[attKey] || []).includes(st.id);
-    const isDropTarget = isHov && dragId !== null;
-    const sz = compact ? 58 : 64;
-    const h = compact ? 64 : 70;
-    return (
-      <div
-        className={`seat-cell${st ? " occupied" : ""}`}
-        draggable={editMode && !!st}
-        onDragStart={e => { if (!editMode || !st) return; e.dataTransfer.effectAllowed = "move"; handleDragStart(st.id); }}
-        onDragEnd={handleDragEnd}
-        onDragOver={e => { if (!editMode) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; setHovSlot(slotI); }}
-        onDragLeave={e => { if (e.currentTarget.contains(e.relatedTarget)) return; setHovSlot(null); }}
-        onDrop={e => { e.preventDefault(); handleDrop(slotI); }}
-        onContextMenu={e => { if (editMode && st) { e.preventDefault(); clearSlot(slotI); } }}
-        onMouseEnter={() => !editMode && st && setHovSlot(slotI)}
-        onMouseLeave={() => setHovSlot(null)}
-        style={{ width: sz, height: h, borderRadius: 10, background: isDropTarget ? "rgba(79,172,254,.14)" : st ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.015)", border: `1px solid ${isDropTarget ? "rgba(79,172,254,.6)" : st ? (present ? "rgba(52,211,153,.35)" : "rgba(255,255,255,.1)") : "rgba(255,255,255,.045)"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, position: "relative", opacity: isDragging ? 0.35 : 1, cursor: editMode ? (st ? "grab" : "default") : "default", transition: "all .2s", flexShrink: 0, boxShadow: isDropTarget ? "0 0 14px rgba(79,172,254,.25)" : "none" }}
-      >
-        {st ? (
-          <>
-            <div style={{ width: compact ? 26 : 30, height: compact ? 26 : 30, borderRadius: "50%", overflow: "hidden", background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: compact ? 15 : 17, flexShrink: 0 }}>
-              {st.photo ? <img src={st.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : st.em}
-            </div>
-            <div style={{ fontSize: 8, color: "#94A3B8", textAlign: "center", padding: "0 3px", lineHeight: 1.2, maxWidth: sz - 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {st.name.split(" ").pop()}
-            </div>
-            <div style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: present ? "#34D399" : "#EF4444", boxShadow: present ? "0 0 6px rgba(52,211,153,.7)" : "none" }} />
-            {hovSlot === slotI && !editMode && (
-              <div className="tooltip" style={{ minWidth: 120 }}>
-                <div style={{ fontWeight: 700, color: "#E2EAF4", marginBottom: 3 }}>{st.name}</div>
-                <div style={{ color: "#4A6580" }}>{st.code}</div>
-                <div style={{ color: present ? "#34D399" : "#EF4444", marginTop: 3 }}>{present ? "✓ Có mặt" : "✗ Vắng"}</div>
-              </div>
-            )}
-            {editMode && <GripVertical size={8} style={{ position: "absolute", top: 3, left: 3, color: "#3D5A78", opacity: .5 }} />}
-          </>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <div style={{ width: 16, height: 16, borderRadius: "50%", background: "rgba(255,255,255,.03)", border: "1px dashed rgba(255,255,255,.08)" }} />
-            {isDropTarget && <div style={{ fontSize: 8, color: "#4FACFE", fontWeight: 700 }}>Thả vào</div>}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const getGroupStats = useCallback((groupIdx) => {
     const slots = groupSlots(groupIdx);
     const gStudents = slots.map(s => getStudentAt(s)).filter(Boolean);
@@ -1089,7 +1365,8 @@ function SeatingPage({ state, user }) {
   }, [getStudentAt, state.attendance, attKey]);
 
   const OverviewView = () => (
-    <div style={{ overflowX: "auto", padding: "20px 24px 24px" }}>
+    <div style={{ overflowX: "auto", padding: "20px 16px 24px", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ minWidth: gridMinW }}>
       <div style={{ padding: "8px 16px", borderRadius: 9, textAlign: "center", background: "rgba(79,172,254,.04)", border: "1px solid rgba(79,172,254,.14)", fontSize: 11, color: "#4FACFE", letterSpacing: ".08em", fontWeight: 700, marginBottom: 24, maxWidth: 680, margin: "0 auto 24px" }}>
         📋 BẢNG ĐEN · BAN GIÁO VIÊN
       </div>
@@ -1133,7 +1410,7 @@ function SeatingPage({ state, user }) {
                     <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
                       {side === 0 && <div style={{ width: 20, fontSize: 9, color: TO_COLORS[groupIdx], fontWeight: 700, textAlign: "right", flexShrink: 0, opacity: .8 }}>{row + 1}</div>}
                       {Array.from({ length: SEAT_COLS }, (_, col) => (
-                        <SeatCell key={col} slotI={globalSlotIdx(side, row, col)} />
+                        <SeatCell key={col} slotI={globalSlotIdx(side, row, col)} compact={false} cellSz={cellSz} cellH={cellH} editMode={editMode} dragId={dragId} hovSlot={hovSlot} getStudentAt={getStudentAt} attKey={attKey} attendance={state.attendance} handleDragStart={handleDragStart} handleDragEnd={handleDragEnd} handleDrop={handleDrop} setHovSlot={setHovSlot} clearSlot={clearSlot} showTooltip={showTooltip} moveTooltip={moveTooltip} hideTooltip={hideTooltip} />
                       ))}
                       {side === 1 && <div style={{ width: 20, fontSize: 9, color: TO_COLORS[groupIdx], fontWeight: 700, flexShrink: 0, opacity: .8 }}>{row + 1}</div>}
                     </div>
@@ -1151,6 +1428,7 @@ function SeatingPage({ state, user }) {
           </div>
         ))}
       </div>
+      </div>
     </div>
   );
 
@@ -1165,7 +1443,8 @@ function SeatingPage({ state, user }) {
     const emptySlots = slots.filter(s => !getStudentAt(s)).length;
 
     return (
-      <div style={{ padding: "20px 24px 24px" }}>
+      <div style={{ padding: "16px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ minWidth: toMinW }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20, padding: "14px 18px", borderRadius: 12, background: `${color}08`, border: `1px solid ${color}28` }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
             {["🅰","🅱","©","🅳"][groupIdx]}
@@ -1200,48 +1479,8 @@ function SeatingPage({ state, user }) {
                   <div style={{ width: 20, fontSize: 10, color: color, fontWeight: 700, textAlign: "right", flexShrink: 0, opacity: .8 }}>{globalRow + 1}</div>
                   {Array.from({ length: TO_COLS }, (_, col) => {
                     const slotI = globalSlotIdx(side, globalRow, col);
-                    const st = getStudentAt(slotI);
-                    const present = st && (state.attendance[attKey] || []).includes(st.id);
-                    const isHov2 = hovSlot === slotI && editMode;
-                    const isDragging2 = st && dragId === st.id;
-                    const isDropTarget2 = isHov2 && dragId !== null;
                     return (
-                      <div key={col} className={`seat-cell${st ? " occupied" : ""}`}
-                        draggable={editMode && !!st}
-                        onDragStart={e => { if (!editMode || !st) return; e.dataTransfer.effectAllowed = "move"; handleDragStart(st.id); }}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={e => { if (!editMode) return; e.preventDefault(); setHovSlot(slotI); }}
-                        onDragLeave={e => { if (e.currentTarget.contains(e.relatedTarget)) return; setHovSlot(null); }}
-                        onDrop={e => { e.preventDefault(); handleDrop(slotI); }}
-                        onContextMenu={e => { if (editMode && st) { e.preventDefault(); clearSlot(slotI); } }}
-                        onMouseEnter={() => !editMode && st && setHovSlot(slotI)}
-                        onMouseLeave={() => setHovSlot(null)}
-                        style={{ width: 72, height: 80, borderRadius: 11, background: isDropTarget2 ? `${color}18` : st ? `${color}07` : "rgba(255,255,255,.015)", border: `1.5px solid ${isDropTarget2 ? color : st ? (present ? "#34D399" : `${color}35`) : "rgba(255,255,255,.055)"}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, position: "relative", opacity: isDragging2 ? 0.3 : 1, cursor: editMode ? (st ? "grab" : "default") : "default", transition: "all .2s", flexShrink: 0, boxShadow: st && !isDropTarget2 ? `0 2px 12px ${color}14` : isDropTarget2 ? `0 0 16px ${color}35` : "none" }}
-                      >
-                        {st ? (
-                          <>
-                            <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0, border: `2px solid ${present ? "#34D399" : `${color}45`}` }}>
-                              {st.photo ? <img src={st.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : st.em}
-                            </div>
-                            <div style={{ fontSize: 9, color: "#CBD5E1", textAlign: "center", padding: "0 4px", lineHeight: 1.3, maxWidth: 66, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{st.name.split(" ").pop()}</div>
-                            <div style={{ fontSize: 8, color: "#3D5A78", fontFamily: "monospace" }}>{st.code}</div>
-                            <div style={{ position: "absolute", top: 5, right: 5, width: 8, height: 8, borderRadius: "50%", background: present ? "#34D399" : "#EF4444", boxShadow: present ? "0 0 7px rgba(52,211,153,.7)" : "none" }} />
-                            {hovSlot === slotI && !editMode && (
-                              <div className="tooltip">
-                                <div style={{ fontWeight: 700, color: "#E2EAF4", marginBottom: 2 }}>{st.name}</div>
-                                <div style={{ color: "#4A6580", fontSize: 9 }}>{st.code}</div>
-                                <div style={{ color: present ? "#34D399" : "#EF4444", marginTop: 3 }}>{present ? "✓ Có mặt" : "✗ Vắng"}</div>
-                              </div>
-                            )}
-                            {editMode && <GripVertical size={9} style={{ position: "absolute", top: 3, left: 3, color: `${color}88` }} />}
-                          </>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                            <div style={{ width: 18, height: 18, borderRadius: "50%", background: `${color}08`, border: `1px dashed ${color}25` }} />
-                            {isDropTarget2 && <div style={{ fontSize: 8, color, fontWeight: 700 }}>Thả vào</div>}
-                          </div>
-                        )}
-                      </div>
+                      <SeatCell key={col} slotI={slotI} compact={true} cellSz={compactSz} cellH={compactH} editMode={editMode} dragId={dragId} hovSlot={hovSlot} getStudentAt={getStudentAt} attKey={attKey} attendance={state.attendance} handleDragStart={handleDragStart} handleDragEnd={handleDragEnd} handleDrop={handleDrop} setHovSlot={setHovSlot} clearSlot={clearSlot} showTooltip={showTooltip} moveTooltip={moveTooltip} hideTooltip={hideTooltip} />
                     );
                   })}
                 </div>
@@ -1262,6 +1501,7 @@ function SeatingPage({ state, user }) {
             </div>
           </div>
         )}
+        </div>
       </div>
     );
   };
@@ -1276,16 +1516,18 @@ function SeatingPage({ state, user }) {
 
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {myClasses.map(c => (
-          <button key={c.id} onClick={() => setSelClass(c.id)} style={{ padding: "6px 14px", borderRadius: 9, border: `1px solid ${selClass === c.id ? "rgba(79,172,254,.4)" : "rgba(255,255,255,.07)"}`, background: selClass === c.id ? "rgba(79,172,254,.1)" : "transparent", color: selClass === c.id ? "#4FACFE" : "#4A6580", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{c.name}</button>
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {myClasses.map(c => (
+            <button key={c.id} onClick={() => setSelClass(c.id)} style={{ padding: "6px 14px", borderRadius: 9, border: `1px solid ${selClass === c.id ? "rgba(79,172,254,.4)" : "rgba(255,255,255,.07)"}`, background: selClass === c.id ? "rgba(79,172,254,.1)" : "transparent", color: selClass === c.id ? "#4FACFE" : "#4A6580", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{c.name}</button>
+          ))}
+        </div>
         {user.role === "teacher" && (
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => setEditMode(p => !p)} style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${editMode ? "rgba(167,139,250,.45)" : "rgba(255,255,255,.08)"}`, background: editMode ? "rgba(167,139,250,.1)" : "transparent", color: editMode ? "#A78BFA" : "#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
-              <GripVertical size={12} />{editMode ? "✓ Xong" : "Kéo thả"}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button onClick={() => setEditMode(p => !p)} style={{ padding: "7px 14px", borderRadius: 9, border: `1px solid ${editMode ? "rgba(167,139,250,.45)" : "rgba(255,255,255,.08)"}`, background: editMode ? "rgba(167,139,250,.12)" : "rgba(255,255,255,.04)", color: editMode ? "#A78BFA" : "#94A3B8", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all .2s", boxShadow: editMode ? "0 0 12px rgba(167,139,250,.2)" : "none" }}>
+              <GripVertical size={13} />{editMode ? "✓ Xong" : "Kéo thả"}
             </button>
-            <button onClick={resetSeats} style={{ padding: "5px 11px", borderRadius: 8, border: "1px solid rgba(255,255,255,.08)", background: "transparent", color: "#4A6580", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><RefreshCw size={11} />Reset</button>
+            <button onClick={resetSeats} style={{ padding: "7px 14px", borderRadius: 9, border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.04)", color: "#94A3B8", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all .2s" }} onMouseEnter={e => e.currentTarget.style.color="#EF4444"} onMouseLeave={e => e.currentTarget.style.color="#94A3B8"}><RefreshCw size={12} />Reset</button>
           </div>
         )}
       </div>
@@ -1333,7 +1575,7 @@ function SeatingPage({ state, user }) {
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
               {unassigned.map(s => (
-                <div key={s.id} draggable={editMode} onDragStart={e => { if (!editMode) return; e.dataTransfer.effectAllowed = "move"; handleDragStart(s.id); }} onDragEnd={handleDragEnd}
+                <div key={s.id} draggable={editMode} onDragStart={e => { if (!editMode) return; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", s.id); handleDragStart(s.id); }} onDragEnd={handleDragEnd}
                   style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 9, background: "rgba(255,255,255,.045)", border: `1px solid ${editMode ? "rgba(245,158,11,.32)" : "rgba(255,255,255,.1)"}`, cursor: editMode ? "grab" : "default", fontSize: 11, color: "#94A3B8" }}>
                   <div style={{ width: 24, height: 24, borderRadius: "50%", overflow: "hidden", background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
                     {s.photo ? <img src={s.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : s.em}
@@ -1404,7 +1646,7 @@ function AttCalendar({ classId, studentId, attendance, onSelectDate, selectedDat
           const isAbsent = hasSession && !isPresent && studentId;
           return (
             <div key={i} className={`cal-day ${isPresent ? "present" : ""} ${isAbsent ? "absent" : ""} ${!hasSession ? "no-session" : ""} ${isToday ? "today-mark" : ""}`}
-              onClick={() => hasSession && onSelectDate(dateStr)} style={{ outline: isSelected ? "2px solid #4FACFE" : "none", outlineOffset: 1 }}>
+              onClick={() => hasSession && onSelectDate(dateStr)} style={{ outline: isSelected && !isToday ? "2px solid #A78BFA" : isSelected && isToday ? "2px solid #A78BFA" : "none", outlineOffset: 2, background: isSelected ? (isPresent ? "rgba(52,211,153,.25)" : isAbsent ? "rgba(239,68,68,.2)" : "rgba(167,139,250,.18)") : undefined, boxShadow: isSelected ? "0 0 0 2px rgba(167,139,250,.5)" : undefined }}>
               {day}
             </div>
           );
@@ -1466,7 +1708,7 @@ function AttPage({ state, user }) {
         </div>
       )}
       <div style={{ display: "flex", gap: 4 }}>
-        {tabs.map(([v, l]) => <button key={v} onClick={() => setTab(v)} style={{ padding: "6px 15px", borderRadius: 9, border: `1px solid ${tab === v ? "rgba(79,172,254,.4)" : "rgba(255,255,255,.07)"}`, background: tab === v ? "rgba(79,172,254,.1)" : "transparent", color: tab === v ? "#4FACFE" : "#4A6580", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>)}
+        {tabs.map(([v, l]) => <button key={v} onClick={() => setTab(v)} style={{ padding: "6px 15px", borderRadius: 9, border: `1px solid ${tab === v ? "rgba(79,172,254,.4)" : "rgba(255,255,255,.07)"}`, background: tab === v ? "linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))" : "transparent", color: tab === v ? "#4FACFE" : "#4A6580", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .25s cubic-bezier(.4,0,.2,1)", boxShadow: tab === v ? "0 4px 16px rgba(79,172,254,.15)" : "none" }}>{l}</button>)}
       </div>
       {tab === "today" && (
         <div style={{ display: "grid", gridTemplateColumns: user.role === "teacher" ? "1fr 1.3fr" : "1fr", gap: 14, alignItems: "start" }}>
@@ -1474,16 +1716,16 @@ function AttPage({ state, user }) {
             <Card style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 3 }}>Mã QR điểm danh</div>
               <div style={{ fontSize: 11, color: "#3D5A78", marginBottom: 16 }}>Lớp {myClasses.find(c => c.id === selClass)?.name} · {today}</div>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                <div style={{ borderRadius: 14, overflow: "hidden", border: "2px solid rgba(79,172,254,.38)", boxShadow: "0 0 36px rgba(79,172,254,.22)", animation: "glowbeat 2s ease-in-out infinite" }}><QRSvg sz={170} /></div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, position: "relative" }}>
+                <div style={{ borderRadius: 16, overflow: "hidden", border: "2px solid rgba(79,172,254,.4)", boxShadow: "0 0 0 4px rgba(79,172,254,.08),0 0 48px rgba(79,172,254,.3),0 0 80px rgba(79,172,254,.1)", animation: "glowbeat 2.5s ease-in-out infinite" }} className="qr-glow"><QRSvg sz={170} /></div>
               </div>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 26, fontWeight: 700, fontFamily: "monospace", color: timer < 60 ? "#EF4444" : "#4FACFE", padding: "6px 20px", borderRadius: 10, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)" }}>{mm}:{ss}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "monospace", color: timer < 60 ? "#EF4444" : "#4FACFE", padding: "7px 22px", borderRadius: 12, background: timer < 60 ? "rgba(239,68,68,.08)" : "rgba(79,172,254,.08)", border: `1px solid ${timer < 60 ? "rgba(239,68,68,.25)" : "rgba(79,172,254,.2)"}`, animation: timer < 60 ? "glowbeat 1s ease-in-out infinite" : "none", transition: "all .5s", letterSpacing: ".05em" }}>{mm}:{ss}</div>
               </div>
               <div style={{ fontSize: 11, color: "#3D5A78", marginBottom: 14 }}>Thời gian còn lại</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => markAll(true)} style={{ flex: 1, padding: "8px", borderRadius: 9, border: "none", cursor: "pointer", background: "rgba(52,211,153,.1)", color: "#34D399", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>✓ Điểm tất cả</button>
-                <button onClick={() => markAll(false)} style={{ flex: 1, padding: "8px", borderRadius: 9, border: "none", cursor: "pointer", background: "rgba(239,68,68,.08)", color: "#EF4444", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>✗ Xóa tất cả</button>
+                <button onClick={() => markAll(true)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "1px solid rgba(52,211,153,.25)", cursor: "pointer", background: "rgba(52,211,153,.08)", color: "#34D399", fontSize: 11, fontWeight: 600, fontFamily: "inherit", transition: "all .25s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(52,211,153,.15)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(52,211,153,.2)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(52,211,153,.08)"; e.currentTarget.style.boxShadow = ""; }}>✓ Điểm tất cả</button>
+                <button onClick={() => markAll(false)} style={{ flex: 1, padding: "9px", borderRadius: 10, border: "1px solid rgba(239,68,68,.22)", cursor: "pointer", background: "rgba(239,68,68,.07)", color: "#EF4444", fontSize: 11, fontWeight: 600, fontFamily: "inherit", transition: "all .25s" }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,.14)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(239,68,68,.2)"; }} onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,.07)"; e.currentTarget.style.boxShadow = ""; }}>✗ Xóa tất cả</button>
               </div>
             </Card>
           ) : (
@@ -1491,42 +1733,41 @@ function AttPage({ state, user }) {
               <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4", marginBottom: 12 }}>Điểm danh hôm nay</div>
               {!scanned ? (
                 <>
-                  <div onClick={doScan} style={{ width: 170, height: 170, borderRadius: 14, margin: "0 auto 18px", background: "rgba(79,172,254,.04)", border: scanning ? "2px solid #4FACFE" : "2px dashed rgba(79,172,254,.32)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", boxShadow: scanning ? "0 0 28px rgba(79,172,254,.32)" : "none", transition: "all .3s", cursor: "pointer" }}>
-                    {scanning ? <><div style={{ fontSize: 40 }}>📷</div><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#4FACFE,transparent)", animation: "scanline 1.5s ease-in-out infinite alternate" }} /></> : <div style={{ color: "#2E4A6A" }}><QrCode size={44} /><div style={{ fontSize: 11, marginTop: 6 }}>Nhấn để quét</div></div>}
+                  <div onClick={doScan} style={{ width: 174, height: 174, borderRadius: 16, margin: "0 auto 18px", background: scanning ? "rgba(79,172,254,.06)" : "rgba(79,172,254,.03)", border: scanning ? "2px solid #4FACFE" : "2px dashed rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", boxShadow: scanning ? "0 0 40px rgba(79,172,254,.35),0 0 0 4px rgba(79,172,254,.08)" : "none", transition: "all .35s cubic-bezier(.4,0,.2,1)", cursor: "pointer" }} onMouseEnter={e => { if (!scanning) { e.currentTarget.style.borderStyle = "solid"; e.currentTarget.style.background = "rgba(79,172,254,.07)"; }}} onMouseLeave={e => { if (!scanning) { e.currentTarget.style.borderStyle = "dashed"; e.currentTarget.style.background = "rgba(79,172,254,.03)"; }}}>
+                    {scanning ? <><div style={{ fontSize: 44, animation: "breathe 1s ease-in-out infinite" }}>📷</div><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#4FACFE,transparent)", animation: "scanline 1.5s ease-in-out infinite alternate", boxShadow: "0 0 12px rgba(79,172,254,.8)" }} /></> : <div style={{ color: "#2E4A6A", textAlign: "center", transition: "all .2s" }}><QrCode size={46} /><div style={{ fontSize: 11, marginTop: 8 }}>Nhấn để quét</div></div>}
                   </div>
                   <Btn onClick={doScan} disabled={scanning} style={{ width: "100%", justifyContent: "center" }}>{scanning ? "Đang quét..." : "Quét QR Code 📷"}</Btn>
                 </>
               ) : (
-                <div style={{ animation: "pop .4s ease", paddingTop: 8 }}>
-                  <div style={{ fontSize: 64, marginBottom: 12 }}>✅</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#34D399", marginBottom: 5 }}>Điểm danh thành công!</div>
-                  <div style={{ fontSize: 11, color: "#3D5A78" }}>{user.data.name}</div>
+                <div style={{ animation: "pop .5s cubic-bezier(.34,1.56,.64,1)", paddingTop: 8 }}>
+                  <div style={{ fontSize: 70, marginBottom: 14, animation: "float 2s ease-in-out infinite", filter: "drop-shadow(0 8px 16px rgba(52,211,153,.4))" }}>✅</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: "#34D399", marginBottom: 6, animation: "countUp .4s .1s both" }}>Điểm danh thành công!</div>
+                  <div style={{ fontSize: 11, color: "#3D5A78", animation: "fadeUp .4s .2s both" }}>{user.data.name}</div>
                 </div>
               )}
             </Card>
           )}
           <div className="scard" style={{ overflow: "hidden" }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,.055)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(79,172,254,.05)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", background: "rgba(79,172,254,.015)" }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#E2EAF4" }}>Danh sách</div>
-              {user.role === "teacher" && <input type="date" value={viewDate} onChange={e => setViewDate(e.target.value)} style={{ padding: "4px 8px", borderRadius: 7, border: "1px solid rgba(255,255,255,.09)", background: "rgba(255,255,255,.04)", color: "#94A3B8", fontSize: 11, fontFamily: "inherit", outline: "none" }} />}
+              {user.role === "teacher" && <input type="date" value={viewDate} onChange={e => setViewDate(e.target.value)} style={{ padding: "4px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,.09)", background: "rgba(255,255,255,.04)", color: "#94A3B8", fontSize: 11, fontFamily: "inherit", outline: "none", transition: "border-color .2s" }} onFocus={e => e.target.style.borderColor = "rgba(79,172,254,.4)"} onBlur={e => e.target.style.borderColor = "rgba(255,255,255,.09)"} />}
               <div style={{ display: "flex", gap: 6 }}><Badge c="green">{presentIds.length} có mặt</Badge><Badge c="red">{classStudents.length - presentIds.length} vắng</Badge></div>
             </div>
             {classStudents.length === 0 ? <div style={{ padding: 28, textAlign: "center", color: "#2E4A6A", fontSize: 12 }}>Chưa có học sinh</div> : (
               <>
                 <div style={{ maxHeight: 340, overflowY: "auto" }}>
-                  {classStudents.map(s => {
+                  {classStudents.map((s, rowIdx) => {
                     const present = presentIds.includes(s.id);
                     return (
-                      <div key={s.id} onClick={() => toggle(s.id)} style={{ padding: "9px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,.025)", cursor: user.role === "teacher" ? "pointer" : "default", transition: "background .15s" }}
-                        onMouseEnter={e => { if (user.role === "teacher") e.currentTarget.style.background = "rgba(255,255,255,.018)"; }}
-                        onMouseLeave={e => e.currentTarget.style.background = ""}>
+                      <div key={s.id} onClick={() => toggle(s.id)} className="row-hover" style={{ padding: "9px 16px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,.025)", cursor: user.role === "teacher" ? "pointer" : "default", transition: "all .2s", animation: `fadeUp .3s ${rowIdx * .03}s both` }}
+                        >
                         <Av em={s.em} photo={s.photo} sz={28} glow={present} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: "#E2EAF4" }}>{s.name}</div>
                           <div style={{ fontSize: 10, color: "#2E4A6A" }}>{s.code}</div>
                         </div>
-                        {user.role === "teacher" && <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${present ? "#34D399" : "rgba(255,255,255,.14)"}`, background: present ? "rgba(52,211,153,.12)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>{present && <Check size={9} color="#34D399" />}</div>}
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: present ? "#34D399" : "#EF4444", boxShadow: present ? "0 0 7px rgba(52,211,153,.65)" : "none" }} />
+                        {user.role === "teacher" && <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${present ? "#34D399" : "rgba(255,255,255,.12)"}`, background: present ? "rgba(52,211,153,.15)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .28s cubic-bezier(.34,1.56,.64,1)", boxShadow: present ? "0 0 12px rgba(52,211,153,.3)" : "none" }}>{present && <Check size={10} color="#34D399" />}</div>}
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: present ? "#34D399" : "#EF4444", boxShadow: present ? "0 0 10px rgba(52,211,153,.7)" : "0 0 6px rgba(239,68,68,.4)", transition: "all .3s" }} />
                       </div>
                     );
                   })}
@@ -1621,7 +1862,7 @@ function ChatPage({ state, user }) {
 
   const send = () => {
     if (!inp.trim()) return;
-    const msg = { id: Date.now(), user: user.data.name, role: user.role, em: user.data.em || (user.role === "teacher" ? "👨‍🏫" : "😊"), text: inp.trim(), time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) };
+    const msg = { id: Date.now(), user: user.data.name, role: user.role, em: user.data.em || (user.role === "teacher" ? "👨‍🏫" : "😊"), photo: user.data.photo || null, text: inp.trim(), time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) };
     state.setMessages(p => ({ ...p, [msgKey]: [...(p[msgKey] || []), msg] }));
     setInp("");
     setTimeout(() => bot.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -1631,15 +1872,15 @@ function ChatPage({ state, user }) {
 
   return (
     <div className="page" style={{ padding: 20, height: "calc(100vh - 100px)", display: "flex", gap: 12 }}>
-      <div style={{ width: 168, borderRadius: 13, background: "#060D1E", border: "1px solid rgba(255,255,255,.06)", padding: 10, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "#2E4A6A", letterSpacing: ".08em", padding: "3px 7px", marginBottom: 6 }}>KÊNH — {cls?.name}</div>
-        {channels.map(ch => <div key={ch} onClick={() => setChannel(ch)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 8px", borderRadius: 7, cursor: "pointer", background: channel === ch ? "rgba(79,172,254,.1)" : "transparent", color: channel === ch ? "#4FACFE" : "#3D5A78", fontSize: 11, marginBottom: 1, transition: "all .15s" }}><Hash size={11} />{ch}</div>)}
+      <div style={{ width: 168, borderRadius: 15, background: "linear-gradient(180deg,#060E1C,#050B18)", border: "1px solid rgba(79,172,254,.06)", padding: 10, flexShrink: 0, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,.3)" }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "#1E3450", letterSpacing: ".1em", padding: "3px 7px", marginBottom: 8 }}>KÊNH — {cls?.name}</div>
+        {channels.map((ch, idx) => <div key={ch} onClick={() => setChannel(ch)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 9px", borderRadius: 9, cursor: "pointer", background: channel === ch ? "linear-gradient(135deg,rgba(79,172,254,.14),rgba(79,172,254,.07))" : "transparent", color: channel === ch ? "#4FACFE" : "#3D5A78", fontSize: 11, marginBottom: 2, transition: "all .22s cubic-bezier(.4,0,.2,1)", border: channel === ch ? "1px solid rgba(79,172,254,.2)" : "1px solid transparent", boxShadow: channel === ch ? "0 2px 12px rgba(79,172,254,.15)" : "none", fontWeight: channel === ch ? 600 : 400 }} onMouseEnter={e => { if (channel !== ch) { e.currentTarget.style.background = "rgba(79,172,254,.05)"; e.currentTarget.style.color = "#6CB8FE"; }}} onMouseLeave={e => { if (channel !== ch) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#3D5A78"; }}}><Hash size={11} />{ch}</div>)}
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 9, fontWeight: 700, color: "#2E4A6A", letterSpacing: ".08em", padding: "6px 7px 4px" }}>THÀNH VIÊN ({classStudents.length})</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "#1E3450", letterSpacing: ".1em", padding: "6px 7px 4px" }}>THÀNH VIÊN ({classStudents.length})</div>
         <div style={{ overflowY: "auto" }}>
           {classStudents.slice(0, 8).map(s => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 7px", fontSize: 10, color: "#2E4A6A" }}>
-              <div style={{ position: "relative" }}><Av em={s.em} photo={s.photo} sz={16} /><div style={{ position: "absolute", bottom: 0, right: 0, width: 4, height: 4, borderRadius: "50%", background: "#34D399", border: "1px solid #060D1E" }} /></div>
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 7px", fontSize: 10, color: "#2E4A6A", borderRadius: 6, transition: "background .15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.03)"} onMouseLeave={e => e.currentTarget.style.background = ""}>
+              <div style={{ position: "relative" }}><Av em={s.em} photo={s.photo} sz={16} /><div style={{ position: "absolute", bottom: 0, right: 0, width: 5, height: 5, borderRadius: "50%", background: "#34D399", border: "1px solid #060D1E", animation: "glowPulseGreen 2.5s ease-in-out infinite" }} /></div>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name.split(" ").pop()}</span>
             </div>
           ))}
@@ -1647,31 +1888,31 @@ function ChatPage({ state, user }) {
         </div>
       </div>
       <div className="scard" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.055)", display: "flex", alignItems: "center", gap: 6 }}>
-          <Hash size={13} style={{ color: "#4FACFE" }} /><span style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4" }}>{channel}</span>
+        <div style={{ padding: "11px 16px", borderBottom: "1px solid rgba(79,172,254,.06)", display: "flex", alignItems: "center", gap: 6, background: "rgba(79,172,254,.02)" }}>
+          <Hash size={13} style={{ color: "#4FACFE", filter: "drop-shadow(0 0 6px rgba(79,172,254,.7))" }} /><span style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4" }}>{channel}</span>
           <div style={{ flex: 1 }} /><span style={{ fontSize: 11, color: "#2E4A6A" }}>{msgs.length} tin</span>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 0 }}>
-          {msgs.length === 0 && <div style={{ color: "#2E4A6A", fontSize: 12, textAlign: "center", paddingTop: 28 }}>Chưa có tin nhắn. Hãy bắt đầu!</div>}
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 0 }}>
+          {msgs.length === 0 && <div style={{ color: "#1E3450", fontSize: 12, textAlign: "center", paddingTop: 40, animation: "fadeUp .5s ease" }}>Chưa có tin nhắn. Hãy bắt đầu! 💬</div>}
           {msgs.map((m, i) => {
             const showAv = i === 0 || msgs[i - 1].user !== m.user;
             const isT = m.role === "teacher";
             return (
-              <div key={m.id} style={{ display: "flex", gap: 9, padding: "3px 0", alignItems: "flex-start", animation: "fadeUp .2s ease" }}>
-                {showAv ? <Av em={m.em} sz={28} /> : <div style={{ width: 28, flexShrink: 0 }} />}
+              <div key={m.id} style={{ display: "flex", gap: 9, padding: "3px 0", alignItems: "flex-start", animation: "fadeUp .25s cubic-bezier(.22,.68,0,1.2)" }}>
+                {showAv ? <Av em={m.em} photo={m.photo} sz={28} /> : <div style={{ width: 28, flexShrink: 0 }} />}
                 <div>
                   {showAv && (<div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}><span style={{ fontSize: 11, fontWeight: 700, color: isT ? "#A78BFA" : "#E2EAF4" }}>{m.user}</span>{isT && <Badge c="violet">GV</Badge>}<span style={{ fontSize: 9, color: "#2E4A6A" }}>{m.time}</span></div>)}
-                  <div style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.65, padding: "6px 12px", borderRadius: showAv ? "2px 10px 10px 10px" : "10px", background: "rgba(255,255,255,.045)", display: "inline-block", maxWidth: 440 }}>{m.text}</div>
+                  <div style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.7, padding: "7px 13px", borderRadius: showAv ? "2px 12px 12px 12px" : "12px", background: isT ? "linear-gradient(135deg,rgba(167,139,250,.09),rgba(167,139,250,.05))" : "rgba(255,255,255,.045)", display: "inline-block", maxWidth: 440, border: isT ? "1px solid rgba(167,139,250,.12)" : "1px solid rgba(255,255,255,.05)", transition: "all .2s" }} onMouseEnter={e => e.currentTarget.style.background = isT ? "rgba(167,139,250,.13)" : "rgba(255,255,255,.065)"} onMouseLeave={e => e.currentTarget.style.background = isT ? "linear-gradient(135deg,rgba(167,139,250,.09),rgba(167,139,250,.05))" : "rgba(255,255,255,.045)"}>{m.text}</div>
                 </div>
               </div>
             );
           })}
           <div ref={bot} />
         </div>
-        <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,.045)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.04)", borderRadius: 11, padding: "6px 13px", border: "1px solid rgba(255,255,255,.08)" }}>
+        <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(79,172,254,.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.035)", borderRadius: 13, padding: "7px 14px", border: "1px solid rgba(255,255,255,.07)", transition: "all .25s" }} onFocusCapture={e => { e.currentTarget.style.borderColor = "rgba(79,172,254,.4)"; e.currentTarget.style.background = "rgba(79,172,254,.04)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(79,172,254,.1)"; }} onBlurCapture={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.07)"; e.currentTarget.style.background = "rgba(255,255,255,.035)"; e.currentTarget.style.boxShadow = ""; }}>
             <input value={inp} onChange={e => setInp(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder={`Nhắn vào #${channel}...`} style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit" }} />
-            <button onClick={send} style={{ width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer", background: inp.trim() ? "rgba(79,172,254,.22)" : "transparent", color: inp.trim() ? "#4FACFE" : "#2E4A6A", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}><Send size={13} /></button>
+            <button onClick={send} style={{ width: 30, height: 30, borderRadius: 9, border: "none", cursor: "pointer", background: inp.trim() ? "linear-gradient(135deg,#1D6CF5,#7B3FE4)" : "transparent", color: inp.trim() ? "#fff" : "#2E4A6A", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .28s cubic-bezier(.34,1.56,.64,1)", transform: inp.trim() ? "scale(1)" : "scale(0.9)", boxShadow: inp.trim() ? "0 4px 16px rgba(29,108,245,.4)" : "none" }}><Send size={13} /></button>
           </div>
         </div>
       </div>
@@ -1680,6 +1921,85 @@ function ChatPage({ state, user }) {
 }
 
 
+function QuizModal({ task, classId, user, state, onClose }) {
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(null);
+  const qs = task.questions || [];
+
+  const submitQuiz = () => {
+    const correct = qs.filter((q, i) => answers[i] === q.ans).length;
+    const pct = Math.round((correct / qs.length) * 100);
+    setScore({ correct, pct });
+    setSubmitted(true);
+    const sub = { studentId: user.data.id, studentName: user.data.name, submittedAt: Date.now(), quizScore: pct, quizCorrect: correct, quizAnswers: answers };
+    state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === task.id ? { ...t, status: "submitted", submittedAt: Date.now(), quizScore: pct, quizCorrect: correct, quizAnswers: answers, submissions: [...(t.submissions||[]).filter(s=>s.studentId!==user.data.id), sub] } : t) }));
+  };
+
+  const answered = Object.keys(answers).length;
+  const OPTS = ["A","B","C","D"];
+
+  return (
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && submitted && onClose()}>
+      <div className="modal-flex" style={{ width: 520 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(79,172,254,.03)" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>🧠 {task.title}</div>
+            <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · {qs.length} câu hỏi</div>
+          </div>
+          {submitted ? <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button> : <div style={{ fontSize: 11, color: answered === qs.length ? "#34D399" : "#F59E0B", fontWeight: 600 }}>{answered}/{qs.length} đã trả lời</div>}
+        </div>
+        {submitted && score ? (
+          <div style={{ padding: 32, textAlign: "center" }}>
+            <div style={{ fontSize: 64, marginBottom: 16, animation: "pop .5s cubic-bezier(.34,1.56,.64,1)" }}>{score.pct >= 80 ? "🏆" : score.pct >= 50 ? "😊" : "📚"}</div>
+            <div className="hfont" style={{ fontSize: 42, fontWeight: 400, color: score.pct >= 80 ? "#34D399" : score.pct >= 50 ? "#F59E0B" : "#EF4444", marginBottom: 8, animation: "countUp .5s .1s both" }}>{score.pct}%</div>
+            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 20 }}>Đúng {score.correct}/{qs.length} câu</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, textAlign: "left", marginBottom: 20 }}>
+              {qs.map((q, i) => {
+                const isCorrect = answers[i] === q.ans;
+                return (
+                  <div key={i} style={{ padding: "10px 14px", borderRadius: 10, background: isCorrect ? "rgba(52,211,153,.07)" : "rgba(239,68,68,.07)", border: `1px solid ${isCorrect ? "rgba(52,211,153,.25)" : "rgba(239,68,68,.2)"}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#E2EAF4", marginBottom: 4 }}>{i+1}. {q.q}</div>
+                    <div style={{ fontSize: 10, color: isCorrect ? "#34D399" : "#EF4444" }}>{isCorrect ? "✓" : "✗"} Bạn chọn: {OPTS[answers[i]] ?? "–"} · Đáp án: {OPTS[q.ans]}: {q.opts[q.ans]}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <Btn onClick={onClose} style={{ width: "100%", justifyContent: "center" }}>Đóng</Btn>
+          </div>
+        ) : (
+          <>
+            <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              {qs.map((q, qi) => (
+                <div key={qi} style={{ background: "rgba(255,255,255,.025)", border: `1px solid ${answers[qi] !== undefined ? "rgba(79,172,254,.2)" : "rgba(255,255,255,.06)"}`, borderRadius: 13, padding: 16, transition: "border-color .2s" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4", marginBottom: 12 }}><span style={{ color: "#4FACFE", marginRight: 8 }}>Câu {qi+1}.</span>{q.q}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {q.opts.map((opt, oi) => {
+                      const sel = answers[qi] === oi;
+                      return (
+                        <button key={oi} onClick={() => setAnswers(p => ({ ...p, [qi]: oi }))} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px", borderRadius: 9, border: `1px solid ${sel ? "rgba(79,172,254,.55)" : "rgba(255,255,255,.07)"}`, background: sel ? "linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))" : "rgba(255,255,255,.025)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: sel ? "#4FACFE" : "#94A3B8", textAlign: "left", transition: "all .2s cubic-bezier(.34,1.56,.64,1)", transform: sel ? "scale(1.01)" : "scale(1)" }}>
+                          <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${sel ? "#4FACFE" : "rgba(255,255,255,.15)"}`, background: sel ? "rgba(79,172,254,.2)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: sel ? "#4FACFE" : "#4A6580", flexShrink: 0, transition: "all .2s" }}>{OPTS[oi]}</div>
+                          {opt || <span style={{ color: "#2E4A6A", fontStyle: "italic" }}>(chưa có đáp án)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 9 }}>
+              <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Hủy</Btn>
+              <Btn onClick={submitQuiz} disabled={answered < qs.length} style={{ flex: 2, justifyContent: "center" }}>
+                {answered < qs.length ? `Còn ${qs.length - answered} câu chưa trả lời` : "✓ Nộp quiz"}
+              </Btn>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // giao btvn
 
 function TaskPage({ state, user }) {
@@ -1687,11 +2007,18 @@ function TaskPage({ state, user }) {
   const tasks = state.assignments[classId] || [];
   const [showAdd, setShowAdd] = useState(false);
   const [tab, setTab] = useState("all");
-  const [newTask, setNewTask] = useState({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [] });
+  const [newTask, setNewTask] = useState({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [] });
   const [uploadingFile, setUploadingFile] = useState(false);
   const [errTask, setErrTask] = useState("");
   const fileRef = useRef();
   const { confirm, ConfirmUI } = useConfirm();
+
+  const [quizModal, setQuizModal] = useState(null);
+  const [submitModal, setSubmitModal] = useState(null);
+  const [submitImgs, setSubmitImgs] = useState([]);
+  const [submitNote, setSubmitNote] = useState("");
+  const [uploadingSubmit, setUploadingSubmit] = useState(false);
+  const submitImgRef = useRef();
 
   const filtered = tab === "all" ? tasks : tasks.filter(t => t.status === tab);
   const counts = { all: tasks.length, pending: tasks.filter(t => t.status === "pending").length, submitted: tasks.filter(t => t.status === "submitted").length, overdue: tasks.filter(t => t.status === "overdue").length };
@@ -1707,15 +2034,39 @@ function TaskPage({ state, user }) {
     }))).then(results => { setNewTask(p => ({ ...p, attachments: [...p.attachments, ...results.filter(Boolean)] })); setUploadingFile(false); });
   };
 
+  const handleSubmitImgUpload = e => {
+    const files = Array.from(e.target.files).filter(f => f.type.startsWith("image/"));
+    if (!files.length) return;
+    setUploadingSubmit(true);
+    Promise.all(files.map(f => new Promise(res => {
+      if (f.size > 8 * 1024 * 1024) { res(null); return; }
+      const r = new FileReader();
+      r.onload = () => res({ name: f.name, data: r.result });
+      r.readAsDataURL(f);
+    }))).then(results => { setSubmitImgs(p => [...p, ...results.filter(Boolean)]); setUploadingSubmit(false); });
+  };
+
+  const [taskDetailModal, setTaskDetailModal] = useState(null);
+
+  const openSubmitModal = task => { setSubmitModal(task); setSubmitImgs([]); setSubmitNote(""); };
+
+  const confirmSubmit = () => {
+    if (submitImgs.length === 0) return;
+    const sub = { studentId: user.data.id, studentName: user.data.name, submittedAt: Date.now(), submitImgs, submitNote };
+    state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === submitModal.id ? { ...t, status: "submitted", submittedAt: Date.now(), submitImgs, submitNote, submissions: [...(t.submissions||[]).filter(s=>s.studentId!==user.data.id), sub] } : t) }));
+    setSubmitModal(null);
+  };
+
   const addTask = () => {
     if (!newTask.title.trim()) { setErrTask("Nhập tên bài tập"); return; }
     if (!newTask.deadline) { setErrTask("Chọn deadline"); return; }
-    state.setAssignments(p => ({ ...p, [classId]: [...(p[classId] || []), { id: "task_" + Date.now(), ...newTask, status: "pending", createdAt: Date.now() }] }));
-    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [] });
+    if ((newTask.taskType||"normal") === "quiz" && !(newTask.questions||[]).length) { setErrTask("Thêm ít nhất 1 câu hỏi"); return; }
+    if ((newTask.taskType||"normal") === "quiz" && (newTask.questions||[]).some(q => !q.q.trim())) { setErrTask("Điền đầy đủ nội dung các câu hỏi"); return; }
+    state.setAssignments(p => ({ ...p, [classId]: [...(p[classId] || []), { id: "task_" + Date.now(), ...newTask, taskType: newTask.taskType||"normal", status: "pending", createdAt: Date.now() }] }));
+    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [] });
     setShowAdd(false); setErrTask("");
   };
 
-  const submitTask = tid => state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === tid ? { ...t, status: "submitted", submittedAt: Date.now() } : t) }));
   const deleteTask = async tid => {
     const ok = await confirm("Xóa bài tập này?");
     if (!ok) return;
@@ -1727,6 +2078,49 @@ function TaskPage({ state, user }) {
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       {ConfirmUI}
+
+      {submitModal && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setSubmitModal(null)}>
+          <div className="modal" style={{ width: 420 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#E2EAF4" }}>Nộp bài: {submitModal.title}</h2>
+              <button onClick={() => setSubmitModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 8, letterSpacing: ".05em" }}>ẢNH BÀI LÀM <span style={{ color: "#EF4444" }}>*</span></div>
+              <button onClick={() => submitImgRef.current?.click()} style={{ width: "100%", padding: "18px", borderRadius: 12, border: `2px dashed ${submitImgs.length > 0 ? "rgba(52,211,153,.4)" : "rgba(79,172,254,.3)"}`, background: submitImgs.length > 0 ? "rgba(52,211,153,.04)" : "rgba(79,172,254,.025)", color: "#2E4A6A", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit", transition: "all .2s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = submitImgs.length > 0 ? "rgba(52,211,153,.6)" : "rgba(79,172,254,.5)"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = submitImgs.length > 0 ? "rgba(52,211,153,.4)" : "rgba(79,172,254,.3)"}>
+                <div style={{ fontSize: 28 }}>{uploadingSubmit ? "⏳" : submitImgs.length > 0 ? "✅" : "📷"}</div>
+                <div style={{ fontSize: 12, color: submitImgs.length > 0 ? "#34D399" : "#4FACFE", fontWeight: 600 }}>
+                  {uploadingSubmit ? "Đang tải..." : submitImgs.length > 0 ? `${submitImgs.length} ảnh đã chọn — nhấn để thêm` : "Chụp/chọn ảnh bài làm"}
+                </div>
+                <div style={{ fontSize: 10, color: "#2E4A6A" }}>Hỗ trợ JPG, PNG — tối đa 8MB/ảnh</div>
+              </button>
+              <input ref={submitImgRef} type="file" accept="image/*" multiple onChange={handleSubmitImgUpload} style={{ display: "none" }} />
+              {submitImgs.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  {submitImgs.map((img, i) => (
+                    <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(52,211,153,.3)" }}>
+                      <img src={img.data} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <button onClick={() => setSubmitImgs(p => p.filter((_,j) => j !== i))} style={{ position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: "50%", background: "rgba(239,68,68,.9)", border: "none", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><X size={10} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>GHI CHÚ (tuỳ chọn)</div>
+              <textarea value={submitNote} onChange={e => setSubmitNote(e.target.value)} placeholder="Ghi chú thêm cho giáo viên..." rows={2} style={{ width: "100%", padding: "9px 13px", borderRadius: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "none" }} />
+            </div>
+            {submitImgs.length === 0 && <div style={{ fontSize: 11, color: "#EF4444", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}><AlertTriangle size={12} />Cần ít nhất 1 ảnh bài làm</div>}
+            <div style={{ display: "flex", gap: 9 }}>
+              <Btn variant="ghost" onClick={() => setSubmitModal(null)} style={{ flex: 1 }}>Hủy</Btn>
+              <Btn onClick={confirmSubmit} disabled={submitImgs.length === 0} style={{ flex: 2 }}><Upload size={13} />Nộp bài</Btn>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: 10 }}>
         {[["Tất cả",counts.all,"#4FACFE"],["Chờ nộp",counts.pending,"#F59E0B"],["Đã nộp",counts.submitted,"#34D399"],["Trễ hạn",counts.overdue,"#EF4444"]].map(([l,n,c]) => (
           <div key={l} className="scard" style={{ padding: 14, textAlign: "center" }}>
@@ -1751,71 +2145,201 @@ function TaskPage({ state, user }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 10, color: "#4A6580", display: "flex", alignItems: "center", gap: 4 }}><Clock size={10} />{a.deadline}</span>
                 {a.priority && <span style={{ fontSize: 10, color: "#F59E0B", fontWeight: 600 }}>⚡ Ưu tiên</span>}
+                {a.taskType === "quiz" && <span style={{ fontSize: 10, color: "#A78BFA", fontWeight: 600 }}>🧠 Quiz · {(a.questions||[]).length} câu</span>}
                 {a.attachments?.length > 0 && <span style={{ fontSize: 10, color: "#4A6580", display: "flex", alignItems: "center", gap: 3 }}><Paperclip size={10} />{a.attachments.length} file</span>}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
               <Badge c={STATUS_CFG[a.status]?.c||"blue"}>{STATUS_CFG[a.status]?.l||a.status}</Badge>
-              {user.role === "student" && a.status === "pending" && <Btn onClick={() => submitTask(a.id)} small variant="success">Nộp bài</Btn>}
-              {user.role === "teacher" && <button onClick={() => deleteTask(a.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>}
+              {user.role === "student" && a.status === "pending" && a.taskType === "quiz" && <Btn onClick={() => setQuizModal(a)} small style={{ background: "linear-gradient(135deg,#7B3FE4,#4FACFE)" }}>🧠 Làm quiz</Btn>}
+              {user.role === "student" && a.status === "pending" && a.taskType !== "quiz" && <Btn onClick={() => openSubmitModal(a)} small variant="success"><Upload size={11} />Nộp bài</Btn>}
+              {user.role === "student" && a.status === "submitted" && a.taskType === "quiz" && a.quizScore !== undefined && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: a.quizScore >= 80 ? "#34D399" : a.quizScore >= 50 ? "#F59E0B" : "#EF4444", padding: "3px 10px", borderRadius: 8, background: a.quizScore >= 80 ? "rgba(52,211,153,.1)" : a.quizScore >= 50 ? "rgba(245,158,11,.1)" : "rgba(239,68,68,.1)", border: `1px solid ${a.quizScore >= 80 ? "rgba(52,211,153,.3)" : a.quizScore >= 50 ? "rgba(245,158,11,.3)" : "rgba(239,68,68,.3)"}` }}>
+                  {a.quizScore}% · {a.quizCorrect}/{(a.questions||[]).length} câu
+                </div>
+              )}
+              {user.role === "student" && a.status === "submitted" && a.taskType !== "quiz" && a.submitImgs?.length > 0 && (
+                <div style={{ display: "flex", gap: 4 }}>
+                  {a.submitImgs.slice(0, 3).map((img, i) => <img key={i} src={img.data} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover", border: "1px solid rgba(52,211,153,.3)" }} />)}
+                  {a.submitImgs.length > 3 && <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94A3B8" }}>+{a.submitImgs.length - 3}</div>}
+                </div>
+              )}
+              {user.role === "teacher" && (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <Btn onClick={() => setTaskDetailModal(a)} small variant="ghost"><Users size={11} />Chi tiết</Btn>
+                  <button onClick={() => deleteTask(a.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
       {showAdd && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
-          <div className="modal" style={{ width: 440 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "#E2EAF4" }}>Thêm bài tập mới</h2>
+          <div className="modal" style={{ width: 480 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
             </div>
-            <Inp label="TÊN BÀI TẬP" value={newTask.title} onChange={v => setNewTask(p => ({ ...p, title: v }))} placeholder="Bài tập chương 3..." required />
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>MÔ TẢ</div>
-              <textarea value={newTask.desc} onChange={e => setNewTask(p => ({ ...p, desc: e.target.value }))} placeholder="Mô tả chi tiết..." rows={2} style={{ width: "100%", padding: "9px 13px", borderRadius: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {[["normal","📝","Bài tập thường"],["quiz","🧠","Quiz trắc nghiệm"]].map(([t,ic,l]) => (
+                <button key={t} onClick={() => setNewTask(p => ({ ...p, taskType: t }))} style={{ flex: 1, padding: "10px 8px", borderRadius: 11, border: `1px solid ${(newTask.taskType||"normal") === t ? "rgba(79,172,254,.5)" : "rgba(255,255,255,.08)"}`, background: (newTask.taskType||"normal") === t ? "linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))" : "transparent", color: (newTask.taskType||"normal") === t ? "#4FACFE" : "#4A6580", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{ic} {l}</button>
+              ))}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <Inp label="TÊN BÀI TẬP" value={newTask.title} onChange={v => setNewTask(p => ({ ...p, title: v }))} placeholder={(newTask.taskType||"normal")==="quiz" ? "Quiz chương 5..." : "Bài tập chương 3..."} required />
+            {(newTask.taskType||"normal") !== "quiz" && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>MÔ TẢ</div>
+                <textarea value={newTask.desc} onChange={e => setNewTask(p => ({ ...p, desc: e.target.value }))} placeholder="Mô tả chi tiết..." rows={2} style={{ width: "100%", padding: "9px 13px", borderRadius: 10, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
               <Sel label="MÔN HỌC" value={newTask.subject} onChange={v => setNewTask(p => ({ ...p, subject: v }))} options={SUBJECTS} required />
               <Inp label="DEADLINE" value={newTask.deadline} onChange={v => setNewTask(p => ({ ...p, deadline: v }))} placeholder="dd/mm/yyyy" required />
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94A3B8", cursor: "pointer", marginBottom: 16 }}>
               <input type="checkbox" checked={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.checked }))} style={{ accentColor: "#F59E0B" }} />⚡ Ưu tiên cao
             </label>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 8, letterSpacing: ".05em" }}>ĐÍNH KÈM FILE</div>
-              <button onClick={() => fileRef.current?.click()} style={{ width: "100%", padding: "12px", borderRadius: 11, border: "2px dashed rgba(79,172,254,.27)", background: "rgba(79,172,254,.025)", color: "#2E4A6A", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", fontSize: 12 }}>
-                <Upload size={16} style={{ color: "#4FACFE" }} />{uploadingFile ? "Đang xử lý..." : "Nhấn để chọn file"}
-              </button>
-              <input ref={fileRef} type="file" multiple onChange={handleFileUpload} style={{ display: "none" }} />
-              {newTask.attachments.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
-                  {newTask.attachments.map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 8, background: "rgba(79,172,254,.07)", border: "1px solid rgba(79,172,254,.18)", fontSize: 11, color: "#4FACFE" }}>
-                      <span>{FILE_ICONS[f.type]||"📁"}</span><span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-                      <button onClick={() => setNewTask(p => ({ ...p, attachments: p.attachments.filter((_,j)=>j!==i) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", display: "flex", padding: 0, marginLeft: 2 }}><X size={11} /></button>
+            {(newTask.taskType||"normal") === "quiz" ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", letterSpacing: ".05em" }}>CÂU HỎI ({(newTask.questions||[]).length})</div>
+                  <Btn small onClick={() => setNewTask(p => ({ ...p, questions: [...(p.questions||[]), { q: "", opts: ["","","",""], ans: 0 }] }))}>+ Thêm câu</Btn>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 320, overflowY: "auto" }}>
+                  {(newTask.questions||[]).map((qq, qi) => (
+                    <div key={qi} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4FACFE", minWidth: 22 }}>C{qi+1}</div>
+                        <input value={qq.q} onChange={e => setNewTask(p => { const qs=[...p.questions]; qs[qi]={...qs[qi],q:e.target.value}; return {...p,questions:qs}; })} placeholder="Nội dung câu hỏi..." style={{ flex: 1, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.09)", borderRadius: 8, padding: "6px 10px", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none" }} />
+                        <button onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_,i)=>i!==qi) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><X size={13} /></button>
+                      </div>
+                      {["A","B","C","D"].map((lbl, oi) => (
+                        <div key={oi} style={{ display: "flex", gap: 6, marginBottom: 5, alignItems: "center" }}>
+                          <button onClick={() => setNewTask(p => { const qs=[...p.questions]; qs[qi]={...qs[qi],ans:oi}; return {...p,questions:qs}; })} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${qq.ans===oi?"#34D399":"rgba(255,255,255,.12)"}`, background: qq.ans===oi?"rgba(52,211,153,.15)":"transparent", cursor: "pointer", fontSize: 9, fontWeight: 700, color: qq.ans===oi?"#34D399":"#4A6580", transition: "all .2s", flexShrink: 0 }}>{lbl}</button>
+                          <input value={qq.opts[oi]} onChange={e => setNewTask(p => { const qs=[...p.questions]; const opts=[...qs[qi].opts]; opts[oi]=e.target.value; qs[qi]={...qs[qi],opts}; return {...p,questions:qs}; })} placeholder={`Đáp án ${lbl}...`} style={{ flex: 1, background: "rgba(255,255,255,.03)", border: `1px solid ${qq.ans===oi?"rgba(52,211,153,.3)":"rgba(255,255,255,.07)"}`, borderRadius: 7, padding: "5px 9px", color: qq.ans===oi?"#34D399":"#94A3B8", fontSize: 11, fontFamily: "inherit", outline: "none" }} />
+                        </div>
+                      ))}
                     </div>
                   ))}
+                  {(newTask.questions||[]).length === 0 && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, padding: "20px 0" }}>Chưa có câu hỏi. Nhấn "+ Thêm câu" để bắt đầu.</div>}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 8, letterSpacing: ".05em" }}>ĐÍNH KÈM FILE</div>
+                <button onClick={() => fileRef.current?.click()} style={{ width: "100%", padding: "12px", borderRadius: 11, border: "2px dashed rgba(79,172,254,.27)", background: "rgba(79,172,254,.025)", color: "#2E4A6A", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", fontSize: 12 }}>
+                  <Upload size={16} style={{ color: "#4FACFE" }} />{uploadingFile ? "Đang xử lý..." : "Nhấn để chọn file"}
+                </button>
+                <input ref={fileRef} type="file" multiple onChange={handleFileUpload} style={{ display: "none" }} />
+                {newTask.attachments.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                    {newTask.attachments.map((f, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 8, background: "rgba(79,172,254,.07)", border: "1px solid rgba(79,172,254,.18)", fontSize: 11, color: "#4FACFE" }}>
+                        <span>{FILE_ICONS[f.type]||"📁"}</span><span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                        <button onClick={() => setNewTask(p => ({ ...p, attachments: p.attachments.filter((_,j)=>j!==i) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", display: "flex", padding: 0, marginLeft: 2 }}><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <ErrBox msg={errTask} />
             <div style={{ display: "flex", gap: 9 }}>
               <Btn variant="ghost" onClick={() => setShowAdd(false)} style={{ flex: 1 }}>Hủy</Btn>
-              <Btn onClick={addTask} style={{ flex: 2 }}>Tạo bài tập</Btn>
+              <Btn onClick={addTask} style={{ flex: 2 }}>{(newTask.taskType||"normal")==="quiz" ? "🧠 Tạo Quiz" : "Tạo bài tập"}</Btn>
             </div>
           </div>
         </div>
       )}
+      {quizModal && <QuizModal task={quizModal} classId={classId} user={user} state={state} onClose={() => setQuizModal(null)} />}
+      {taskDetailModal && <TaskDetailModal task={taskDetailModal} classId={classId} state={state} onClose={() => setTaskDetailModal(null)} />}
     </div>
   );
 }
 
+function TaskDetailModal({ task, classId, state, onClose }) {
+  const allStudents = state.students.filter(s => s.classId === classId);
+  const subs = task.submissions || [];
+  const [detailTab, setDetailTab] = useState("notyet");
 
-// vòng quay may mắn
+  const getStatus = s => {
+    const sub = subs.find(sb => sb.studentId === s.id);
+    if (!sub) return "notyet";
+    const isLate = task.deadline && sub.submittedAt > new Date(task.deadline.split("/").reverse().join("-") + "T23:59:59").getTime();
+    return isLate ? "late" : "done";
+  };
+
+  const groups = {
+    done:   allStudents.filter(s => getStatus(s) === "done"),
+    late:   allStudents.filter(s => getStatus(s) === "late"),
+    notyet: allStudents.filter(s => getStatus(s) === "notyet"),
+  };
+  const shown = groups[detailTab] || [];
+
+  return (
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-flex" style={{ width: 500 }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>{task.title}</div>
+            <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · Deadline: {task.deadline} · {allStudents.length} học sinh</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
+        </div>
+        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+          {[["notyet","⏳ Chưa nộp",groups.notyet.length,"#F59E0B"],["done","✓ Đã nộp",groups.done.length,"#34D399"],["late","⚠ Nộp trễ",groups.late.length,"#EF4444"]].map(([v,l,n,c]) => (
+            <button key={v} onClick={() => setDetailTab(v)} style={{ flex: 1, padding: "11px 8px", border: "none", background: detailTab===v ? "rgba(255,255,255,.04)" : "transparent", borderBottom: detailTab===v ? `2px solid ${c}` : "2px solid transparent", color: detailTab===v ? c : "#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>
+              {l} <span style={{ marginLeft: 4, padding: "1px 7px", borderRadius: 99, background: `${c}18`, color: c, fontSize: 10 }}>{n}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, minHeight: 200 }}>
+          {shown.length === 0 && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, paddingTop: 32 }}>Không có học sinh nào.</div>}
+          {shown.map(s => {
+            const sub = subs.find(sb => sb.studentId === s.id);
+            return (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 11, background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.05)", animation: "fadeUp .25s both" }}>
+                <Av em={s.em} photo={s.photo} sz={32} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4" }}>{s.name}</div>
+                  <div style={{ fontSize: 10, color: "#3D5A78" }}>{s.code}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  {sub ? (
+                    <>
+                      <div style={{ fontSize: 10, color: detailTab==="late" ? "#EF4444" : "#34D399", fontWeight: 600 }}>
+                        {new Date(sub.submittedAt).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}
+                      </div>
+                      {sub.submitNote && <div style={{ fontSize: 10, color: "#4A6580", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>"{sub.submitNote}"</div>}
+                      {task.taskType !== "quiz" && sub.submitImgs?.length > 0 && (
+                        <div style={{ display: "flex", gap: 3, marginTop: 4, justifyContent: "flex-end" }}>
+                          {sub.submitImgs.slice(0,3).map((img,i) => <img key={i} src={img.data} alt="" style={{ width: 26, height: 26, borderRadius: 5, objectFit: "cover", border: "1px solid rgba(52,211,153,.3)" }} />)}
+                          {sub.submitImgs.length > 3 && <div style={{ width: 26, height: 26, borderRadius: 5, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94A3B8" }}>+{sub.submitImgs.length-3}</div>}
+                        </div>
+                      )}
+                      {task.taskType === "quiz" && sub.quizScore !== undefined && (
+                        <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: sub.quizScore>=80?"#34D399":sub.quizScore>=50?"#F59E0B":"#EF4444" }}>{sub.quizScore}% · {sub.quizCorrect}/{(task.questions||[]).length} câu</div>
+                      )}
+                    </>
+                  ) : <Badge c="amber">Chưa nộp</Badge>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function WheelPage({ state, user }) {
   const classId = user.role === "teacher" ? state.classes.find(c => c.teacherId === user.data.id)?.id : user.classId;
-  const students = useMemo(() => state.students.filter(s => s.classId === classId), [state.students, classId]);
+  const today = new Date().toISOString().slice(0, 10);
+  const attKey = `${classId}_${today}`;
+  const presentIds = useMemo(() => new Set(state.attendance[attKey] || []), [state.attendance, attKey]);
+  const allStudents = useMemo(() => state.students.filter(s => s.classId === classId), [state.students, classId]);
+  const [filterPresent, setFilterPresent] = useState(user.role === "teacher");
+  const students = useMemo(() => filterPresent ? allStudents.filter(s => presentIds.has(s.id)) : allStudents, [allStudents, presentIds, filterPresent]);
   const N = students.length;
   const [totalRot, setTotalRot] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -1824,9 +2348,9 @@ function WheelPage({ state, user }) {
   const [history, setHistory] = useState([]);
   const WCOLS = ["#4FACFE","#818CF8","#34D399","#F59E0B","#F472B6","#FB923C","#A78BFA","#4ADE80","#60A5FA","#FACC15","#E879F9","#FCA5A5","#38BDF8","#6EE7B7"];
 
-  if (N === 0) return <div className="page" style={{ padding: 20, textAlign: "center", color: "#2E4A6A", paddingTop: 60 }}>Chưa có học sinh trong lớp.</div>;
+  if (allStudents.length === 0) return <div className="page" style={{ padding: 20, textAlign: "center", color: "#2E4A6A", paddingTop: 60 }}>Chưa có học sinh trong lớp.</div>;
 
-  const sliceAngle = 360 / N;
+  const sliceAngle = 360 / (N || 1);
   const spin = () => {
     if (spinning) return;
     setSpinning(true); setWinner(null); setWinnerIdx(null);
@@ -1848,9 +2372,20 @@ function WheelPage({ state, user }) {
   return (
     <div className="page" style={{ padding: 20, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
       <div style={{ flex: 1, minWidth: 280, display: "flex", flexDirection: "column", gap: 14 }}>
-        <Card style={{ textAlign: "center" }}>
+        <div className="scard" style={{ padding: 20, textAlign: "center" }}>
           <div className="hfont" style={{ fontSize: 18, fontWeight: 400, marginBottom: 4 }}>🎡 Lucky Wheel</div>
-          <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 18 }}>Quay ngẫu nhiên để chọn học sinh</div>
+          <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 12 }}>Quay ngẫu nhiên để chọn học sinh</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 18 }}>
+            <button onClick={() => { setFilterPresent(true); setWinner(null); setWinnerIdx(null); setTotalRot(0); }} style={{ padding: "5px 14px", borderRadius: 9, border: `1px solid ${filterPresent ? "rgba(52,211,153,.4)" : "rgba(255,255,255,.08)"}`, background: filterPresent ? "rgba(52,211,153,.12)" : "transparent", color: filterPresent ? "#34D399" : "#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>✓ Có mặt ({allStudents.filter(s => presentIds.has(s.id)).length})</button>
+            <button onClick={() => { setFilterPresent(false); setWinner(null); setWinnerIdx(null); setTotalRot(0); }} style={{ padding: "5px 14px", borderRadius: 9, border: `1px solid ${!filterPresent ? "rgba(79,172,254,.4)" : "rgba(255,255,255,.08)"}`, background: !filterPresent ? "rgba(79,172,254,.12)" : "transparent", color: !filterPresent ? "#4FACFE" : "#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>👥 Tất cả ({allStudents.length})</button>
+          </div>
+          {N === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>😴</div>
+              <div style={{ fontSize: 13, color: "#3D5A78", fontWeight: 600 }}>Không có học sinh có mặt hôm nay</div>
+              <div style={{ fontSize: 11, color: "#2E4A6A", marginTop: 6 }}>Chuyển sang "Tất cả" hoặc điểm danh trước</div>
+            </div>
+          ) : (<>
           <div style={{ position: "relative", width: 300, height: 300, margin: "0 auto 18px" }}>
             <div style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", zIndex: 10 }}>
               <div style={{ width: 0, height: 0, borderLeft: "12px solid transparent", borderRight: "12px solid transparent", borderTop: "24px solid #F59E0B", filter: "drop-shadow(0 4px 8px rgba(245,158,11,.6))" }} />
@@ -1864,15 +2399,34 @@ function WheelPage({ state, user }) {
                   const x2 = 150 + 140 * Math.cos(endAngle), y2 = 150 + 140 * Math.sin(endAngle);
                   const largeArc = sliceAngle > 180 ? 1 : 0;
                   const midAngle = ((i + 0.5) * sliceAngle - 90) * Math.PI / 180;
-                  const mx = 150 + 96 * Math.cos(midAngle), my = 150 + 96 * Math.sin(midAngle);
+                  const mx = 150 + 88 * Math.cos(midAngle), my = 150 + 88 * Math.sin(midAngle);
                   const textRot = (i + 0.5) * sliceAngle - 90;
                   const col = WCOLS[i % WCOLS.length];
                   const isWinner = winnerIdx === i && !spinning;
+                  const dimmed = winnerIdx !== null && !spinning && !isWinner;
+                  const label = s.name.split(" ").pop();
+                  const fs = N > 20 ? 8 : N > 12 ? 10 : N > 6 ? 11 : 12;
+                  if (N === 1) return (
+                    <g key={i}>
+                      <circle cx="150" cy="150" r="140" fill={col} stroke="#050C1A" strokeWidth="1.5" />
+                      <text x="150" y="150" textAnchor="middle" dominantBaseline="middle" fontSize="14" fontWeight="bold" fontFamily="Outfit,sans-serif" fill="#fff">{label}</text>
+                    </g>
+                  );
                   return (
                     <g key={i}>
-                      <path d={`M 150 150 L ${x1} ${y1} A 140 140 0 ${largeArc} 1 ${x2} ${y2} Z`} fill={col} stroke="#050C1A" strokeWidth="1.5" opacity={isWinner ? 1 : .88} />
-                      {isWinner && <path d={`M 150 150 L ${x1} ${y1} A 140 140 0 ${largeArc} 1 ${x2} ${y2} Z`} fill="none" stroke="#FFF" strokeWidth="2.5" opacity=".7" />}
-                      <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle" fontSize={N > 20 ? 7 : N > 12 ? 9 : 10} fontWeight="700" fill="rgba(255,255,255,.95)" transform={`rotate(${textRot},${mx},${my})`}>{s.name.split(" ").pop()}</text>
+                      <path d={`M 150 150 L ${x1} ${y1} A 140 140 0 ${largeArc} 1 ${x2} ${y2} Z`} fill={col} stroke="#050C1A" strokeWidth="1.5" opacity={dimmed ? 0.45 : 1} />
+                      {isWinner && <path d={`M 150 150 L ${x1} ${y1} A 140 140 0 ${largeArc} 1 ${x2} ${y2} Z`} fill="none" stroke="#FFF" strokeWidth="3" opacity="0.9" />}
+                      <text
+                        x={mx} y={my}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={fs}
+                        fontWeight="bold"
+                        fontFamily="Outfit,sans-serif"
+                        fill={dimmed ? "rgba(255,255,255,.4)" : "#fff"}
+                        transform={`rotate(${textRot},${mx},${my})`}
+                        style={{ userSelect: "none" }}
+                      >{label}</text>
                     </g>
                   );
                 })}
@@ -1882,28 +2436,36 @@ function WheelPage({ state, user }) {
               </svg>
             </div>
           </div>
-          <Btn onClick={spin} disabled={spinning} style={{ padding: "12px 40px", fontSize: 14, fontWeight: 700, justifyContent: "center" }}>{spinning ? "🌀 Đang quay..." : "🎯 Quay ngay!"}</Btn>
-        </Card>
+          <Btn onClick={spin} disabled={spinning || N < 2} style={{ padding: "13px 48px", fontSize: 15, fontWeight: 700, justifyContent: "center", animation: spinning || N < 2 ? "none" : "breathe 2.5s ease-in-out infinite" }}>{spinning ? "🌀 Đang quay..." : N < 2 ? "⚠ Cần ít nhất 2 học sinh" : "🎯 Quay ngay!"}</Btn>
+          </>)}
+        </div>
         {winner && !spinning && (
-          <div style={{ borderRadius: 14, padding: 22, textAlign: "center", background: "linear-gradient(135deg,rgba(79,172,254,.08),rgba(129,140,248,.08))", border: "1px solid rgba(79,172,254,.25)", animation: "pop .4s ease" }}>
+          <div style={{ borderRadius: 18, padding: 28, textAlign: "center", background: "linear-gradient(135deg,rgba(79,172,254,.1),rgba(167,139,250,.08),rgba(0,242,254,.05))", border: "1px solid rgba(79,172,254,.3)", animation: "pop .5s cubic-bezier(.34,1.56,.64,1)" }} className="winner-card">
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}><Av em={winner.em} photo={winner.photo} sz={68} glow /></div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#E2EAF4", marginBottom: 5 }}>🎉 {winner.name}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#E2EAF4", marginBottom: 5, animation: "countUp .4s cubic-bezier(.34,1.56,.64,1)" }}>🎉 {winner.name}</div>
             <div style={{ fontSize: 11, color: "#3D5A78" }}>{winner.code}</div>
           </div>
         )}
       </div>
       <div style={{ width: 200, display: "flex", flexDirection: "column", gap: 12 }}>
         <div className="scard" style={{ overflow: "hidden" }}>
-          <div style={{ padding: "10px 13px", borderBottom: "1px solid rgba(255,255,255,.055)", fontSize: 12, fontWeight: 700, color: "#E2EAF4" }}>DS Học sinh ({N})</div>
+          <div style={{ padding: "10px 13px", borderBottom: "1px solid rgba(255,255,255,.055)", fontSize: 12, fontWeight: 700, color: "#E2EAF4" }}>
+            {filterPresent ? `Có mặt (${N})` : `Tất cả (${allStudents.length})`}
+          </div>
           <div style={{ maxHeight: 300, overflowY: "auto" }}>
-            {students.map((s, i) => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", borderBottom: "1px solid rgba(255,255,255,.02)", fontSize: 11, color: "#4A6580", background: winnerIdx === i && !spinning ? "rgba(79,172,254,.07)" : "transparent" }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: WCOLS[i % WCOLS.length], flexShrink: 0 }} />
-                <Av em={s.em} photo={s.photo} sz={22} />
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-                {winnerIdx === i && !spinning && <span style={{ fontSize: 12 }}>🏆</span>}
-              </div>
-            ))}
+            {(filterPresent ? students : allStudents).map((s, i) => {
+              const isPresent = presentIds.has(s.id);
+              const inWheel = students.some(ws => ws.id === s.id);
+              return (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 13px", borderBottom: "1px solid rgba(255,255,255,.02)", fontSize: 11, color: inWheel ? "#4A6580" : "#2E3A50", background: winnerIdx !== null && !spinning && students[winnerIdx]?.id === s.id ? "rgba(79,172,254,.07)" : "transparent", opacity: !filterPresent && !isPresent ? 0.45 : 1, transition: "all .2s" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: inWheel ? WCOLS[i % WCOLS.length] : "#2E3A50", flexShrink: 0 }} />
+                  <Av em={s.em} photo={s.photo} sz={22} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  {!filterPresent && <span style={{ fontSize: 9, fontWeight: 700, color: isPresent ? "#34D399" : "#EF4444" }}>{isPresent ? "✓" : "✗"}</span>}
+                  {winnerIdx !== null && !spinning && students[winnerIdx]?.id === s.id && <span style={{ fontSize: 12 }}>🏆</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
         {history.length > 0 && (
@@ -2277,26 +2839,27 @@ function ProfilePage({ state, user }) {
 
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ borderRadius: 16, padding: "24px", background: "linear-gradient(135deg,rgba(29,108,245,.1),rgba(123,63,228,.08))", border: "1px solid rgba(79,172,254,.12)", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+      <div style={{ borderRadius: 20, padding: "26px 28px", background: "linear-gradient(135deg,rgba(29,108,245,.12),rgba(123,63,228,.09),rgba(0,242,254,.05))", backgroundSize: "300% 300%", animation: "morphGrad 9s ease infinite", border: "1px solid rgba(79,172,254,.15)", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", boxShadow: "0 8px 40px rgba(29,108,245,.12),inset 0 1px 0 rgba(255,255,255,.06)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -40, right: -20, width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle,rgba(79,172,254,.1),transparent)", filter: "blur(40px)", pointerEvents: "none" }} />
         <div style={{ position: "relative" }}>
-          <div style={{ width: 72, height: 72, borderRadius: "50%", overflow: "hidden", background: "linear-gradient(135deg,#4FACFE,#A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, boxShadow: "0 0 28px rgba(79,172,254,.45)", border: "3px solid rgba(79,172,254,.35)" }}>
+          <div style={{ width: 76, height: 76, borderRadius: "50%", overflow: "hidden", background: "linear-gradient(135deg,#4FACFE,#A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 38, boxShadow: "0 0 0 3px rgba(79,172,254,.3),0 0 32px rgba(79,172,254,.4)", border: "3px solid rgba(79,172,254,.4)", animation: "float 4s ease-in-out infinite" }}>
             {s.photo ? <img src={s.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (s.em || "😊")}
           </div>
-          <div style={{ position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: "50%", background: "#34D399", border: "2px solid #050C1A" }} />
+          <div style={{ position: "absolute", bottom: 2, right: 2, width: 15, height: 15, borderRadius: "50%", background: "linear-gradient(135deg,#34D399,#10B981)", border: "2px solid #050C1A", animation: "glowPulseGreen 2s ease-in-out infinite" }} />
         </div>
         <div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: "#E2EAF4", marginBottom: 4 }}>{s.name}</div>
-          <div style={{ fontSize: 12, color: "#2E4A6A", marginBottom: 10 }}>{s.code} · Lớp {cls?.name}</div>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#E2EAF4", marginBottom: 4, animation: "fadeUp .4s .1s both" }}>{s.name}</div>
+          <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 10, animation: "fadeUp .4s .18s both" }}>{s.code} · Lớp {cls?.name}</div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", animation: "fadeUp .4s .26s both" }}>
             {presentToday && <Badge c="green">✓ Đã điểm danh hôm nay</Badge>}
             <Badge c="blue">Học sinh</Badge>
           </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 20, flexWrap: "wrap" }}>
-          {[["Chuyên cần", totalDays ? `${Math.round((presentDays / totalDays) * 100)}%` : "--", "#4FACFE"], ["Ngày học", `${presentDays}/${totalDays}`, "#34D399"], ["Bài tập", `${tasks.filter(t => t.status === "submitted").length}/${tasks.length}`, "#A78BFA"]].map(([l, v, c]) => (
-            <div key={l} style={{ textAlign: "center" }}>
-              <div className="hfont" style={{ fontSize: 21, fontWeight: 400, color: c }}>{v}</div>
-              <div style={{ fontSize: 10, color: "#2E4A6A", marginTop: 2 }}>{l}</div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 24, flexWrap: "wrap" }}>
+          {[["Chuyên cần", totalDays ? `${Math.round((presentDays / totalDays) * 100)}%` : "--", "#4FACFE"], ["Ngày học", `${presentDays}/${totalDays}`, "#34D399"], ["Bài tập", `${tasks.filter(t => t.status === "submitted").length}/${tasks.length}`, "#A78BFA"]].map(([l, v, c], i) => (
+            <div key={l} style={{ textAlign: "center", animation: `countUp .5s ${i * .1 + .2}s cubic-bezier(.34,1.56,.64,1) both` }}>
+              <div className="hfont stat-val" style={{ fontSize: 22, fontWeight: 400, color: c, filter: `drop-shadow(0 0 8px ${c}66)` }}>{v}</div>
+              <div style={{ fontSize: 10, color: "#3D5A78", marginTop: 3, fontWeight: 500 }}>{l}</div>
             </div>
           ))}
         </div>
@@ -2333,25 +2896,26 @@ function DashPage({ state, user, setView }) {
 
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ borderRadius: 16, padding: "22px 24px", background: "linear-gradient(135deg,rgba(29,108,245,.1),rgba(123,63,228,.08))", border: "1px solid rgba(79,172,254,.12)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ borderRadius: 18, padding: "24px 28px", background: "linear-gradient(135deg,rgba(29,108,245,.12),rgba(123,63,228,.09),rgba(0,242,254,.06))", backgroundSize: "300% 300%", animation: "morphGrad 8s ease infinite", border: "1px solid rgba(79,172,254,.15)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, boxShadow: "0 4px 32px rgba(29,108,245,.1),inset 0 1px 0 rgba(255,255,255,.05)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -30, right: 120, width: 150, height: 150, borderRadius: "50%", background: "radial-gradient(circle,rgba(79,172,254,.12),transparent)", filter: "blur(30px)", pointerEvents: "none" }} />
         <div>
-          <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 4, color: "#E2EAF4" }}>{isT ? `Chào, ${user.data.name}! 👋` : `Xin chào, ${user.data.name}! 👋`}</div>
-          <div style={{ fontSize: 12, color: "#2E4A6A", marginBottom: 10, textTransform: "capitalize" }}>{todayDate}</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 19, fontWeight: 700, marginBottom: 4, color: "#E2EAF4", animation: "fadeUp .4s .1s both" }}>{isT ? `Chào, ${user.data.name}! 👋` : `Xin chào, ${user.data.name}! 👋`}</div>
+          <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 10, textTransform: "capitalize", animation: "fadeUp .4s .18s both" }}>{todayDate}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", animation: "fadeUp .4s .26s both" }}>
             {isT ? (
               <>
-                <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(79,172,254,.1)", color: "#4FACFE", fontWeight: 500 }}>{myClasses.length} lớp · {classStudents.length} học sinh</span>
-                {pendingCount > 0 && <span onClick={() => setView("pending")} style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(239,68,68,.1)", color: "#EF4444", fontWeight: 600, cursor: "pointer" }}>⚠ {pendingCount} đăng ký chờ duyệt</span>}
+                <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 9, background: "rgba(79,172,254,.12)", color: "#4FACFE", fontWeight: 600, border: "1px solid rgba(79,172,254,.2)", backdropFilter: "blur(8px)" }}>{myClasses.length} lớp · {classStudents.length} học sinh</span>
+                {pendingCount > 0 && <span onClick={() => setView("pending")} style={{ fontSize: 11, padding: "4px 12px", borderRadius: 9, background: "rgba(239,68,68,.12)", color: "#EF4444", fontWeight: 700, cursor: "pointer", border: "1px solid rgba(239,68,68,.25)", animation: "glowbeat 2s infinite", backdropFilter: "blur(8px)" }}>⚠ {pendingCount} đăng ký chờ duyệt</span>}
               </>
             ) : (
               <>
-                {presentToday.includes(user.data.id) ? <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(52,211,153,.1)", color: "#34D399", fontWeight: 500 }}>✓ Đã điểm danh</span> : <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(245,158,11,.1)", color: "#F59E0B", fontWeight: 500 }}>⚠ Chưa điểm danh</span>}
-                <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(239,68,68,.08)", color: "#EF4444", fontWeight: 500 }}>{tasks.filter(t => t.status === "pending").length} bài chờ nộp</span>
+                {presentToday.includes(user.data.id) ? <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 9, background: "rgba(52,211,153,.12)", color: "#34D399", fontWeight: 600, border: "1px solid rgba(52,211,153,.25)", animation: "glowPulseGreen 2.5s infinite" }}>✓ Đã điểm danh</span> : <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 9, background: "rgba(245,158,11,.12)", color: "#F59E0B", fontWeight: 600, border: "1px solid rgba(245,158,11,.25)" }}>⚠ Chưa điểm danh</span>}
+                <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 9, background: "rgba(239,68,68,.1)", color: "#EF4444", fontWeight: 500, border: "1px solid rgba(239,68,68,.18)" }}>{tasks.filter(t => t.status === "pending").length} bài chờ nộp</span>
               </>
             )}
           </div>
         </div>
-        <div style={{ fontSize: 54, animation: "float 4s ease-in-out infinite" }}>{isT ? "📋" : "📚"}</div>
+        <div style={{ fontSize: 58, animation: "float 4s ease-in-out infinite", filter: "drop-shadow(0 8px 24px rgba(79,172,254,.3))" }}>{isT ? "📋" : "📚"}</div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 11 }}>
         {(isT ? [
@@ -2365,12 +2929,13 @@ function DashPage({ state, user, setView }) {
           { l:"Chờ nộp", v:tasks.filter(t=>t.status==="pending").length, c:"#F59E0B", Ic:Clock, s:"Bài tập" },
           { l:"Đã nộp", v:tasks.filter(t=>t.status==="submitted").length, c:"#34D399", Ic:Trophy, s:"Bài tập" },
           { l:"Bạn lớp", v:classStudents.length, c:"#4FACFE", Ic:Users, s:cls?.name||"--" },
-        ]).map(({ l, v, c, Ic, s }) => (
-          <div key={l} className="scard cglow" style={{ padding: 15 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: `${c}16`, display: "flex", alignItems: "center", justifyContent: "center", color: c, marginBottom: 12 }}><Ic size={15} /></div>
-            <div className="hfont" style={{ fontSize: 23, fontWeight: 400, color: "#E2EAF4", marginBottom: 2 }}>{v}</div>
-            <div style={{ fontSize: 11, color: "#3D5A78" }}>{l}</div>
-            <div style={{ fontSize: 10, color: "#2E4A6A", marginTop: 1 }}>{s}</div>
+        ]).map(({ l, v, c, Ic, s }, i) => (
+          <div key={l} className="scard cglow card-reveal" style={{ padding: 16, animationDelay: `${i * .07}s`, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: -20, right: -20, width: 70, height: 70, borderRadius: "50%", background: `radial-gradient(circle,${c}18,transparent)`, pointerEvents: "none" }} />
+            <div style={{ width: 36, height: 36, borderRadius: 11, background: `linear-gradient(135deg,${c}22,${c}10)`, display: "flex", alignItems: "center", justifyContent: "center", color: c, marginBottom: 13, border: `1px solid ${c}25`, boxShadow: `0 4px 16px ${c}20`, transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }}><Ic size={16} /></div>
+            <div className="hfont stat-val" style={{ fontSize: 24, fontWeight: 400, color: "#E2EAF4", marginBottom: 2, animationDelay: `${i * .07 + .1}s` }}>{v}</div>
+            <div style={{ fontSize: 11, color: "#4A6580", fontWeight: 500 }}>{l}</div>
+            <div style={{ fontSize: 10, color: "#2E4A6A", marginTop: 2 }}>{s}</div>
           </div>
         ))}
       </div>
@@ -2387,9 +2952,9 @@ function DashPage({ state, user, setView }) {
               { Ic:QrCode, l:"Điểm danh", v:"attendance", c:"#4FACFE" },
               { Ic:MessageSquare, l:"Chat", v:"chat", c:"#A78BFA" },
               { Ic:BookOpen, l:"Bài tập", v:"assignments", c:"#34D399" },
-              { Ic:Shuffle, l:"Lucky Wheel", v:"wheel", c:"#F59E0B" },
+              { Ic:Library, l:"Tài liệu", v:"library", c:"#F59E0B" },
             ]).map(({ Ic, l, v, c }) => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: "12px 7px", borderRadius: 10, cursor: "pointer", background: `${c}09`, border: `1px solid ${c}18`, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: "inherit", color: c, transition: "all .2s" }}>
+              <button key={v} onClick={() => setView(v)} style={{ padding: "12px 7px", borderRadius: 12, cursor: "pointer", background: `${c}0A`, border: `1px solid ${c}20`, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, fontFamily: "inherit", color: c, transition: "all .3s cubic-bezier(.34,1.56,.64,1)" }} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px) scale(1.05)"; e.currentTarget.style.boxShadow = `0 8px 24px ${c}30`; e.currentTarget.style.background = `${c}16`; }} onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.background = `${c}0A`; }}>
                 <Ic size={17} /><span style={{ fontSize: 10, fontWeight: 500, color: "#4A6580" }}>{l}</span>
               </button>
             ))}
@@ -2435,6 +3000,26 @@ function SettingsPage({ state, user }) {
   const [pw, setPw] = useState("");
   const [pwOld, setPwOld] = useState("");
   const [em, setEm] = useState(t.em || "👨‍🏫");
+  const [photo, setPhoto] = useState(t.photo || null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const profilePhotoRef = useRef();
+  const modalPhotoRef = useRef();
+
+  const handleProfilePhoto = file => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) return;
+    setPhotoUploading(true);
+    const r = new FileReader();
+    r.onload = () => { setPhoto(r.result); setPhotoUploading(false); };
+    r.readAsDataURL(file);
+  };
+
+  const handleModalPhoto = file => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const r = new FileReader();
+    r.onload = () => setNewT(p => ({ ...p, photo: r.result }));
+    r.readAsDataURL(file);
+  };
   const [saved, setSaved] = useState(false);
   const [errP, setErrP] = useState("");
   const [showAddT, setShowAddT] = useState(false);
@@ -2451,7 +3036,7 @@ function SettingsPage({ state, user }) {
     if (pw && pw.length < 4) { setErrP("Mật khẩu mới tối thiểu 4 ký tự"); return; }
     if (pw && !pwOld) { setErrP("Nhập mật khẩu hiện tại để đổi"); return; }
     if (pw && t.password !== pwOld) { setErrP("Mật khẩu hiện tại không đúng"); return; }
-    state.setTeachers(p => p.map(x => x.id === t.id ? { ...x, name: name.trim(), subject, em, ...(pw ? { password: pw } : {}) } : x));
+    state.setTeachers(p => p.map(x => x.id === t.id ? { ...x, name: name.trim(), subject, em, photo: photo || x.photo, ...(pw ? { password: pw } : {}) } : x));
     setSaved(true); setPw(""); setPwOld("");
     setTimeout(() => setSaved(false), 2500);
   };
@@ -2461,12 +3046,12 @@ function SettingsPage({ state, user }) {
     if (!newT.name.trim() || !newT.username.trim() || (!editT && !newT.password)) { setErrT("Điền đầy đủ thông tin bắt buộc"); return; }
     if (state.teachers.find(x => x.username === newT.username.trim() && x.id !== editT?.id)) { setErrT("Username đã tồn tại"); return; }
     if (editT) {
-      state.setTeachers(p => p.map(x => x.id === editT.id ? { ...x, name: newT.name.trim(), username: newT.username.trim(), subject: newT.subject, em: newT.em, ...(newT.password ? { password: newT.password } : {}) } : x));
+      state.setTeachers(p => p.map(x => x.id === editT.id ? { ...x, name: newT.name.trim(), username: newT.username.trim(), subject: newT.subject, em: newT.em, photo: newT.photo ?? x.photo, ...(newT.password ? { password: newT.password } : {}) } : x));
     } else {
       if (newT.password.length < 4) { setErrT("Mật khẩu tối thiểu 4 ký tự"); return; }
-      state.setTeachers(p => [...p, { id: "t_" + Date.now(), name: newT.name.trim(), username: newT.username.trim(), password: newT.password, subject: newT.subject, em: newT.em, isAdmin: false }]);
+      state.setTeachers(p => [...p, { id: "t_" + Date.now(), name: newT.name.trim(), username: newT.username.trim(), password: newT.password, subject: newT.subject, em: newT.em, photo: newT.photo || null, isAdmin: false }]);
     }
-    setNewT({ name: "", username: "", password: "", subject: SUBJECTS[0], em: "👨‍🏫" }); setShowAddT(false); setEditT(null); setErrT("");
+    setNewT({ name: "", username: "", password: "", subject: SUBJECTS[0], em: "👨‍🏫", photo: null }); setShowAddT(false); setEditT(null); setErrT("");
   };
 
   const deleteTeacher = async tid => {
@@ -2519,10 +3104,27 @@ function SettingsPage({ state, user }) {
         <Card>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 16 }}>Thông tin tài khoản</div>
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 8, letterSpacing: ".05em" }}>AVATAR</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {EMOJIS.slice(0, 16).map(e => <button key={e} onClick={() => setEm(e)} style={{ width: 34, height: 34, borderRadius: 9, border: `2px solid ${em===e?"#4FACFE":"rgba(255,255,255,.08)"}`, background: em===e?"rgba(79,172,254,.1)":"rgba(255,255,255,.03)", cursor: "pointer", fontSize: 17 }}>{e}</button>)}
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 10, letterSpacing: ".05em" }}>AVATAR</div>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 12 }}>
+              <div onClick={() => profilePhotoRef.current?.click()} style={{ width: 64, height: 64, borderRadius: 18, overflow: "hidden", background: "linear-gradient(135deg,rgba(79,172,254,.15),rgba(167,139,250,.1))", border: "2px solid rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: photo ? undefined : 30, flexShrink: 0, boxShadow: "0 0 18px rgba(79,172,254,.2)", cursor: "pointer", position: "relative" }}>
+                {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (photoUploading ? "⏳" : em)}
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .2s" }} onMouseEnter={e => e.currentTarget.style.opacity=1} onMouseLeave={e => e.currentTarget.style.opacity=0}><Camera size={18} color="#fff" /></div>
+              </div>
+              <div>
+                <button onClick={() => profilePhotoRef.current?.click()} style={{ padding: "6px 13px", borderRadius: 9, border: "1px solid rgba(79,172,254,.32)", background: "rgba(79,172,254,.07)", color: "#4FACFE", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                  <Camera size={12} />Tải ảnh lên
+                </button>
+                {photo && <button onClick={() => setPhoto(null)} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid rgba(239,68,68,.25)", background: "rgba(239,68,68,.06)", color: "#EF4444", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Xóa ảnh</button>}
+              </div>
             </div>
+            <input ref={profilePhotoRef} type="file" accept="image/*" onChange={e => handleProfilePhoto(e.target.files[0])} style={{ display: "none" }} />
+            {!photo && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {EMOJIS.slice(0, 16).map(e => (
+                  <button key={e} onClick={() => setEm(e)} style={{ width: 40, height: 40, borderRadius: 11, border: `2px solid ${em===e ? "rgba(79,172,254,.7)" : "rgba(255,255,255,.07)"}`, background: em===e ? "linear-gradient(135deg,rgba(79,172,254,.18),rgba(79,172,254,.08))" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 21, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .22s cubic-bezier(.34,1.56,.64,1)", transform: em===e ? "scale(1.12)" : "scale(1)", boxShadow: em===e ? "0 4px 14px rgba(79,172,254,.25)" : "none" }}>{e}</button>
+                ))}
+              </div>
+            )}
           </div>
           <Inp label="HỌ VÀ TÊN" value={name} onChange={setName} required />
           <Inp label="MÔN PHỤ TRÁCH" value={subject} onChange={setSubject} placeholder="Toán, Lý..." />
@@ -2551,7 +3153,7 @@ function SettingsPage({ state, user }) {
               </div>
               {x.id === t.id && <Badge c="violet">Bạn</Badge>}
               {x.isAdmin && x.id !== t.id && <Badge c="amber">Admin</Badge>}
-              <button onClick={() => { setEditT(x); setNewT({ name: x.name, username: x.username, password: "", subject: x.subject||SUBJECTS[0], em: x.em||"👨‍🏫" }); setErrT(""); setShowAddT(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "#4FACFE", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
+              <button onClick={() => { setEditT(x); setNewT({ name: x.name, username: x.username, password: "", subject: x.subject||SUBJECTS[0], em: x.em||"👨‍🏫", photo: x.photo||null }); setErrT(""); setShowAddT(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "#4FACFE", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
               {x.id !== t.id && <button onClick={() => deleteTeacher(x.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>}
             </div>
           ))}
@@ -2587,12 +3189,40 @@ function SettingsPage({ state, user }) {
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "#E2EAF4" }}>{editT ? "Sửa giáo viên" : "Thêm giáo viên"}</h2>
               <button onClick={() => { setShowAddT(false); setEditT(null); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 7, letterSpacing: ".05em" }}>AVATAR</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {["👨‍🏫","👩‍🏫","👨‍💼","👩‍💼","🧑‍🏫","👨‍🔬","👩‍🔬","👨‍💻","👩‍💻","🎓","📚","⭐"].map(e => <button key={e} onClick={() => setNewT(p => ({ ...p, em: e }))} style={{ width: 32, height: 32, borderRadius: 7, border: `2px solid ${newT.em===e?"#4FACFE":"rgba(255,255,255,.08)"}`, background: newT.em===e?"rgba(79,172,254,.1)":"rgba(255,255,255,.03)", cursor: "pointer", fontSize: 16 }}>{e}</button>)}
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 10, letterSpacing: ".05em" }}>AVATAR</div>
+                <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 12 }}>
+                  <div onClick={() => modalPhotoRef.current?.click()} style={{ width: 64, height: 64, borderRadius: 18, overflow: "hidden", background: "linear-gradient(135deg,rgba(79,172,254,.15),rgba(167,139,250,.1))", border: "2px solid rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: newT.photo ? undefined : 34, flexShrink: 0, boxShadow: "0 0 20px rgba(79,172,254,.2)", cursor: "pointer", position: "relative" }}>
+                    {newT.photo ? <img src={newT.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : newT.em}
+                    <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .2s" }} onMouseEnter={e => e.currentTarget.style.opacity=1} onMouseLeave={e => e.currentTarget.style.opacity=0}><Camera size={18} color="#fff" /></div>
+                  </div>
+                  <div>
+                    <button onClick={() => modalPhotoRef.current?.click()} style={{ padding: "6px 13px", borderRadius: 9, border: "1px solid rgba(79,172,254,.32)", background: "rgba(79,172,254,.07)", color: "#4FACFE", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
+                      <Camera size={12} />Tải ảnh lên
+                    </button>
+                    {newT.photo && <button onClick={() => setNewT(p => ({ ...p, photo: null }))} style={{ padding: "4px 10px", borderRadius: 7, border: "1px solid rgba(239,68,68,.25)", background: "rgba(239,68,68,.06)", color: "#EF4444", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Xóa ảnh</button>}
+                  </div>
+                </div>
+                <input ref={modalPhotoRef} type="file" accept="image/*" onChange={e => handleModalPhoto(e.target.files[0])} style={{ display: "none" }} />
+                {!newT.photo && (
+                  <div style={{ background: "rgba(255,255,255,.025)", borderRadius: 13, padding: 10, border: "1px solid rgba(255,255,255,.06)" }}>
+                    {[
+                      { label: "Giáo viên", items: ["👨‍🏫","👩‍🏫","🧑‍🏫","👨‍🎓","👩‍🎓"] },
+                      { label: "Chuyên môn", items: ["👨‍🔬","👩‍🔬","👨‍💻","👩‍💻","👨‍💼","👩‍💼"] },
+                      { label: "Biểu tượng", items: ["🎓","📚","⭐","🏆","💡","🎯","✏️","📝"] },
+                    ].map(({ label, items }) => (
+                      <div key={label} style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: "#2E4A6A", letterSpacing: ".08em", marginBottom: 6, textTransform: "uppercase" }}>{label}</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {items.map(e => (
+                            <button key={e} onClick={() => setNewT(p => ({ ...p, em: e }))} style={{ width: 42, height: 42, borderRadius: 11, border: `2px solid ${newT.em===e ? "rgba(79,172,254,.7)" : "rgba(255,255,255,.07)"}`, background: newT.em===e ? "linear-gradient(135deg,rgba(79,172,254,.18),rgba(79,172,254,.08))" : "rgba(255,255,255,.03)", cursor: "pointer", fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center", transition: "all .22s cubic-bezier(.34,1.56,.64,1)", transform: newT.em===e ? "scale(1.12)" : "scale(1)", boxShadow: newT.em===e ? "0 4px 16px rgba(79,172,254,.25)" : "none" }}>{e}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
             <Inp label="HỌ VÀ TÊN" value={newT.name} onChange={v => setNewT(p => ({ ...p, name: v }))} placeholder="Tên giáo viên" required />
             <Inp label="USERNAME" value={newT.username} onChange={v => setNewT(p => ({ ...p, username: v }))} placeholder="vd: gv.nam" required note="Phải là duy nhất" />
             <Inp label={editT ? "MẬT KHẨU MỚI (để trống nếu không đổi)" : "MẬT KHẨU"} value={newT.password} onChange={v => setNewT(p => ({ ...p, password: v }))} type="password" placeholder="Tối thiểu 4 ký tự" required={!editT} />
@@ -2615,6 +3245,18 @@ function SettingsPage({ state, user }) {
 function App({ user, state, onLogout }) {
   const [view, setView] = useState("dashboard");
   const [col, setCol] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [winW, setWinW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const isMobile = winW <= 768;
+  const isTablet = winW > 768 && winW <= 1100;
+  const sideW = isMobile ? 0 : (col || isTablet) ? 58 : 224;
 
   const classId = user.role === "teacher"
     ? state.classes.find(c => c.teacherId === user.data.id)?.id
@@ -2623,10 +3265,13 @@ function App({ user, state, onLogout }) {
   const myClassIds = useMemo(() => state.classes.filter(c => c.teacherId === user?.data?.id).map(c => c.id), [state.classes, user]);
   const pendingCount = user.role === "teacher" ? state.pendingStudents.filter(p => myClassIds.includes(p.classId)).length : 0;
 
+  const nav = user.role === "teacher" ? NAV_TEACHER : NAV_STUDENT;
+  const bottomNav = nav.slice(0, 5);
+
   const PAGES = useMemo(() => ({
     dashboard:   p => <DashPage    {...p} setView={setView} />,
     students:    p => <StudentsPage  {...p} />,
-    seating:     p => <SeatingPage   {...p} />,
+    seating:     p => <SeatingPage   {...p} isMobile={isMobile} />,
     attendance:  p => <AttPage       {...p} />,
     chat:        p => <ChatPage      {...p} />,
     assignments: p => <TaskPage      {...p} />,
@@ -2639,15 +3284,66 @@ function App({ user, state, onLogout }) {
 
   const PageFn = PAGES[view] || PAGES.dashboard;
 
+  const handleSetView = v => { setView(v); setMobileOpen(false); };
+
   return (
     <div className="ecp" style={{ display: "flex" }}>
-      <Sidebar view={view} setView={setView} col={col} user={user} pendingCount={pendingCount} />
-      <div style={{ marginLeft: col ? 58 : 224, flex: 1, minHeight: "100vh", transition: "margin-left .3s cubic-bezier(.4,0,.2,1)", display: "flex", flexDirection: "column" }}>
-        <TopBar view={view} toggleSide={() => setCol(p => !p)} user={user} onLogout={onLogout} classInfo={classInfo} />
-        <div style={{ flex: 1 }}>
+      {mobileOpen && (
+        <div onClick={() => setMobileOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 49, backdropFilter: "blur(4px)" }} />
+      )}
+      {!isMobile && (
+        <div className="sidebar-desktop" style={{ display: "flex" }}>
+          <Sidebar view={view} setView={handleSetView} col={col || isTablet} user={user} pendingCount={pendingCount} />
+        </div>
+      )}
+      {mobileOpen && (
+        <div style={{ position: "fixed", left: 0, top: 0, bottom: 0, width: 240, zIndex: 50, display: "flex", flexDirection: "column", background: "linear-gradient(180deg,#06101E,#050C1A)", borderRight: "1px solid rgba(79,172,254,.1)", boxShadow: "8px 0 40px rgba(0,0,0,.6)", animation: "slideInLeft .25s cubic-bezier(.34,1.2,.64,1)" }}>
+          <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 16px", borderBottom: "1px solid rgba(79,172,254,.06)", gap: 10, justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <img src={LOGO_SM} alt="" style={{ width: 32, height: 32, borderRadius: 9, boxShadow: "0 4px 16px rgba(29,108,245,.4)" }} />
+              <span className="hfont" style={{ fontSize: 14, color: "#E2EAF4" }}>E-Class <span className="gtext">P2K</span></span>
+            </div>
+            <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#4A6580" }}><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+            {nav.map(({ id, Ic, l }) => (
+              <div key={id} onClick={() => handleSetView(id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 11, marginBottom: 2, cursor: "pointer", background: view === id ? "linear-gradient(135deg,rgba(79,172,254,.14),rgba(79,172,254,.07))" : "transparent", color: view === id ? "#4FACFE" : "#3D5A78", border: view === id ? "1px solid rgba(79,172,254,.2)" : "1px solid transparent", transition: "all .2s", position: "relative" }}>
+                <Ic size={15} strokeWidth={view === id ? 2.5 : 1.8} style={{ filter: view === id ? "drop-shadow(0 0 5px rgba(79,172,254,.7))" : "none" }} />
+                <span style={{ fontSize: 13, fontWeight: view === id ? 700 : 400 }}>{l}</span>
+                {id === "pending" && pendingCount > 0 && <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 99, background: "rgba(239,68,68,.18)", color: "#EF4444" }}>{pendingCount}</span>}
+                {view === id && <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: 3, height: 18, background: "linear-gradient(180deg,#4FACFE,#00F2FE)", borderRadius: "2px 0 0 2px" }} />}
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,.05)" }}>
+            <button onClick={onLogout} style={{ width: "100%", padding: "10px", borderRadius: 10, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <LogOut size={13} />Đăng xuất
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="main-content" style={{ marginLeft: sideW, flex: 1, minHeight: "100vh", transition: "margin-left .3s cubic-bezier(.4,0,.2,1)", display: "flex", flexDirection: "column" }}>
+        <TopBar view={view} toggleSide={() => setCol(p => !p)} toggleMobile={() => setMobileOpen(p => !p)} user={user} onLogout={onLogout} classInfo={classInfo} />
+        <div style={{ flex: 1, paddingBottom: isMobile ? 70 : 0 }}>
           <PageFn state={state} user={user} />
         </div>
       </div>
+      {isMobile && (
+        <div className="bottom-nav" style={{ display: "flex" }}>
+        {bottomNav.map(({ id, Ic, l }) => (
+          <button key={id} onClick={() => handleSetView(id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 4px", border: "none", background: "transparent", cursor: "pointer", color: view === id ? "#4FACFE" : "#3D5A78", fontFamily: "inherit", position: "relative", transition: "all .2s" }}>
+            {view === id && <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 24, height: 2, borderRadius: 2, background: "linear-gradient(90deg,#4FACFE,#00F2FE)" }} />}
+            <Ic size={20} strokeWidth={view === id ? 2.5 : 1.8} style={{ filter: view === id ? "drop-shadow(0 0 6px rgba(79,172,254,.8))" : "none", transition: "all .2s" }} />
+            <span style={{ fontSize: 9, fontWeight: view === id ? 700 : 400 }}>{l}</span>
+            {id === "pending" && pendingCount > 0 && <div style={{ position: "absolute", top: 4, right: "calc(50% - 14px)", width: 7, height: 7, borderRadius: "50%", background: "#EF4444", border: "1.5px solid #050C1A" }} />}
+          </button>
+        ))}
+        <button onClick={() => setMobileOpen(p => !p)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, padding: "6px 4px", border: "none", background: "transparent", cursor: "pointer", color: "#3D5A78", fontFamily: "inherit", transition: "all .2s" }}>
+          <Menu size={20} strokeWidth={1.8} />
+          <span style={{ fontSize: 9 }}>Thêm</span>
+        </button>
+      </div>
+      )}
     </div>
   );
 }
@@ -2682,6 +3378,14 @@ export default function EClassP2K() {
     }
   }, [state.students]);
 
+  useEffect(() => {
+    if (!user || user.role !== "teacher") return;
+    const updated = state.teachers.find(t => t.id === user.data.id);
+    if (updated && JSON.stringify(updated) !== JSON.stringify(user.data)) {
+      setUser(prev => ({ ...prev, data: updated }));
+    }
+  }, [state.teachers]);
+
   const handleLogin = session => {
     setUser(session);
     state.setSession(session);
@@ -2696,10 +3400,18 @@ export default function EClassP2K() {
     return (
       <>
         <style>{CSS}</style>
-        <div className="ecp" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ textAlign: "center" }}>
-            <img src={LOGO_LG} alt="E-Class P2K" style={{ width: 72, height: 72, borderRadius: 20, boxShadow: "0 12px 36px rgba(29,108,245,.45)", marginBottom: 20, animation: "float 2s ease-in-out infinite", display: "inline-block" }} />
-            <div style={{ fontSize: 14, color: "#3D5A78" }}>Đang tải dữ liệu...</div>
+        <div className="ecp" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle,rgba(29,108,245,.2),transparent 70%)", top: "50%", left: "50%", transform: "translate(-50%,-50%)", filter: "blur(60px)", animation: "breathe 3s ease-in-out infinite", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle,rgba(255,255,255,.018) 1px,transparent 1px)", backgroundSize: "28px 28px", pointerEvents: "none" }} />
+          <div style={{ textAlign: "center", position: "relative" }}>
+            <div style={{ position: "relative", display: "inline-block", marginBottom: 24, animation: "float 3s ease-in-out infinite" }}>
+              <img src={LOGO_LG} alt="E-Class P2K" className="logo-entrance" style={{ width: 84, height: 84, borderRadius: 22, boxShadow: "0 16px 48px rgba(29,108,245,.55),0 0 0 1px rgba(79,172,254,.2)", display: "block" }} />
+              <div style={{ position: "absolute", inset: -8, borderRadius: 30, border: "1.5px solid rgba(79,172,254,.25)", animation: "glowbeat 2s ease-in-out infinite", pointerEvents: "none" }} />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#4FACFE", marginBottom: 6, animation: "fadeUp .5s .3s both", letterSpacing: ".02em" }}>E-Class P2K</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", animation: "fadeUp .5s .5s both" }}>
+              {[0,1,2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#4FACFE", animation: `breathe 1.2s ${i * .2}s ease-in-out infinite`, opacity: .5 }} />)}
+            </div>
           </div>
         </div>
       </>
