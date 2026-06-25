@@ -435,6 +435,9 @@ function StudentRegisterPage({ state, onBack }) {
   const [dob, setDob] = useState("");
   const [em, setEm] = useState("😊");
   const [photo, setPhoto] = useState(null);
+  const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -453,12 +456,14 @@ function StudentRegisterPage({ state, onBack }) {
     setErr("");
     if (!name.trim()) { setErr("Nhập họ và tên"); return; }
     if (!classId) { setErr("Chọn lớp học"); return; }
+    if (password && password.length < 4) { setErr("Mật khẩu tối thiểu 4 ký tự"); return; }
+    if (password !== password2) { setErr("Mật khẩu xác nhận không khớp"); return; }
     const dup = state.pendingStudents.find(p => p.name.toLowerCase() === name.trim().toLowerCase() && p.classId === classId);
     if (dup) { setErr("Bạn đã đăng ký rồi, đang chờ duyệt"); return; }
     state.setPendingStudents(prev => [...prev, {
       id: "pend_" + Date.now() + Math.random(),
       name: name.trim(), classId, phone, dob,
-      em, photo, submittedAt: Date.now(),
+      em, photo, password: password || null, submittedAt: Date.now(),
     }]);
     setSuccess(true);
   };
@@ -490,6 +495,14 @@ function StudentRegisterPage({ state, onBack }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <Inp label="NGÀY SINH" value={dob} onChange={setDob} type="date" />
         <Inp label="SỐ ĐIỆN THOẠI" value={phone} onChange={setPhone} placeholder="0912..." />
+      </div>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU <span style={{ color: "#3D5A78", fontWeight: 400, fontSize: 10 }}>(tuỳ chọn)</span></div>
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <input className="inp" type={showPw ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Tối thiểu 4 ký tự" style={{ display: "block", paddingRight: 42 }} />
+          <button onClick={() => setShowPw(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#2E4A6A" }}>{showPw ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+        </div>
+        <input className="inp" type={showPw ? "text" : "password"} value={password2} onChange={e => setPassword2(e.target.value)} placeholder="Xác nhận mật khẩu" style={{ display: "block" }} />
       </div>
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 10, letterSpacing: ".05em" }}>AVATAR</div>
@@ -525,6 +538,8 @@ function LoginPage({ state, onLogin }) {
   const [shaking, setShaking] = useState(false);
   const [sClass, setSClass] = useState("");
   const [sCode, setSCode] = useState("");
+  const [sPass, setSPass] = useState("");
+  const [showSPass, setShowSPass] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
 
   const shake = () => { setShaking(true); setTimeout(() => setShaking(false), 400); };
@@ -542,6 +557,8 @@ function LoginPage({ state, onLogin }) {
       if (pending) { setErr("Tài khoản chưa được giáo viên xét duyệt. Vui lòng chờ!"); shake(); return; }
       const st = state.students.find(s => s.classId === cls.id && s.code.toUpperCase() === sCode.trim().toUpperCase());
       if (!st) { setErr("Mã học sinh không đúng hoặc không thuộc lớp này"); shake(); return; }
+      if (st.password && st.password !== sPass) { setErr("Sai mật khẩu"); shake(); return; }
+      if (!st.password && sPass) { setErr("Tài khoản này chưa có mật khẩu, bỏ trống để đăng nhập"); shake(); return; }
       onLogin({ role: "student", data: st, classId: cls.id });
     }
   };
@@ -607,6 +624,15 @@ function LoginPage({ state, onLogin }) {
                   </select>
                 </div>
                 <Inp label="MÃ HỌC SINH" value={sCode} onChange={setSCode} placeholder="Ví dụ: HS001" required note="Mã được giáo viên cấp sau khi duyệt đăng ký" />
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU <span style={{ color: "#3D5A78", fontWeight: 400, fontSize: 10 }}>(nếu được đặt)</span></div>
+                  <div style={{ position: "relative" }}>
+                    <input className="inp" type={showSPass ? "text" : "password"} value={sPass} onChange={e => setSPass(e.target.value)} onKeyDown={e => e.key === "Enter" && doLogin()} placeholder="Nhập mật khẩu học sinh" style={{ display: "block", paddingRight: 42 }} />
+                    <button onClick={() => setShowSPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#2E4A6A", transition: "color .2s" }}>
+                      {showSPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
               </>
             )}
             <ErrBox msg={err} />
@@ -738,6 +764,7 @@ function PendingPage({ state, user }) {
       photo: pend.photo || null,
       phone: pend.phone || "",
       dob: pend.dob || "",
+      password: pend.password || null,
       score: 0,
       createdAt: Date.now(),
     }]);
@@ -839,9 +866,11 @@ function StudentsPage({ state, user }) {
   const saveStudent = () => {
     if (!newSt.name.trim()) { setErrSt("Vui lòng nhập tên học sinh"); return; }
     if (!newSt.code.trim()) { setErrSt("Vui lòng nhập mã học sinh"); return; }
+    if (newSt.password && newSt.password.length < 4) { setErrSt("Mật khẩu tối thiểu 4 ký tự"); return; }
     const dup = state.students.find(s => s.code.toUpperCase() === newSt.code.trim().toUpperCase() && s.classId === selClass && s.id !== editStudent?.id);
     if (dup) { setErrSt("Mã học sinh đã tồn tại trong lớp này"); return; }
     const payload = { name: newSt.name.trim(), code: newSt.code.trim().toUpperCase(), em: newSt.em, photo: newSt.photo || null, phone: newSt.phone || "", dob: newSt.dob || "" };
+    if (newSt.password) payload.password = newSt.password;
     if (editStudent) {
       state.setStudents(p => p.map(s => s.id === editStudent.id ? { ...s, ...payload } : s));
     } else {
@@ -1081,6 +1110,7 @@ function StudentsPage({ state, user }) {
                 </div>
               </div>
             )}
+            <Inp label={editStudent ? "MẬT KHẨU MỚI (để trống nếu không đổi)" : "MẬT KHẨU (tuỳ chọn)"} value={newSt.password || ""} onChange={v => setNewSt(p => ({ ...p, password: v }))} type="password" placeholder="Tối thiểu 4 ký tự" />
             <ErrBox msg={errSt} />
             <div style={{ display: "flex", gap: 9 }}>
               <Btn variant="ghost" onClick={() => setShowAddModal(false)} style={{ flex: 1 }}>Hủy</Btn>
@@ -2837,6 +2867,25 @@ function ProfilePage({ state, user }) {
   const totalDays = allAtt.length;
   const tasks = state.assignments[user.classId] || [];
 
+  const [pwNew, setPwNew] = useState("");
+  const [pwNew2, setPwNew2] = useState("");
+  const [pwOld, setPwOld] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwErr, setPwErr] = useState("");
+
+  const changePw = () => {
+    setPwErr(""); setPwMsg("");
+    if (s.password && !pwOld) { setPwErr("Nhập mật khẩu cũ"); return; }
+    if (s.password && s.password !== pwOld) { setPwErr("Mật khẩu cũ không đúng"); return; }
+    if (!pwNew || pwNew.length < 4) { setPwErr("Mật khẩu mới tối thiểu 4 ký tự"); return; }
+    if (pwNew !== pwNew2) { setPwErr("Xác nhận mật khẩu không khớp"); return; }
+    state.setStudents(p => p.map(x => x.id === s.id ? { ...x, password: pwNew } : x));
+    setPwNew(""); setPwNew2(""); setPwOld("");
+    setPwMsg("Đổi mật khẩu thành công!");
+    setTimeout(() => setPwMsg(""), 3000);
+  };
+
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ borderRadius: 20, padding: "26px 28px", background: "linear-gradient(135deg,rgba(29,108,245,.12),rgba(123,63,228,.09),rgba(0,242,254,.05))", backgroundSize: "300% 300%", animation: "morphGrad 9s ease infinite", border: "1px solid rgba(79,172,254,.15)", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", boxShadow: "0 8px 40px rgba(29,108,245,.12),inset 0 1px 0 rgba(255,255,255,.06)", position: "relative", overflow: "hidden" }}>
@@ -2872,6 +2921,19 @@ function ProfilePage({ state, user }) {
             <span style={{ color: "#E2EAF4", fontWeight: 500 }}>{v}</span>
           </div>
         ))}
+      </Card>
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}><Key size={14} style={{ color: "#4FACFE" }} />Đổi mật khẩu</div>
+        {s.password && <Inp label="MẬT KHẨU CŨ" value={pwOld} onChange={setPwOld} type={showPw ? "text" : "password"} placeholder="Nhập mật khẩu hiện tại" required />}
+        <Inp label="MẬT KHẨU MỚI" value={pwNew} onChange={setPwNew} type={showPw ? "text" : "password"} placeholder="Tối thiểu 4 ký tự" required />
+        <Inp label="XÁC NHẬN MẬT KHẨU" value={pwNew2} onChange={setPwNew2} type={showPw ? "text" : "password"} placeholder="Nhập lại mật khẩu mới" required />
+        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#94A3B8", cursor: "pointer", marginBottom: 14 }}>
+          <input type="checkbox" checked={showPw} onChange={e => setShowPw(e.target.checked)} style={{ accentColor: "#4FACFE" }} />Hiện mật khẩu
+        </label>
+        {pwErr && <ErrBox msg={pwErr} />}
+        {pwMsg && <div style={{ fontSize: 12, color: "#34D399", marginBottom: 12, padding: "9px 13px", borderRadius: 10, background: "rgba(52,211,153,.08)", border: "1px solid rgba(52,211,153,.25)" }}>✓ {pwMsg}</div>}
+        <Btn onClick={changePw} style={{ width: "100%", justifyContent: "center" }} disabled={!pwNew || !pwNew2}><Key size={13} />Đổi mật khẩu</Btn>
+        {!s.password && <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 10, textAlign: "center" }}>Tài khoản chưa có mật khẩu — đặt mật khẩu để bảo mật hơn</div>}
       </Card>
     </div>
   );
@@ -3146,7 +3208,7 @@ function SettingsPage({ state, user }) {
           </div>
           {state.teachers.map(x => (
             <div key={x.id} style={{ padding: "11px 16px", borderBottom: "1px solid rgba(255,255,255,.03)", display: "flex", alignItems: "center", gap: 12 }}>
-              <Av em={x.em||"👨‍🏫"} sz={34} />
+              <Av em={x.em||"👨‍🏫"} photo={x.photo||null} sz={34} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4" }}>{x.name}</div>
                 <div style={{ fontSize: 10, color: "#2E4A6A" }}>@{x.username} · {x.subject||"—"}{x.isAdmin?" · Admin":""}</div>
