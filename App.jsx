@@ -222,7 +222,10 @@ const DB_KEY = "eclassp2k_v2";
 async function loadFromStorage(def) {
   try {
     const r = await window.storage.get(DB_KEY);
-    if (r && r.value) return JSON.parse(r.value);
+    if (r && r.value) {
+      const saved = JSON.parse(r.value);
+      return { ...def, ...saved };
+    }
   } catch {}
   return def;
 }
@@ -318,6 +321,7 @@ const DEFAULT_STATE = {
   attendance: {},
   files: {},
   pendingStudents: [],
+  loginLogs: {},
   session: null,
 };
 
@@ -327,8 +331,17 @@ function useAppState() {
 
   useEffect(() => {
     loadFromStorage(DEFAULT_STATE).then(saved => {
-      setData(saved);
+      const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const cleaned = {
+        ...saved,
+        pendingStudents: (saved.pendingStudents || []).filter(p => (now - (p.submittedAt || now)) < SEVEN_DAYS),
+      };
+      setData(cleaned);
       setLoaded(true);
+      if (cleaned.pendingStudents.length !== (saved.pendingStudents || []).length) {
+        saveToStorage(cleaned);
+      }
     });
   }, []);
 
@@ -351,8 +364,62 @@ function useAppState() {
     attendance:  data.attendance,  setAttendance:  v => update("attendance", v),
     files:       data.files,       setFiles:       v => update("files", v),
     pendingStudents: data.pendingStudents, setPendingStudents: v => update("pendingStudents", v),
+    loginLogs:   data.loginLogs,   setLoginLogs:   v => update("loginLogs", v),
     session:     data.session,     setSession:     v => update("session", v),
   };
+}
+
+
+function LoginStatsCard({ logs }) {
+  const fmtDuration = ms => {
+    if (!ms) return "--";
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s} giây`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m} phút ${s % 60} giây`;
+    return `${Math.floor(m / 60)} giờ ${m % 60} phút`;
+  };
+  const fmtTime = ts => new Date(ts).toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit" });
+  const totalTime = (logs?.history || []).reduce((sum, h) => sum + (h.duration || 0), 0);
+  const avgTime = logs?.history?.filter(h => h.duration)?.length
+    ? totalTime / logs.history.filter(h => h.duration).length : 0;
+
+  return (
+    <div style={{ background: "linear-gradient(145deg,#0A1628,#07101F)", border: "1px solid rgba(255,255,255,.065)", borderRadius: 15, padding: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 14, display: "flex", alignItems: "center", gap: 7 }}>
+        <BarChart2 size={14} style={{ color: "#4FACFE" }} />Thống kê đăng nhập
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 14 }}>
+        {[
+          ["Số lần", logs?.count || 0, "#4FACFE"],
+          ["Tổng thời gian", fmtDuration(totalTime), "#34D399"],
+          ["TB mỗi phiên", fmtDuration(Math.round(avgTime)), "#A78BFA"],
+        ].map(([l, v, c]) => (
+          <div key={l} style={{ textAlign: "center", padding: "10px 8px", borderRadius: 11, background: `${c}08`, border: `1px solid ${c}18` }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: c, marginBottom: 3 }}>{v}</div>
+            <div style={{ fontSize: 9, color: "#3D5A78", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".04em" }}>{l}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#2E4A6A", letterSpacing: ".06em", marginBottom: 8 }}>LỊCH SỬ ĐĂNG NHẬP</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 200, overflowY: "auto" }}>
+        {(logs?.history || []).length === 0
+          ? <div style={{ fontSize: 11, color: "#2E4A6A", textAlign: "center", padding: "12px 0" }}>Chưa có lịch sử</div>
+          : (logs.history).map((h, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px", borderRadius: 8, background: i === 0 ? "rgba(79,172,254,.06)" : "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)", fontSize: 11 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {i === 0 && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 99, background: "rgba(52,211,153,.15)", color: "#34D399", fontWeight: 700 }}>MỚI NHẤT</span>}
+                <span style={{ color: "#94A3B8" }}>{fmtTime(h.at)}</span>
+              </div>
+              <span style={{ color: h.duration ? "#4FACFE" : "#F59E0B", fontWeight: 500 }}>
+                {h.duration ? fmtDuration(h.duration) : "Đang hoạt động"}
+              </span>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
 }
 
 
@@ -800,7 +867,7 @@ function PendingPage({ state, user }) {
               <div style={{ flex: 1, minWidth: 160 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4" }}>{p.name}</div>
                 <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>Lớp: <span style={{ color: "#4FACFE" }}>{cls?.name}</span> · {p.phone && `📞 ${p.phone}`}</div>
-                <div style={{ fontSize: 10, color: "#2E4A6A", marginTop: 1 }}>Đăng ký: {new Date(p.submittedAt).toLocaleDateString("vi-VN")}</div>
+                <div style={{ fontSize: 10, color: "#2E4A6A", marginTop: 1 }}>Đăng ký: {new Date(p.submittedAt).toLocaleDateString("vi-VN")} · {(() => { const daysLeft = 7 - Math.floor((Date.now() - (p.submittedAt || Date.now())) / 86400000); return daysLeft <= 1 ? <span style={{ color: "#EF4444", fontWeight: 700 }}>Hết hạn sau {daysLeft} ngày!</span> : daysLeft <= 3 ? <span style={{ color: "#F59E0B", fontWeight: 600 }}>Còn {daysLeft} ngày</span> : <span>Còn {daysLeft} ngày</span>; })()}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <div>
@@ -825,6 +892,7 @@ function StudentsPage({ state, user }) {
   const myClasses = useMemo(() => state.classes.filter(c => c.teacherId === user.data.id), [state.classes, user.data.id]);
   const [selClass, setSelClass] = useState(() => myClasses[0]?.id || "");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [loginStatsModal, setLoginStatsModal] = useState(null);
   const [showAddClass, setShowAddClass] = useState(false);
   const [showEditClass, setShowEditClass] = useState(false);
   const [editStudent, setEditStudent] = useState(null);
@@ -997,6 +1065,7 @@ function StudentsPage({ state, user }) {
                     <div style={{ fontSize: 12, color: "#4A6580", fontFamily: "monospace" }}>{s.code}</div>
                     <div>{present ? <Badge c="green">✓ Có mặt</Badge> : <Badge c="gray">Chưa ĐD</Badge>}</div>
                     <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setLoginStatsModal(s)} title="Thống kê đăng nhập" style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(167,139,250,.25)", background: "rgba(167,139,250,.07)", color: "#A78BFA", cursor: "pointer", display: "flex" }}><BarChart2 size={12} /></button>
                       <button onClick={() => { setEditStudent(s); setNewSt({ name: s.name, code: s.code, em: s.em, photo: s.photo || null, phone: s.phone || "", dob: s.dob || "" }); setErrSt(""); setShowAddModal(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "#4FACFE", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
                       <button onClick={() => deleteStudent(s.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>
                     </div>
@@ -1067,6 +1136,25 @@ function StudentsPage({ state, user }) {
         </div>
       )}
 
+      {loginStatsModal && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setLoginStatsModal(null)}>
+          <div className="modal-flex" style={{ width: 460 }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Av em={loginStatsModal.em} photo={loginStatsModal.photo} sz={36} />
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>{loginStatsModal.name}</div>
+                  <div style={{ fontSize: 11, color: "#3D5A78" }}>{loginStatsModal.code} · {state.classes.find(c => c.id === loginStatsModal.classId)?.name}</div>
+                </div>
+              </div>
+              <button onClick={() => setLoginStatsModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+              <LoginStatsCard logs={state.loginLogs?.[loginStatsModal.id]} />
+            </div>
+          </div>
+        </div>
+      )}
       {showAddModal && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowAddModal(false)}>
           <div className="modal" style={{ width: 430 }}>
@@ -1691,38 +1779,177 @@ function AttCalendar({ classId, studentId, attendance, onSelectDate, selectedDat
   );
 }
 
+const loadScript = url => new Promise((res, rej) => {
+  if (document.querySelector(`script[src="${url}"]`)) { res(); return; }
+  const s = document.createElement("script"); s.src = url;
+  s.onload = res; s.onerror = rej;
+  document.head.appendChild(s);
+});
+
+function RealQRCode({ data, size = 170 }) {
+  const [cells, setCells] = useState(null);
+  useEffect(() => {
+    loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qr.js").then(() => {
+      try {
+        const qr = window.qrcode(0, "M");
+        qr.addData(data); qr.make();
+        const n = qr.getModuleCount();
+        const grid = [];
+        for (let r = 0; r < n; r++) { for (let c = 0; c < n; c++) { if (qr.isDark(r, c)) grid.push([r, c]); } }
+        setCells({ grid, n });
+      } catch(e) { setCells(null); }
+    }).catch(() => setCells(null));
+  }, [data]);
+  if (!cells) return <div style={{ width: size, height: size, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}><div style={{ fontSize: 11, color: "#999" }}>Đang tạo QR...</div></div>;
+  const cs = Math.floor(size / cells.n);
+  return (
+    <svg width={size} height={size} style={{ display: "block" }}>
+      <rect width={size} height={size} fill="white" />
+      {cells.grid.map(([r, c], i) => <rect key={i} x={c * cs} y={r * cs} width={cs} height={cs} fill="#050C1A" />)}
+    </svg>
+  );
+}
+
+function CameraScanner({ expectedData, onSuccess }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+  const foundRef = useRef(false);
+  const [camState, setCamState] = useState("idle");
+  const [errMsg, setErrMsg] = useState("");
+
+  const stopCamera = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  useEffect(() => () => stopCamera(), []);
+
+  const startCamera = async () => {
+    setCamState("requesting"); setErrMsg("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+      setCamState("scanning");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js");
+      const scan = () => {
+        const video = videoRef.current; const canvas = canvasRef.current;
+        if (!video || !canvas || video.readyState < 2) { rafRef.current = requestAnimationFrame(scan); return; }
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = window.jsQR?.(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && !foundRef.current) {
+          if (code.data === expectedData) {
+            foundRef.current = true;
+            stopCamera(); setCamState("success"); onSuccess();
+          } else {
+            setCamState("wrong");
+            setTimeout(() => setCamState("scanning"), 1500);
+          }
+        }
+        if (!foundRef.current) rafRef.current = requestAnimationFrame(scan);
+      };
+      rafRef.current = requestAnimationFrame(scan);
+    } catch(e) {
+      stopCamera(); setCamState("error");
+      if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError")
+        setErrMsg("Bạn đã từ chối quyền camera. Vào cài đặt trình duyệt → Quyền → Camera để cấp phép.");
+      else if (e.name === "NotFoundError")
+        setErrMsg("Không tìm thấy camera. Thiết bị của bạn có thể không có camera.");
+      else setErrMsg("Lỗi camera: " + e.message);
+    }
+  };
+
+  if (camState === "idle") return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 52, marginBottom: 14, animation: "float 3s ease-in-out infinite" }}>📷</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "#E2EAF4", marginBottom: 6 }}>Quét QR để điểm danh</div>
+      <div style={{ fontSize: 11, color: "#3D5A78", marginBottom: 18 }}>Nhấn nút bên dưới để mở camera và quét mã QR từ giáo viên</div>
+      <Btn onClick={startCamera} style={{ width: "100%", justifyContent: "center" }}>📷 Cho phép Camera & Quét QR</Btn>
+    </div>
+  );
+
+  if (camState === "requesting") return (
+    <div style={{ textAlign: "center", padding: "20px 0" }}>
+      <div style={{ fontSize: 36, marginBottom: 12, animation: "breathe 1s ease-in-out infinite" }}>🔐</div>
+      <div style={{ fontSize: 12, color: "#4FACFE", fontWeight: 600 }}>Đang yêu cầu quyền camera...</div>
+      <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 6 }}>Nhấn "Cho phép" trên popup của trình duyệt</div>
+    </div>
+  );
+
+  if (camState === "error") return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
+      <div style={{ fontSize: 12, color: "#EF4444", fontWeight: 600, marginBottom: 8 }}>Không thể truy cập camera</div>
+      <div style={{ fontSize: 11, color: "#3D5A78", marginBottom: 16, lineHeight: 1.6 }}>{errMsg}</div>
+      <Btn variant="ghost" onClick={() => { setCamState("idle"); setErrMsg(""); }}>Thử lại</Btn>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "relative" }}>
+      <video ref={videoRef} muted playsInline style={{ width: "100%", borderRadius: 12, display: "block", maxHeight: 260, objectFit: "cover" }} />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+        <div style={{ width: 160, height: 160, position: "relative" }}>
+          {[["0 0","border-top","border-left"],["0 auto 0 0","border-top","border-right"],["auto 0 0 0","border-bottom","border-left"],["auto 0 0 auto","border-bottom","border-right"]].map(([inset, b1, b2], i) => (
+            <div key={i} style={{ position: "absolute", width: 28, height: 28, inset, [b1]: `3px solid ${camState === "wrong" ? "#EF4444" : "#4FACFE"}`, [b2]: `3px solid ${camState === "wrong" ? "#EF4444" : "#4FACFE"}`, borderRadius: 3, transition: "border-color .3s" }} />
+          ))}
+          <div style={{ position: "absolute", left: 0, right: 0, height: 2, top: "50%", background: `linear-gradient(90deg,transparent,${camState === "wrong" ? "#EF4444" : "#4FACFE"},transparent)`, animation: "scanline 1.8s ease-in-out infinite alternate", boxShadow: `0 0 10px ${camState === "wrong" ? "rgba(239,68,68,.8)" : "rgba(79,172,254,.8)"}` }} />
+        </div>
+      </div>
+      <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, textAlign: "center" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 99, background: camState === "wrong" ? "rgba(239,68,68,.85)" : "rgba(5,12,26,.8)", color: camState === "wrong" ? "#fff" : "#4FACFE", backdropFilter: "blur(8px)" }}>
+          {camState === "wrong" ? "✗ QR không hợp lệ" : "📡 Đang quét..."}
+        </span>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <Btn variant="ghost" onClick={() => { stopCamera(); setCamState("idle"); foundRef.current = false; }} style={{ width: "100%", justifyContent: "center", fontSize: 12 }}>Hủy</Btn>
+      </div>
+    </div>
+  );
+}
+
 function AttPage({ state, user }) {
   const today = new Date().toISOString().slice(0, 10);
   const myClasses = useMemo(() => user.role === "teacher" ? state.classes.filter(c => c.teacherId === user.data.id) : state.classes.filter(c => c.id === user.classId), [state.classes, user]);
   const [selClass, setSelClass] = useState(() => myClasses[0]?.id || "");
-  const [scanned, setScanned] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [timer, setTimer] = useState(300);
   const [viewDate, setViewDate] = useState(today);
+  const [scanned, setScanned] = useState(false);
   const [tab, setTab] = useState("today");
   const [selStudent, setSelStudent] = useState(null);
+  const qrData = `ECLASS_ATTEND:${selClass}:${today}`;
   const attKey = `${selClass}_${viewDate}`;
   const presentIds = state.attendance[attKey] || [];
   const classStudents = useMemo(() => state.students.filter(s => s.classId === selClass), [state.students, selClass]);
 
+  const handleScanSuccess = useCallback(() => {
+    setScanned(true);
+    state.setAttendance(p => {
+      const prev = p[`${selClass}_${today}`] || [];
+      if (prev.includes(user.data.id)) return p;
+      return { ...p, [`${selClass}_${today}`]: [...prev, user.data.id] };
+    });
+  }, [selClass, today, user.data.id, state]);
+
+  const [timer, setTimer] = useState(300);
   useEffect(() => { const t = setInterval(() => setTimer(p => p > 0 ? p - 1 : 0), 1000); return () => clearInterval(t); }, []);
+  const mm = Math.floor(timer / 60).toString().padStart(2, "0");
+  const ss = (timer % 60).toString().padStart(2, "0");
+  const pct = classStudents.length ? Math.round((presentIds.length / classStudents.length) * 100) : 0;
 
   const toggle = sid => {
     if (user.role !== "teacher") return;
     state.setAttendance(p => { const prev = p[attKey] || []; return { ...p, [attKey]: prev.includes(sid) ? prev.filter(x => x !== sid) : [...prev, sid] }; });
   };
   const markAll = yes => state.setAttendance(p => ({ ...p, [attKey]: yes ? classStudents.map(s => s.id) : [] }));
-  const doScan = () => {
-    if (scanned) return;
-    setScanning(true);
-    setTimeout(() => {
-      setScanning(false); setScanned(true);
-      state.setAttendance(p => { const prev = p[`${selClass}_${today}`] || []; if (!prev.includes(user.data.id)) return { ...p, [`${selClass}_${today}`]: [...prev, user.data.id] }; return p; });
-    }, 2200);
-  };
-  const mm = Math.floor(timer / 60).toString().padStart(2, "0");
-  const ss = (timer % 60).toString().padStart(2, "0");
-  const pct = classStudents.length ? Math.round((presentIds.length / classStudents.length) * 100) : 0;
   const allSessions = useMemo(() => Object.keys(state.attendance).filter(k => k.startsWith(selClass + "_")), [state.attendance, selClass]);
   const totalSessions = allSessions.length;
   const getStats = useCallback(sid => { const p = allSessions.filter(k => (state.attendance[k] || []).includes(sid)).length; return { p, a: totalSessions - p, pct: totalSessions ? Math.round((p / totalSessions) * 100) : 0 }; }, [allSessions, state.attendance, totalSessions]);
@@ -1747,7 +1974,9 @@ function AttPage({ state, user }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 3 }}>Mã QR điểm danh</div>
               <div style={{ fontSize: 11, color: "#3D5A78", marginBottom: 16 }}>Lớp {myClasses.find(c => c.id === selClass)?.name} · {today}</div>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, position: "relative" }}>
-                <div style={{ borderRadius: 16, overflow: "hidden", border: "2px solid rgba(79,172,254,.4)", boxShadow: "0 0 0 4px rgba(79,172,254,.08),0 0 48px rgba(79,172,254,.3),0 0 80px rgba(79,172,254,.1)", animation: "glowbeat 2.5s ease-in-out infinite" }} className="qr-glow"><QRSvg sz={170} /></div>
+                <div style={{ borderRadius: 16, overflow: "hidden", border: "2px solid rgba(79,172,254,.4)", boxShadow: "0 0 0 4px rgba(79,172,254,.08),0 0 48px rgba(79,172,254,.3)", animation: "glowbeat 2.5s ease-in-out infinite" }}>
+                  <RealQRCode data={qrData} size={170} />
+                </div>
               </div>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
                 <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "monospace", color: timer < 60 ? "#EF4444" : "#4FACFE", padding: "7px 22px", borderRadius: 12, background: timer < 60 ? "rgba(239,68,68,.08)" : "rgba(79,172,254,.08)", border: `1px solid ${timer < 60 ? "rgba(239,68,68,.25)" : "rgba(79,172,254,.2)"}`, animation: timer < 60 ? "glowbeat 1s ease-in-out infinite" : "none", transition: "all .5s", letterSpacing: ".05em" }}>{mm}:{ss}</div>
@@ -1761,19 +1990,14 @@ function AttPage({ state, user }) {
           ) : (
             <Card style={{ textAlign: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4", marginBottom: 12 }}>Điểm danh hôm nay</div>
-              {!scanned ? (
-                <>
-                  <div onClick={doScan} style={{ width: 174, height: 174, borderRadius: 16, margin: "0 auto 18px", background: scanning ? "rgba(79,172,254,.06)" : "rgba(79,172,254,.03)", border: scanning ? "2px solid #4FACFE" : "2px dashed rgba(79,172,254,.35)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden", boxShadow: scanning ? "0 0 40px rgba(79,172,254,.35),0 0 0 4px rgba(79,172,254,.08)" : "none", transition: "all .35s cubic-bezier(.4,0,.2,1)", cursor: "pointer" }} onMouseEnter={e => { if (!scanning) { e.currentTarget.style.borderStyle = "solid"; e.currentTarget.style.background = "rgba(79,172,254,.07)"; }}} onMouseLeave={e => { if (!scanning) { e.currentTarget.style.borderStyle = "dashed"; e.currentTarget.style.background = "rgba(79,172,254,.03)"; }}}>
-                    {scanning ? <><div style={{ fontSize: 44, animation: "breathe 1s ease-in-out infinite" }}>📷</div><div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#4FACFE,transparent)", animation: "scanline 1.5s ease-in-out infinite alternate", boxShadow: "0 0 12px rgba(79,172,254,.8)" }} /></> : <div style={{ color: "#2E4A6A", textAlign: "center", transition: "all .2s" }}><QrCode size={46} /><div style={{ fontSize: 11, marginTop: 8 }}>Nhấn để quét</div></div>}
-                  </div>
-                  <Btn onClick={doScan} disabled={scanning} style={{ width: "100%", justifyContent: "center" }}>{scanning ? "Đang quét..." : "Quét QR Code 📷"}</Btn>
-                </>
-              ) : (
+              {scanned ? (
                 <div style={{ animation: "pop .5s cubic-bezier(.34,1.56,.64,1)", paddingTop: 8 }}>
                   <div style={{ fontSize: 70, marginBottom: 14, animation: "float 2s ease-in-out infinite", filter: "drop-shadow(0 8px 16px rgba(52,211,153,.4))" }}>✅</div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: "#34D399", marginBottom: 6, animation: "countUp .4s .1s both" }}>Điểm danh thành công!</div>
-                  <div style={{ fontSize: 11, color: "#3D5A78", animation: "fadeUp .4s .2s both" }}>{user.data.name}</div>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: "#34D399", marginBottom: 6 }}>Điểm danh thành công!</div>
+                  <div style={{ fontSize: 11, color: "#3D5A78" }}>{user.data.name}</div>
                 </div>
+              ) : (
+                <CameraScanner expectedData={qrData} onSuccess={handleScanSuccess} />
               )}
             </Card>
           )}
@@ -1953,20 +2177,31 @@ function ChatPage({ state, user }) {
 
 function QuizModal({ task, classId, user, state, onClose }) {
   const [answers, setAnswers] = useState({});
+  const [essayText, setEssayText] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(null);
   const qs = task.questions || [];
+  const isTF = task.taskType === "truefalse";
+  const isEssay = task.taskType === "essay";
 
   const submitQuiz = () => {
+    if (isEssay) {
+      if (!essayText.trim()) return;
+      const sub = { studentId: user.data.id, studentName: user.data.name, submittedAt: Date.now(), essayText };
+      state.setAssignments(p => ({ ...p, [classId]: (p[classId]||[]).map(t => t.id === task.id ? { ...t, status: "submitted", submittedAt: Date.now(), submissions: [...(t.submissions||[]).filter(s=>s.studentId!==user.data.id), sub] } : t) }));
+      setSubmitted(true);
+      return;
+    }
     const correct = qs.filter((q, i) => answers[i] === q.ans).length;
     const pct = Math.round((correct / qs.length) * 100);
     setScore({ correct, pct });
     setSubmitted(true);
     const sub = { studentId: user.data.id, studentName: user.data.name, submittedAt: Date.now(), quizScore: pct, quizCorrect: correct, quizAnswers: answers };
-    state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === task.id ? { ...t, status: "submitted", submittedAt: Date.now(), quizScore: pct, quizCorrect: correct, quizAnswers: answers, submissions: [...(t.submissions||[]).filter(s=>s.studentId!==user.data.id), sub] } : t) }));
+    state.setAssignments(p => ({ ...p, [classId]: (p[classId]||[]).map(t => t.id === task.id ? { ...t, status: "submitted", submittedAt: Date.now(), quizScore: pct, quizCorrect: correct, submissions: [...(t.submissions||[]).filter(s=>s.studentId!==user.data.id), sub] } : t) }));
   };
 
-  const answered = Object.keys(answers).length;
+  const answered = isEssay ? (essayText.trim() ? 1 : 0) : Object.keys(answers).length;
+  const total = isEssay ? 1 : qs.length;
   const OPTS = ["A","B","C","D"];
 
   return (
@@ -1974,53 +2209,98 @@ function QuizModal({ task, classId, user, state, onClose }) {
       <div className="modal-flex" style={{ width: 520 }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(79,172,254,.03)" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>🧠 {task.title}</div>
-            <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · {qs.length} câu hỏi</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>{isTF ? "✅" : isEssay ? "✍️" : "🧠"} {task.title}</div>
+            <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · {isEssay ? "Tự luận" : `${qs.length} câu ${isTF ? "đúng/sai" : "hỏi"}`}</div>
           </div>
-          {submitted ? <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button> : <div style={{ fontSize: 11, color: answered === qs.length ? "#34D399" : "#F59E0B", fontWeight: 600 }}>{answered}/{qs.length} đã trả lời</div>}
+          {submitted ? <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button> : <div style={{ fontSize: 11, color: answered === total ? "#34D399" : "#F59E0B", fontWeight: 600 }}>{answered}/{total} đã trả lời</div>}
         </div>
-        {submitted && score ? (
+
+        {submitted ? (
           <div style={{ padding: 32, textAlign: "center" }}>
-            <div style={{ fontSize: 64, marginBottom: 16, animation: "pop .5s cubic-bezier(.34,1.56,.64,1)" }}>{score.pct >= 80 ? "🏆" : score.pct >= 50 ? "😊" : "📚"}</div>
-            <div className="hfont" style={{ fontSize: 42, fontWeight: 400, color: score.pct >= 80 ? "#34D399" : score.pct >= 50 ? "#F59E0B" : "#EF4444", marginBottom: 8, animation: "countUp .5s .1s both" }}>{score.pct}%</div>
-            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 20 }}>Đúng {score.correct}/{qs.length} câu</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, textAlign: "left", marginBottom: 20 }}>
-              {qs.map((q, i) => {
-                const isCorrect = answers[i] === q.ans;
-                return (
-                  <div key={i} style={{ padding: "10px 14px", borderRadius: 10, background: isCorrect ? "rgba(52,211,153,.07)" : "rgba(239,68,68,.07)", border: `1px solid ${isCorrect ? "rgba(52,211,153,.25)" : "rgba(239,68,68,.2)"}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#E2EAF4", marginBottom: 4 }}>{i+1}. {q.q}</div>
-                    <div style={{ fontSize: 10, color: isCorrect ? "#34D399" : "#EF4444" }}>{isCorrect ? "✓" : "✗"} Bạn chọn: {OPTS[answers[i]] ?? "–"} · Đáp án: {OPTS[q.ans]}: {q.opts[q.ans]}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <Btn onClick={onClose} style={{ width: "100%", justifyContent: "center" }}>Đóng</Btn>
+            {isEssay ? (
+              <>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📨</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: "#34D399", marginBottom: 8 }}>Đã nộp bài!</div>
+                <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 20 }}>Giáo viên sẽ chấm và phản hồi sớm nhất.</div>
+                <Btn onClick={onClose} style={{ width: "100%", justifyContent: "center" }}>Đóng</Btn>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 64, marginBottom: 16, animation: "pop .5s cubic-bezier(.34,1.56,.64,1)" }}>{score.pct >= 80 ? "🏆" : score.pct >= 50 ? "😊" : "📚"}</div>
+                <div className="hfont" style={{ fontSize: 42, color: score.pct>=80?"#34D399":score.pct>=50?"#F59E0B":"#EF4444", marginBottom: 8 }}>{score.pct}%</div>
+                <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 20 }}>Đúng {score.correct}/{qs.length} câu</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7, textAlign: "left", marginBottom: 20 }}>
+                  {qs.map((q, i) => {
+                    const isCorrect = isTF ? (answers[i] === q.ans) : (answers[i] === q.ans);
+                    const userAns = isTF ? (answers[i] === true ? "Đúng" : answers[i] === false ? "Sai" : "–") : (OPTS[answers[i]] ?? "–");
+                    const correctAns = isTF ? (q.ans ? "Đúng" : "Sai") : `${OPTS[q.ans]}: ${q.opts[q.ans]}`;
+                    return (
+                      <div key={i} style={{ padding: "9px 13px", borderRadius: 10, background: isCorrect?"rgba(52,211,153,.07)":"rgba(239,68,68,.07)", border: `1px solid ${isCorrect?"rgba(52,211,153,.2)":"rgba(239,68,68,.18)"}` }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#E2EAF4", marginBottom: 4 }}>{i+1}. {q.q}</div>
+                        <div style={{ fontSize: 10, color: isCorrect?"#34D399":"#EF4444" }}>{isCorrect?"✓":"✗"} Bạn chọn: {userAns} · Đáp án: {correctAns}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Btn onClick={onClose} style={{ width: "100%", justifyContent: "center" }}>Đóng</Btn>
+              </>
+            )}
           </div>
         ) : (
           <>
-            <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-              {qs.map((q, qi) => (
-                <div key={qi} style={{ background: "rgba(255,255,255,.025)", border: `1px solid ${answers[qi] !== undefined ? "rgba(79,172,254,.2)" : "rgba(255,255,255,.06)"}`, borderRadius: 13, padding: 16, transition: "border-color .2s" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4", marginBottom: 12 }}><span style={{ color: "#4FACFE", marginRight: 8 }}>Câu {qi+1}.</span>{q.q}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {q.opts.map((opt, oi) => {
-                      const sel = answers[qi] === oi;
-                      return (
-                        <button key={oi} onClick={() => setAnswers(p => ({ ...p, [qi]: oi }))} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px", borderRadius: 9, border: `1px solid ${sel ? "rgba(79,172,254,.55)" : "rgba(255,255,255,.07)"}`, background: sel ? "linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))" : "rgba(255,255,255,.025)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: sel ? "#4FACFE" : "#94A3B8", textAlign: "left", transition: "all .2s cubic-bezier(.34,1.56,.64,1)", transform: sel ? "scale(1.01)" : "scale(1)" }}>
-                          <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${sel ? "#4FACFE" : "rgba(255,255,255,.15)"}`, background: sel ? "rgba(79,172,254,.2)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: sel ? "#4FACFE" : "#4A6580", flexShrink: 0, transition: "all .2s" }}>{OPTS[oi]}</div>
-                          {opt || <span style={{ color: "#2E4A6A", fontStyle: "italic" }}>(chưa có đáp án)</span>}
-                        </button>
-                      );
-                    })}
+            <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              {isEssay ? (
+                <>
+                  <div style={{ background: "rgba(245,158,11,.06)", border: "1px solid rgba(245,158,11,.2)", borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#F59E0B", marginBottom: 6 }}>Đề bài:</div>
+                    <div style={{ fontSize: 13, color: "#E2EAF4", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{task.desc}</div>
+                    {task.rubric && <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "rgba(255,255,255,.04)", fontSize: 11, color: "#94A3B8" }}>💡 Gợi ý: {task.rubric}</div>}
                   </div>
-                </div>
-              ))}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 7, letterSpacing: ".05em" }}>BÀI LÀM CỦA BẠN</div>
+                    <textarea value={essayText} onChange={e => setEssayText(e.target.value)} placeholder="Viết bài làm của bạn tại đây..." rows={8} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 13, fontFamily: "inherit", outline: "none", resize: "vertical", lineHeight: 1.7 }} />
+                    <div style={{ fontSize: 10, color: "#3D5A78", marginTop: 4, textAlign: "right" }}>{essayText.length} ký tự</div>
+                  </div>
+                </>
+              ) : isTF ? (
+                qs.map((q, qi) => (
+                  <div key={qi} style={{ background: "rgba(255,255,255,.025)", border: `1px solid ${answers[qi]!==undefined?"rgba(52,211,153,.2)":"rgba(255,255,255,.06)"}`, borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4", marginBottom: 10 }}><span style={{ color: "#34D399", marginRight: 8 }}>{qi+1}.</span>{q.q}</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[true, false].map(v => {
+                        const sel = answers[qi] === v;
+                        return (
+                          <button key={String(v)} onClick={() => setAnswers(p => ({ ...p, [qi]: v }))} style={{ flex: 1, padding: "10px", borderRadius: 10, border: `1px solid ${sel?(v?"rgba(52,211,153,.5)":"rgba(239,68,68,.5)"):"rgba(255,255,255,.08)"}`, background: sel?(v?"linear-gradient(135deg,rgba(52,211,153,.15),rgba(52,211,153,.07))":"linear-gradient(135deg,rgba(239,68,68,.12),rgba(239,68,68,.06))"):"rgba(255,255,255,.025)", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: sel?(v?"#34D399":"#EF4444"):"#4A6580", transition: "all .2s cubic-bezier(.34,1.56,.64,1)", transform: sel?"scale(1.02)":"scale(1)" }}>
+                            {v ? "✓ Đúng" : "✗ Sai"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                qs.map((q, qi) => (
+                  <div key={qi} style={{ background: "rgba(255,255,255,.025)", border: `1px solid ${answers[qi]!==undefined?"rgba(79,172,254,.2)":"rgba(255,255,255,.06)"}`, borderRadius: 13, padding: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4", marginBottom: 12 }}><span style={{ color: "#4FACFE", marginRight: 8 }}>Câu {qi+1}.</span>{q.q}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                      {q.opts.map((opt, oi) => {
+                        const sel = answers[qi] === oi;
+                        return (
+                          <button key={oi} onClick={() => setAnswers(p => ({ ...p, [qi]: oi }))} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px", borderRadius: 9, border: `1px solid ${sel?"rgba(79,172,254,.55)":"rgba(255,255,255,.07)"}`, background: sel?"linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))":"rgba(255,255,255,.025)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: sel?"#4FACFE":"#94A3B8", textAlign: "left", transition: "all .2s" }}>
+                            <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${sel?"#4FACFE":"rgba(255,255,255,.15)"}`, background: sel?"rgba(79,172,254,.2)":"transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: sel?"#4FACFE":"#4A6580", flexShrink: 0 }}>{OPTS[oi]}</div>
+                            {opt || <span style={{ color: "#2E4A6A", fontStyle: "italic" }}>(chưa có đáp án)</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
             <div style={{ padding: "14px 20px", borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 9 }}>
               <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Hủy</Btn>
-              <Btn onClick={submitQuiz} disabled={answered < qs.length} style={{ flex: 2, justifyContent: "center" }}>
-                {answered < qs.length ? `Còn ${qs.length - answered} câu chưa trả lời` : "✓ Nộp quiz"}
+              <Btn onClick={submitQuiz} disabled={isEssay ? !essayText.trim() : answered < total} style={{ flex: 2, justifyContent: "center" }}>
+                {isEssay ? (essayText.trim() ? "📨 Nộp bài" : "Chưa có bài làm") : answered < total ? `Còn ${total-answered} câu chưa trả lời` : "✓ Nộp bài"}
               </Btn>
             </div>
           </>
@@ -2037,13 +2317,14 @@ function TaskPage({ state, user }) {
   const tasks = state.assignments[classId] || [];
   const [showAdd, setShowAdd] = useState(false);
   const [tab, setTab] = useState("all");
-  const [newTask, setNewTask] = useState({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [] });
+  const [newTask, setNewTask] = useState({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [], videoUrl: "", checkpoints: [] });
   const [uploadingFile, setUploadingFile] = useState(false);
   const [errTask, setErrTask] = useState("");
   const fileRef = useRef();
   const { confirm, ConfirmUI } = useConfirm();
 
   const [quizModal, setQuizModal] = useState(null);
+  const [videoModal, setVideoModal] = useState(null);
   const [submitModal, setSubmitModal] = useState(null);
   const [submitImgs, setSubmitImgs] = useState([]);
   const [submitNote, setSubmitNote] = useState("");
@@ -2092,8 +2373,13 @@ function TaskPage({ state, user }) {
     if (!newTask.deadline) { setErrTask("Chọn deadline"); return; }
     if ((newTask.taskType||"normal") === "quiz" && !(newTask.questions||[]).length) { setErrTask("Thêm ít nhất 1 câu hỏi"); return; }
     if ((newTask.taskType||"normal") === "quiz" && (newTask.questions||[]).some(q => !q.q.trim())) { setErrTask("Điền đầy đủ nội dung các câu hỏi"); return; }
+    if (newTask.taskType === "truefalse" && !(newTask.questions||[]).length) { setErrTask("Thêm ít nhất 1 câu đúng/sai"); return; }
+    if (newTask.taskType === "truefalse" && (newTask.questions||[]).some(q => !q.q.trim())) { setErrTask("Điền đầy đủ nội dung các câu"); return; }
+    if (newTask.taskType === "essay" && !newTask.desc?.trim()) { setErrTask("Nhập đề bài tự luận"); return; }
+    if (newTask.taskType === "video" && !newTask.videoUrl?.trim()) { setErrTask("Nhập URL video"); return; }
+    if (newTask.taskType === "video" && !(newTask.checkpoints||[]).length) { setErrTask("Thêm ít nhất 1 câu hỏi checkpoint"); return; }
     state.setAssignments(p => ({ ...p, [classId]: [...(p[classId] || []), { id: "task_" + Date.now(), ...newTask, taskType: newTask.taskType||"normal", status: "pending", createdAt: Date.now() }] }));
-    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [] });
+    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], taskType: "normal", questions: [], videoUrl: "", checkpoints: [] });
     setShowAdd(false); setErrTask("");
   };
 
@@ -2176,19 +2462,27 @@ function TaskPage({ state, user }) {
                 <span style={{ fontSize: 10, color: "#4A6580", display: "flex", alignItems: "center", gap: 4 }}><Clock size={10} />{a.deadline}</span>
                 {a.priority && <span style={{ fontSize: 10, color: "#F59E0B", fontWeight: 600 }}>⚡ Ưu tiên</span>}
                 {a.taskType === "quiz" && <span style={{ fontSize: 10, color: "#A78BFA", fontWeight: 600 }}>🧠 Quiz · {(a.questions||[]).length} câu</span>}
+              {a.taskType === "truefalse" && <span style={{ fontSize: 10, color: "#34D399", fontWeight: 600 }}>✅ Đúng/Sai · {(a.questions||[]).length} câu</span>}
+              {a.taskType === "essay" && <span style={{ fontSize: 10, color: "#F59E0B", fontWeight: 600 }}>✍️ Tự luận</span>}
+              {a.taskType === "video" && <span style={{ fontSize: 10, color: "#4FACFE", fontWeight: 600 }}>▶ Video · {(a.checkpoints||[]).length} checkpoint</span>}
                 {a.attachments?.length > 0 && <span style={{ fontSize: 10, color: "#4A6580", display: "flex", alignItems: "center", gap: 3 }}><Paperclip size={10} />{a.attachments.length} file</span>}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
               <Badge c={STATUS_CFG[a.status]?.c||"blue"}>{STATUS_CFG[a.status]?.l||a.status}</Badge>
-              {user.role === "student" && a.status === "pending" && a.taskType === "quiz" && <Btn onClick={() => setQuizModal(a)} small style={{ background: "linear-gradient(135deg,#7B3FE4,#4FACFE)" }}>🧠 Làm quiz</Btn>}
-              {user.role === "student" && a.status === "pending" && a.taskType !== "quiz" && <Btn onClick={() => openSubmitModal(a)} small variant="success"><Upload size={11} />Nộp bài</Btn>}
-              {user.role === "student" && a.status === "submitted" && a.taskType === "quiz" && a.quizScore !== undefined && (
+              {user.role === "student" && a.status === "pending" && a.taskType === "video" && <Btn onClick={() => setVideoModal(a)} small style={{ background: "linear-gradient(135deg,#0EA5E9,#4FACFE)" }}>▶ Xem video</Btn>}
+              {user.role === "student" && a.status === "pending" && a.taskType === "truefalse" && <Btn onClick={() => setQuizModal(a)} small style={{ background: "linear-gradient(135deg,#059669,#34D399)" }}>✅ Làm bài</Btn>}
+              {user.role === "student" && a.status === "pending" && a.taskType === "essay" && <Btn onClick={() => setQuizModal(a)} small style={{ background: "linear-gradient(135deg,#D97706,#F59E0B)" }}>✍️ Làm bài</Btn>}
+              {user.role === "student" && a.status === "pending" && a.taskType !== "quiz" && a.taskType !== "truefalse" && a.taskType !== "essay" && <Btn onClick={() => openSubmitModal(a)} small variant="success"><Upload size={11} />Nộp bài</Btn>}
+              {user.role === "student" && a.status === "submitted" && (a.taskType === "quiz" || a.taskType === "truefalse") && a.quizScore !== undefined && (
                 <div style={{ fontSize: 11, fontWeight: 700, color: a.quizScore >= 80 ? "#34D399" : a.quizScore >= 50 ? "#F59E0B" : "#EF4444", padding: "3px 10px", borderRadius: 8, background: a.quizScore >= 80 ? "rgba(52,211,153,.1)" : a.quizScore >= 50 ? "rgba(245,158,11,.1)" : "rgba(239,68,68,.1)", border: `1px solid ${a.quizScore >= 80 ? "rgba(52,211,153,.3)" : a.quizScore >= 50 ? "rgba(245,158,11,.3)" : "rgba(239,68,68,.3)"}` }}>
                   {a.quizScore}% · {a.quizCorrect}/{(a.questions||[]).length} câu
                 </div>
               )}
-              {user.role === "student" && a.status === "submitted" && a.taskType !== "quiz" && a.submitImgs?.length > 0 && (
+              {user.role === "student" && a.status === "submitted" && a.taskType === "essay" && (
+                <div style={{ fontSize: 10, color: "#F59E0B", padding: "3px 9px", borderRadius: 7, background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.25)", fontWeight: 600 }}>✍️ Chờ chấm</div>
+              )}
+              {user.role === "student" && a.status === "submitted" && a.taskType !== "quiz" && a.taskType !== "truefalse" && a.taskType !== "essay" && a.submitImgs?.length > 0 && (
                 <div style={{ display: "flex", gap: 4 }}>
                   {a.submitImgs.slice(0, 3).map((img, i) => <img key={i} src={img.data} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover", border: "1px solid rgba(52,211,153,.3)" }} />)}
                   {a.submitImgs.length > 3 && <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94A3B8" }}>+{a.submitImgs.length - 3}</div>}
@@ -2211,7 +2505,7 @@ function TaskPage({ state, user }) {
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
             </div>
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              {[["normal","📝","Bài tập thường"],["quiz","🧠","Quiz trắc nghiệm"]].map(([t,ic,l]) => (
+              {[["normal","📝","Bài thường"],["quiz","🧠","Trắc nghiệm"],["truefalse","✅","Đúng / Sai"],["essay","✍️","Tự luận"],["video","▶","Video tương tác"]].map(([t,ic,l]) => (
                 <button key={t} onClick={() => setNewTask(p => ({ ...p, taskType: t }))} style={{ flex: 1, padding: "10px 8px", borderRadius: 11, border: `1px solid ${(newTask.taskType||"normal") === t ? "rgba(79,172,254,.5)" : "rgba(255,255,255,.08)"}`, background: (newTask.taskType||"normal") === t ? "linear-gradient(135deg,rgba(79,172,254,.15),rgba(79,172,254,.07))" : "transparent", color: (newTask.taskType||"normal") === t ? "#4FACFE" : "#4A6580", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 600, transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{ic} {l}</button>
               ))}
             </div>
@@ -2229,7 +2523,7 @@ function TaskPage({ state, user }) {
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#94A3B8", cursor: "pointer", marginBottom: 16 }}>
               <input type="checkbox" checked={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.checked }))} style={{ accentColor: "#F59E0B" }} />⚡ Ưu tiên cao
             </label>
-            {(newTask.taskType||"normal") === "quiz" ? (
+            {newTask.taskType === "quiz" ? (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", letterSpacing: ".05em" }}>CÂU HỎI ({(newTask.questions||[]).length})</div>
@@ -2251,7 +2545,73 @@ function TaskPage({ state, user }) {
                       ))}
                     </div>
                   ))}
-                  {(newTask.questions||[]).length === 0 && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, padding: "20px 0" }}>Chưa có câu hỏi. Nhấn "+ Thêm câu" để bắt đầu.</div>}
+                  {!(newTask.questions||[]).length && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, padding: "20px 0" }}>Nhấn "+ Thêm câu" để bắt đầu.</div>}
+                </div>
+              </div>
+            ) : newTask.taskType === "truefalse" ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", letterSpacing: ".05em" }}>MỆNH ĐỀ ({(newTask.questions||[]).length})</div>
+                  <Btn small onClick={() => setNewTask(p => ({ ...p, questions: [...(p.questions||[]), { q: "", ans: true }] }))}>+ Thêm mệnh đề</Btn>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
+                  {(newTask.questions||[]).map((qq, qi) => (
+                    <div key={qi} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 11, padding: "10px 12px", display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4FACFE", minWidth: 22 }}>{qi+1}.</div>
+                      <input value={qq.q} onChange={e => setNewTask(p => { const qs=[...p.questions]; qs[qi]={...qs[qi],q:e.target.value}; return {...p,questions:qs}; })} placeholder="Nhập mệnh đề..." style={{ flex: 1, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 8, padding: "6px 10px", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none" }} />
+                      <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                        {[true, false].map(v => (
+                          <button key={String(v)} onClick={() => setNewTask(p => { const qs=[...p.questions]; qs[qi]={...qs[qi],ans:v}; return {...p,questions:qs}; })} style={{ padding: "4px 10px", borderRadius: 7, border: `1px solid ${qq.ans===v ? (v?"rgba(52,211,153,.5)":"rgba(239,68,68,.5)") : "rgba(255,255,255,.08)"}`, background: qq.ans===v ? (v?"rgba(52,211,153,.15)":"rgba(239,68,68,.12)") : "transparent", color: qq.ans===v ? (v?"#34D399":"#EF4444") : "#4A6580", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>
+                            {v ? "Đúng" : "Sai"}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={() => setNewTask(p => ({ ...p, questions: p.questions.filter((_,i)=>i!==qi) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444" }}><X size={13} /></button>
+                    </div>
+                  ))}
+                  {!(newTask.questions||[]).length && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, padding: "16px 0" }}>Nhấn "+ Thêm mệnh đề" để bắt đầu.</div>}
+                </div>
+              </div>
+            ) : newTask.taskType === "essay" ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 6, letterSpacing: ".05em" }}>ĐỀ BÀI <span style={{ color: "#EF4444" }}>*</span></div>
+                <textarea value={newTask.desc||""} onChange={e => setNewTask(p => ({ ...p, desc: e.target.value }))} placeholder="Nhập đề bài tự luận chi tiết..." rows={4} style={{ width: "100%", padding: "10px 13px", borderRadius: 11, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", marginBottom: 8 }} />
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 6, letterSpacing: ".05em" }}>GỢI Ý / TIÊU CHÍ CHẤM (tuỳ chọn)</div>
+                <textarea value={newTask.rubric||""} onChange={e => setNewTask(p => ({ ...p, rubric: e.target.value }))} placeholder="Gợi ý cách chấm, từ khoá cần có..." rows={2} style={{ width: "100%", padding: "10px 13px", borderRadius: 11, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.1)", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+              </div>
+            ) : newTask.taskType === "video" ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", marginBottom: 6, letterSpacing: ".05em" }}>URL VIDEO <span style={{ color: "#EF4444" }}>*</span></div>
+                  <input value={newTask.videoUrl||""} onChange={e => setNewTask(p => ({ ...p, videoUrl: e.target.value }))} className="inp" placeholder="https://youtube.com/watch?v=... hoặc link MP4" style={{ display: "block" }} />
+                  {newTask.videoUrl && extractYTId(newTask.videoUrl) && (
+                    <div style={{ marginTop: 8, borderRadius: 10, overflow: "hidden", aspectRatio: "16/9" }}>
+                      <iframe src={`https://www.youtube.com/embed/${extractYTId(newTask.videoUrl)}?rel=0`} style={{ width: "100%", height: "100%", border: "none" }} allowFullScreen />
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4A6580", letterSpacing: ".05em" }}>CHECKPOINTS ({(newTask.checkpoints||[]).length} câu)</div>
+                  <Btn small onClick={() => setNewTask(p => ({ ...p, checkpoints: [...(p.checkpoints||[]), { time: 0, q: "", opts: ["","","",""], ans: 0 }] }))}>+ Thêm câu hỏi</Btn>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 280, overflowY: "auto" }}>
+                  {(newTask.checkpoints||[]).map((cp, ci) => (
+                    <div key={ci} style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "#F59E0B" }}>⏱</span>
+                        <input value={(() => { const m=Math.floor(cp.time/60),s=cp.time%60; return `${m}:${String(s).padStart(2,"0")}`; })()} onChange={e => { const p=e.target.value.split(":"); const sec=(parseInt(p[0])||0)*60+(parseInt(p[1])||0); setNewTask(t => { const cps=[...t.checkpoints]; cps[ci]={...cps[ci],time:sec}; return {...t,checkpoints:cps}; }); }} placeholder="0:00" style={{ width: 58, background: "rgba(245,158,11,.1)", border: "1px solid rgba(245,158,11,.3)", borderRadius: 7, padding: "4px 8px", color: "#F59E0B", fontSize: 12, fontFamily: "inherit", outline: "none", fontWeight: 700, textAlign: "center" }} />
+                        <input value={cp.q} onChange={e => setNewTask(t => { const cps=[...t.checkpoints]; cps[ci]={...cps[ci],q:e.target.value}; return {...t,checkpoints:cps}; })} placeholder="Câu hỏi..." style={{ flex: 1, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.09)", borderRadius: 8, padding: "6px 10px", color: "#E2EAF4", fontSize: 12, fontFamily: "inherit", outline: "none" }} />
+                        <button onClick={() => setNewTask(t => ({ ...t, checkpoints: t.checkpoints.filter((_,i)=>i!==ci) }))} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444" }}><X size={13} /></button>
+                      </div>
+                      {["A","B","C","D"].map((lbl, oi) => (
+                        <div key={oi} style={{ display: "flex", gap: 6, marginBottom: 5, alignItems: "center" }}>
+                          <button onClick={() => setNewTask(t => { const cps=[...t.checkpoints]; cps[ci]={...cps[ci],ans:oi}; return {...t,checkpoints:cps}; })} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${cp.ans===oi?"#34D399":"rgba(255,255,255,.12)"}`, background: cp.ans===oi?"rgba(52,211,153,.15)":"transparent", cursor: "pointer", fontSize: 9, fontWeight: 700, color: cp.ans===oi?"#34D399":"#4A6580", flexShrink: 0 }}>{lbl}</button>
+                          <input value={cp.opts[oi]} onChange={e => setNewTask(t => { const cps=[...t.checkpoints]; const opts=[...cps[ci].opts]; opts[oi]=e.target.value; cps[ci]={...cps[ci],opts}; return {...t,checkpoints:cps}; })} placeholder={`Đáp án ${lbl}...`} style={{ flex: 1, background: "rgba(255,255,255,.03)", border: `1px solid ${cp.ans===oi?"rgba(52,211,153,.3)":"rgba(255,255,255,.07)"}`, borderRadius: 7, padding: "5px 9px", color: cp.ans===oi?"#34D399":"#94A3B8", fontSize: 11, fontFamily: "inherit", outline: "none" }} />
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {!(newTask.checkpoints||[]).length && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, padding: "14px 0" }}>Nhấn "+ Thêm câu hỏi" để tạo checkpoint.</div>}
                 </div>
               </div>
             ) : (
@@ -2276,11 +2636,14 @@ function TaskPage({ state, user }) {
             <ErrBox msg={errTask} />
             <div style={{ display: "flex", gap: 9 }}>
               <Btn variant="ghost" onClick={() => setShowAdd(false)} style={{ flex: 1 }}>Hủy</Btn>
-              <Btn onClick={addTask} style={{ flex: 2 }}>{(newTask.taskType||"normal")==="quiz" ? "🧠 Tạo Quiz" : "Tạo bài tập"}</Btn>
+              <Btn onClick={addTask} style={{ flex: 2 }}>
+                {newTask.taskType==="quiz" ? "🧠 Tạo Quiz" : newTask.taskType==="truefalse" ? "✅ Tạo Đúng/Sai" : newTask.taskType==="essay" ? "✍️ Tạo Tự luận" : newTask.taskType==="video" ? "▶ Tạo Video tương tác" : "Tạo bài tập"}
+              </Btn>
             </div>
           </div>
         </div>
       )}
+      {videoModal && <VideoTaskModal task={videoModal} classId={classId} user={user} state={state} onClose={() => setVideoModal(null)} />}
       {quizModal && <QuizModal task={quizModal} classId={classId} user={user} state={state} onClose={() => setQuizModal(null)} />}
       {taskDetailModal && <TaskDetailModal task={taskDetailModal} classId={classId} state={state} onClose={() => setTaskDetailModal(null)} />}
     </div>
@@ -2289,8 +2652,11 @@ function TaskPage({ state, user }) {
 
 function TaskDetailModal({ task, classId, state, onClose }) {
   const allStudents = state.students.filter(s => s.classId === classId);
-  const subs = task.submissions || [];
+  const [subs, setSubs] = useState(task.submissions || []);
   const [detailTab, setDetailTab] = useState("notyet");
+  const [viewEssay, setViewEssay] = useState(null);
+  const [grading, setGrading] = useState(null);
+  const [gradingErr, setGradingErr] = useState("");
 
   const getStatus = s => {
     const sub = subs.find(sb => sb.studentId === s.id);
@@ -2306,57 +2672,351 @@ function TaskDetailModal({ task, classId, state, onClose }) {
   };
   const shown = groups[detailTab] || [];
 
+  const autoGrade = async (sub, student) => {
+    setGrading(sub.studentId);
+    setGradingErr("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{
+            role: "user",
+            content: `Bạn là giáo viên đang chấm bài tự luận. Hãy chấm bài và trả lời CHỈ bằng JSON, không có gì khác.
+
+ĐỀ BÀI: ${task.desc}
+${task.rubric ? `TIÊU CHÍ CHẤM: ${task.rubric}` : ""}
+MÔN: ${task.subject}
+
+BÀI LÀM CỦA HỌC SINH (${student.name}):
+${sub.essayText}
+
+Trả về JSON với format:
+{
+  "score": <số từ 0-10>,
+  "grade": <"Xuất sắc"|"Giỏi"|"Khá"|"Trung bình"|"Yếu">,
+  "feedback": "<nhận xét chi tiết 2-3 câu bằng tiếng Việt>",
+  "strengths": "<điểm mạnh>",
+  "improvements": "<cần cải thiện>"
+}`
+          }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text || "";
+      const clean = text.replace(/```json|```/g, "").trim();
+      const result = JSON.parse(clean);
+      const updatedSubs = subs.map(s => s.studentId === sub.studentId ? { ...s, aiScore: result.score, aiGrade: result.grade, aiFeedback: result.feedback, aiStrengths: result.strengths, aiImprovements: result.improvements, aiGradedAt: Date.now() } : s);
+      setSubs(updatedSubs);
+      state.setAssignments(p => ({ ...p, [classId]: (p[classId]||[]).map(t => t.id === task.id ? { ...t, submissions: updatedSubs } : t) }));
+    } catch(e) {
+      setGradingErr("Lỗi chấm bài: " + e.message);
+    }
+    setGrading(null);
+  };
+
   return (
-    <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-flex" style={{ width: 500 }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && !viewEssay && onClose()}>
+      {viewEssay ? (
+        <div className="modal-flex" style={{ width: 560 }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4" }}>Bài làm: {viewEssay.student.name}</div>
+              <div style={{ fontSize: 10, color: "#3D5A78" }}>{new Date(viewEssay.sub.submittedAt).toLocaleString("vi-VN")}</div>
+            </div>
+            <button onClick={() => setViewEssay(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ background: "rgba(245,158,11,.05)", border: "1px solid rgba(245,158,11,.18)", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#F59E0B", marginBottom: 6 }}>Đề bài</div>
+              <div style={{ fontSize: 12, color: "#94A3B8", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{task.desc}</div>
+              {task.rubric && <div style={{ marginTop: 8, fontSize: 11, color: "#64748B", fontStyle: "italic" }}>💡 {task.rubric}</div>}
+            </div>
+            <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#E2EAF4", marginBottom: 8 }}>Bài làm</div>
+              <div style={{ fontSize: 13, color: "#CBD5E1", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{viewEssay.sub.essayText}</div>
+            </div>
+            {viewEssay.sub.aiScore !== undefined ? (
+              <div style={{ background: "linear-gradient(135deg,rgba(79,172,254,.08),rgba(167,139,250,.06))", border: "1px solid rgba(79,172,254,.2)", borderRadius: 14, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#4FACFE" }}>✨ Kết quả AI chấm</div>
+                  <span style={{ fontSize: 10, color: "#3D5A78" }}>{new Date(viewEssay.sub.aiGradedAt).toLocaleString("vi-VN")}</span>
+                </div>
+                <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                  <div style={{ textAlign: "center", padding: "10px 18px", borderRadius: 11, background: "rgba(79,172,254,.1)", border: "1px solid rgba(79,172,254,.2)" }}>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: viewEssay.sub.aiScore>=8?"#34D399":viewEssay.sub.aiScore>=6?"#4FACFE":viewEssay.sub.aiScore>=4?"#F59E0B":"#EF4444" }}>{viewEssay.sub.aiScore}<span style={{ fontSize: 14 }}>/10</span></div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", marginTop: 2 }}>{viewEssay.sub.aiGrade}</div>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ fontSize: 11, color: "#34D399" }}>✓ {viewEssay.sub.aiStrengths}</div>
+                    <div style={{ fontSize: 11, color: "#F59E0B" }}>↑ {viewEssay.sub.aiImprovements}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "#94A3B8", lineHeight: 1.7, padding: "10px 13px", background: "rgba(255,255,255,.03)", borderRadius: 9 }}>{viewEssay.sub.aiFeedback}</div>
+                <button onClick={() => autoGrade(viewEssay.sub, viewEssay.student)} disabled={grading === viewEssay.sub.studentId} style={{ marginTop: 10, padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(79,172,254,.25)", background: "rgba(79,172,254,.07)", color: "#4FACFE", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  {grading === viewEssay.sub.studentId ? "Đang chấm lại..." : "Chấm lại"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center" }}>
+                {gradingErr && <div style={{ fontSize: 11, color: "#EF4444", marginBottom: 10 }}>{gradingErr}</div>}
+                <button onClick={() => autoGrade(viewEssay.sub, viewEssay.student)} disabled={grading === viewEssay.sub.studentId} style={{ padding: "11px 28px", borderRadius: 13, border: "none", background: "linear-gradient(135deg,#1D6CF5,#7B3FE4)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: grading ? "not-allowed" : "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 8, opacity: grading ? .7 : 1, boxShadow: "0 8px 24px rgba(29,108,245,.4)" }}>
+                  {grading === viewEssay.sub.studentId ? <><div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin360 .8s linear infinite" }} />Đang chấm...</> : <>✨ Tự chấm bằng AI</>}
+                </button>
+                <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 8 }}>Claude AI sẽ chấm dựa theo đề bài và tiêu chí</div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="modal-flex" style={{ width: 500 }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>{task.title}</div>
+              <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · Deadline: {task.deadline} · {allStudents.length} học sinh</div>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
+          </div>
+          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            {[["notyet","⏳ Chưa nộp",groups.notyet.length,"#F59E0B"],["done","✓ Đã nộp",groups.done.length,"#34D399"],["late","⚠ Nộp trễ",groups.late.length,"#EF4444"]].map(([v,l,n,c]) => (
+              <button key={v} onClick={() => setDetailTab(v)} style={{ flex: 1, padding: "11px 8px", border: "none", background: detailTab===v?"rgba(255,255,255,.04)":"transparent", borderBottom: detailTab===v?`2px solid ${c}`:"2px solid transparent", color: detailTab===v?c:"#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>
+                {l} <span style={{ marginLeft: 4, padding: "1px 7px", borderRadius: 99, background: `${c}18`, color: c, fontSize: 10 }}>{n}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, minHeight: 200 }}>
+            {shown.length === 0 && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, paddingTop: 32 }}>Không có học sinh nào.</div>}
+            {shown.map(s => {
+              const sub = subs.find(sb => sb.studentId === s.id);
+              return (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 11, background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.05)", animation: "fadeUp .25s both" }}>
+                  <Av em={s.em} photo={s.photo} sz={32} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4" }}>{s.name}</div>
+                    <div style={{ fontSize: 10, color: "#3D5A78" }}>{s.code}</div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    {sub ? (
+                      <>
+                        <div style={{ fontSize: 10, color: detailTab==="late"?"#EF4444":"#34D399", fontWeight: 600 }}>
+                          {new Date(sub.submittedAt).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}
+                        </div>
+                        {task.taskType === "essay" && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, justifyContent: "flex-end" }}>
+                            {sub.aiScore !== undefined && (
+                              <span style={{ fontSize: 11, fontWeight: 700, color: sub.aiScore>=8?"#34D399":sub.aiScore>=6?"#4FACFE":sub.aiScore>=4?"#F59E0B":"#EF4444", padding: "2px 8px", borderRadius: 7, background: "rgba(79,172,254,.08)", border: "1px solid rgba(79,172,254,.15)" }}>{sub.aiScore}/10 · {sub.aiGrade}</span>
+                            )}
+                            <button onClick={() => setViewEssay({ sub: subs.find(sb=>sb.studentId===s.id), student: s })} style={{ padding: "4px 9px", borderRadius: 7, border: "1px solid rgba(79,172,254,.25)", background: "rgba(79,172,254,.07)", color: "#4FACFE", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                              {sub.aiScore !== undefined ? "Xem chi tiết" : "Xem & Chấm"}
+                            </button>
+                          </div>
+                        )}
+                        {(task.taskType === "quiz" || task.taskType === "truefalse") && sub.quizScore !== undefined && (
+                          <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: sub.quizScore>=80?"#34D399":sub.quizScore>=50?"#F59E0B":"#EF4444" }}>{sub.quizScore}% · {sub.quizCorrect}/{(task.questions||[]).length} câu</div>
+                        )}
+                        {task.taskType !== "quiz" && task.taskType !== "truefalse" && task.taskType !== "essay" && sub.submitImgs?.length > 0 && (
+                          <div style={{ display: "flex", gap: 3, marginTop: 4, justifyContent: "flex-end" }}>
+                            {sub.submitImgs.slice(0,3).map((img,i) => <img key={i} src={img.data} alt="" style={{ width: 26, height: 26, borderRadius: 5, objectFit: "cover", border: "1px solid rgba(52,211,153,.3)" }} />)}
+                            {sub.submitImgs.length > 3 && <div style={{ width: 26, height: 26, borderRadius: 5, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94A3B8" }}>+{sub.submitImgs.length-3}</div>}
+                          </div>
+                        )}
+                      </>
+                    ) : <Badge c="amber">Chưa nộp</Badge>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function extractYTId(url = "") {
+  const m = url.match(/(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/);
+  return m ? m[1] : null;
+}
+
+function VideoTaskModal({ task, classId, user, state, onClose }) {
+  const videoRef = useRef(null);
+  const ytPlayerRef = useRef(null);
+  const pollRef = useRef(null);
+  const answeredRef = useRef({});
+  const activeCPRef = useRef(null);
+  const [answered, setAnswered] = useState({});
+  const [activeCP, setActiveCP] = useState(null);
+  const [selAns, setSelAns] = useState(null);
+  const [result, setResult] = useState(null);
+  const [completed, setCompleted] = useState(false);
+  const [ytReady, setYtReady] = useState(false);
+  const [wrongCount, setWrongCount] = useState(0);
+
+  const checkpoints = useMemo(() => [...(task.checkpoints || [])].sort((a, b) => a.time - b.time), [task.checkpoints]);
+  const isYT = /youtube\.com|youtu\.be/.test(task.videoUrl || "");
+  const ytId = isYT ? extractYTId(task.videoUrl) : null;
+  const OPTS = ["A", "B", "C", "D"];
+  const fmtTime = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const pauseVideo = useCallback(() => {
+    if (isYT) ytPlayerRef.current?.pauseVideo?.();
+    else videoRef.current?.pause();
+  }, [isYT]);
+
+  const playVideo = useCallback(() => {
+    if (isYT) ytPlayerRef.current?.playVideo?.();
+    else videoRef.current?.play();
+  }, [isYT]);
+
+  const checkTime = useCallback((t) => {
+    if (activeCPRef.current) return;
+    const cp = checkpoints.find(cp => t >= cp.time && !answeredRef.current[cp.time]);
+    if (cp) {
+      activeCPRef.current = cp;
+      pauseVideo();
+      setActiveCP(cp);
+      setSelAns(null);
+      setResult(null);
+      setWrongCount(0);
+    }
+  }, [checkpoints, pauseVideo]);
+
+  useEffect(() => {
+    if (!isYT) return;
+    const initPlayer = () => {
+      ytPlayerRef.current = new window.YT.Player("yt-player-" + task.id, {
+        videoId: ytId,
+        playerVars: { rel: 0, modestbranding: 1 },
+        events: {
+          onReady: () => setYtReady(true),
+          onStateChange: (e) => {
+            if (e.data === 1) {
+              pollRef.current = setInterval(() => {
+                checkTime(Math.floor(ytPlayerRef.current?.getCurrentTime?.() || 0));
+              }, 500);
+            } else {
+              clearInterval(pollRef.current);
+            }
+          },
+        },
+      });
+    };
+    if (window.YT?.Player) { initPlayer(); return; }
+    window.onYouTubeIframeAPIReady = initPlayer;
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const s = document.createElement("script");
+      s.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(s);
+    }
+    return () => clearInterval(pollRef.current);
+  }, []);
+
+  const handleTimeUpdate = useCallback((e) => {
+    checkTime(Math.floor(e.target.currentTime));
+  }, [checkTime]);
+
+  const handleVideoEnd = useCallback(() => {
+    const sub = { studentId: user.data.id, studentName: user.data.name, submittedAt: Date.now(), videoAnswers: answeredRef.current };
+    state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === task.id ? { ...t, status: "submitted", submittedAt: Date.now(), submissions: [...(t.submissions || []).filter(s => s.studentId !== user.data.id), sub] } : t) }));
+    setCompleted(true);
+  }, [user, classId, state, task]);
+
+  const submitAnswer = () => {
+    if (selAns === null) return;
+    if (selAns === activeCP.ans) {
+      setResult("correct");
+      answeredRef.current = { ...answeredRef.current, [activeCP.time]: selAns };
+      setAnswered({ ...answeredRef.current });
+      setTimeout(() => {
+        activeCPRef.current = null;
+        setActiveCP(null);
+        setResult(null);
+        setSelAns(null);
+        playVideo();
+      }, 1400);
+    } else {
+      setResult("wrong");
+      setWrongCount(p => p + 1);
+      setTimeout(() => { setResult(null); setSelAns(null); }, 1000);
+    }
+  };
+
+  const answeredCount = Object.keys(answered).length;
+
+  return (
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && completed && onClose()}>
+      <div className="modal-flex" style={{ width: Math.min(760, window.innerWidth - 24), maxHeight: "94vh" }}>
+        <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255,255,255,.07)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(79,172,254,.02)" }}>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2EAF4" }}>{task.title}</div>
-            <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 2 }}>{task.subject} · Deadline: {task.deadline} · {allStudents.length} học sinh</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4" }}>▶ {task.title}</div>
+            <div style={{ fontSize: 10, color: "#3D5A78", marginTop: 2 }}>{task.subject} · {checkpoints.length} câu hỏi tương tác</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#3D5A78" }}><X size={18} /></button>
         </div>
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-          {[["notyet","⏳ Chưa nộp",groups.notyet.length,"#F59E0B"],["done","✓ Đã nộp",groups.done.length,"#34D399"],["late","⚠ Nộp trễ",groups.late.length,"#EF4444"]].map(([v,l,n,c]) => (
-            <button key={v} onClick={() => setDetailTab(v)} style={{ flex: 1, padding: "11px 8px", border: "none", background: detailTab===v ? "rgba(255,255,255,.04)" : "transparent", borderBottom: detailTab===v ? `2px solid ${c}` : "2px solid transparent", color: detailTab===v ? c : "#4A6580", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all .2s" }}>
-              {l} <span style={{ marginLeft: 4, padding: "1px 7px", borderRadius: 99, background: `${c}18`, color: c, fontSize: 10 }}>{n}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8, minHeight: 200 }}>
-          {shown.length === 0 && <div style={{ textAlign: "center", color: "#2E4A6A", fontSize: 12, paddingTop: 32 }}>Không có học sinh nào.</div>}
-          {shown.map(s => {
-            const sub = subs.find(sb => sb.studentId === s.id);
-            return (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 11, background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.05)", animation: "fadeUp .25s both" }}>
-                <Av em={s.em} photo={s.photo} sz={32} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#E2EAF4" }}>{s.name}</div>
-                  <div style={{ fontSize: 10, color: "#3D5A78" }}>{s.code}</div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  {sub ? (
-                    <>
-                      <div style={{ fontSize: 10, color: detailTab==="late" ? "#EF4444" : "#34D399", fontWeight: 600 }}>
-                        {new Date(sub.submittedAt).toLocaleString("vi-VN",{hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"})}
+
+        {completed ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <div style={{ fontSize: 64, marginBottom: 16, animation: "pop .5s cubic-bezier(.34,1.56,.64,1)" }}>🎬</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#34D399", marginBottom: 8 }}>Hoàn thành video!</div>
+            <div style={{ fontSize: 12, color: "#3D5A78", marginBottom: 20 }}>Đã trả lời {answeredCount}/{checkpoints.length} câu hỏi tương tác</div>
+            <Btn onClick={onClose} style={{ justifyContent: "center" }}>Đóng</Btn>
+          </div>
+        ) : (
+          <>
+            <div style={{ position: "relative", background: "#000", aspectRatio: "16/9", width: "100%", flexShrink: 0 }}>
+              {isYT ? (
+                <div id={"yt-player-" + task.id} style={{ width: "100%", height: "100%" }} />
+              ) : (
+                <video ref={videoRef} src={task.videoUrl} onTimeUpdate={handleTimeUpdate} onEnded={handleVideoEnd} controls controlsList="nodownload" style={{ width: "100%", height: "100%", display: "block" }} />
+              )}
+
+              {activeCP && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(5,12,26,.93)", backdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn .2s ease" }}>
+                  <div style={{ maxWidth: 460, width: "100%" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 14 }}>
+                      <div style={{ padding: "3px 10px", borderRadius: 99, background: "rgba(245,158,11,.15)", border: "1px solid rgba(245,158,11,.35)", fontSize: 10, fontWeight: 700, color: "#F59E0B", display: "flex", alignItems: "center", gap: 5 }}>
+                        <Clock size={10} />⏸ Dừng tại {fmtTime(activeCP.time)}
                       </div>
-                      {sub.submitNote && <div style={{ fontSize: 10, color: "#4A6580", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>"{sub.submitNote}"</div>}
-                      {task.taskType !== "quiz" && sub.submitImgs?.length > 0 && (
-                        <div style={{ display: "flex", gap: 3, marginTop: 4, justifyContent: "flex-end" }}>
-                          {sub.submitImgs.slice(0,3).map((img,i) => <img key={i} src={img.data} alt="" style={{ width: 26, height: 26, borderRadius: 5, objectFit: "cover", border: "1px solid rgba(52,211,153,.3)" }} />)}
-                          {sub.submitImgs.length > 3 && <div style={{ width: 26, height: 26, borderRadius: 5, background: "rgba(255,255,255,.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#94A3B8" }}>+{sub.submitImgs.length-3}</div>}
-                        </div>
-                      )}
-                      {task.taskType === "quiz" && sub.quizScore !== undefined && (
-                        <div style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: sub.quizScore>=80?"#34D399":sub.quizScore>=50?"#F59E0B":"#EF4444" }}>{sub.quizScore}% · {sub.quizCorrect}/{(task.questions||[]).length} câu</div>
-                      )}
-                    </>
-                  ) : <Badge c="amber">Chưa nộp</Badge>}
+                      {wrongCount > 0 && <span style={{ fontSize: 10, color: "#EF4444" }}>✗ {wrongCount} lần sai</span>}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#E2EAF4", marginBottom: 16, lineHeight: 1.65 }}>{activeCP.q}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 16 }}>
+                      {activeCP.opts.map((opt, i) => {
+                        const isSel = selAns === i;
+                        const correct = result === "correct" && isSel;
+                        const wrong = result === "wrong" && isSel;
+                        return (
+                          <button key={i} onClick={() => { if (!result) setSelAns(i); }} disabled={!!result} style={{ padding: "11px 15px", borderRadius: 11, border: `1.5px solid ${correct ? "rgba(52,211,153,.7)" : wrong ? "rgba(239,68,68,.7)" : isSel ? "rgba(79,172,254,.6)" : "rgba(255,255,255,.08)"}`, background: correct ? "rgba(52,211,153,.15)" : wrong ? "rgba(239,68,68,.13)" : isSel ? "rgba(79,172,254,.12)" : "rgba(255,255,255,.04)", color: correct ? "#34D399" : wrong ? "#EF4444" : isSel ? "#4FACFE" : "#94A3B8", fontSize: 13, cursor: result ? "default" : "pointer", fontFamily: "inherit", textAlign: "left", display: "flex", gap: 10, alignItems: "center", transition: "all .2s cubic-bezier(.34,1.56,.64,1)", transform: isSel && !result ? "scale(1.01)" : "scale(1)" }}>
+                            <span style={{ fontWeight: 800, fontSize: 12, minWidth: 20, color: isSel ? "inherit" : "#4A6580" }}>{OPTS[i]}</span>
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={submitAnswer} disabled={selAns === null || !!result} style={{ width: "100%", padding: "12px", borderRadius: 12, border: "none", background: selAns !== null && !result ? "linear-gradient(135deg,#1D6CF5,#7B3FE4)" : "rgba(255,255,255,.07)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: selAns !== null && !result ? "pointer" : "default", fontFamily: "inherit", transition: "all .2s", boxShadow: selAns !== null && !result ? "0 8px 24px rgba(29,108,245,.4)" : "none" }}>
+                      {result === "correct" ? "✓ Chính xác! Tiếp tục xem..." : result === "wrong" ? "✗ Sai rồi, chọn lại!" : selAns !== null ? "Xác nhận đáp án" : "Chọn một đáp án"}
+                    </button>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            <div style={{ padding: "10px 18px", borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 10, color: "#3D5A78", whiteSpace: "nowrap" }}>Câu hỏi: {answeredCount}/{checkpoints.length}</div>
+              <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center" }}>
+                {checkpoints.map((cp, i) => (
+                  <div key={cp.time} title={fmtTime(cp.time)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: answered[cp.time] !== undefined ? "#34D399" : activeCPRef.current?.time === cp.time ? "#F59E0B" : "#2E4A6A", boxShadow: answered[cp.time] !== undefined ? "0 0 8px rgba(52,211,153,.7)" : "none", transition: "all .3s" }} />
+                    <div style={{ fontSize: 7, color: "#2E4A6A" }}>{fmtTime(cp.time)}</div>
+                  </div>
+                ))}
               </div>
-            );
-          })}
-        </div>
+              {isYT && !ytReady && <div style={{ fontSize: 10, color: "#3D5A78" }}>Đang tải...</div>}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2935,6 +3595,7 @@ function ProfilePage({ state, user }) {
         <Btn onClick={changePw} style={{ width: "100%", justifyContent: "center" }} disabled={!pwNew || !pwNew2}><Key size={13} />Đổi mật khẩu</Btn>
         {!s.password && <div style={{ fontSize: 11, color: "#3D5A78", marginTop: 10, textAlign: "center" }}>Tài khoản chưa có mật khẩu — đặt mật khẩu để bảo mật hơn</div>}
       </Card>
+      <LoginStatsCard logs={state.loginLogs?.[s.id]} />
     </div>
   );
 }
@@ -3163,6 +3824,7 @@ function SettingsPage({ state, user }) {
         {[["profile","Hồ sơ"],["teachers","Quản lý GV"],["data","Dữ liệu"]].map(([v, l]) => <button key={v} onClick={() => setTab(v)} style={{ padding: "6px 15px", borderRadius: 9, border: `1px solid ${tab===v?"rgba(79,172,254,.4)":"rgba(255,255,255,.07)"}`, background: tab===v?"rgba(79,172,254,.1)":"transparent", color: tab===v?"#4FACFE":"#4A6580", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>)}
       </div>
       {tab === "profile" && (
+        <>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#E2EAF4", marginBottom: 16 }}>Thông tin tài khoản</div>
           <div style={{ marginBottom: 16 }}>
@@ -3199,6 +3861,8 @@ function SettingsPage({ state, user }) {
           {saved && <div style={{ fontSize: 12, color: "#34D399", marginBottom: 10, display: "flex", alignItems: "center", gap: 5 }}><Check size={13} />Đã lưu thành công!</div>}
           <Btn onClick={saveProfile}><Save size={13} />Lưu thay đổi</Btn>
         </Card>
+        <LoginStatsCard logs={state.loginLogs?.[t.id]} />
+        </>
       )}
       {tab === "teachers" && (
         <div className="scard" style={{ overflow: "hidden" }}>
@@ -3448,12 +4112,38 @@ export default function EClassP2K() {
     }
   }, [state.teachers]);
 
+  const sessionStartRef = useRef(null);
+
   const handleLogin = session => {
     setUser(session);
     state.setSession(session);
+    sessionStartRef.current = Date.now();
+    const uid = session.data.id;
+    const now = Date.now();
+    state.setLoginLogs(prev => {
+      const existing = prev[uid] || { count: 0, history: [] };
+      return {
+        ...prev,
+        [uid]: {
+          count: existing.count + 1,
+          history: [{ at: now, duration: null }, ...existing.history].slice(0, 50),
+        },
+      };
+    });
   };
 
   const handleLogout = () => {
+    if (user && sessionStartRef.current) {
+      const uid = user.data.id;
+      const duration = Date.now() - sessionStartRef.current;
+      state.setLoginLogs(prev => {
+        const existing = prev[uid] || { count: 0, history: [] };
+        const history = [...existing.history];
+        if (history.length > 0 && history[0].duration === null) history[0] = { ...history[0], duration };
+        return { ...prev, [uid]: { ...existing, history } };
+      });
+    }
+    sessionStartRef.current = null;
     setUser(null);
     state.setSession(null);
   };
