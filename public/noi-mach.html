@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Phòng Thí Nghiệm Vật Lý - Lắp Mạch Điện</title>
+<style>
+  :root {
+    --bg-app: #080d1a;
+    --bg-panel: #0f172a;
+    --bg-panel-2: #1e293b;
+    --bg-deep: #070b14;
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --text-faint: #64748b;
+    --border-soft: #334155;
+    --line-soft: rgba(255,255,255,0.08);
+    --accent-teal: #2dd4bf;
+    --accent-teal-hover: #14b8a6;
+    --copper: #d97706;
+    --copper-mid: #b45309;
+    --copper-dim: #78350f;
+    --current: #fbbf24;
+    --current-soft: #f59e0b;
+    --danger: #ef4444;
+    --bulb-glow: rgba(251,191,36,0.22);
+    --font-mono: 'Fira Code', 'Courier New', monospace;
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow: hidden;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    padding: 0 20px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-soft);
+    z-index: 10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  .brand-icon {
+    font-size: 20px;
+    color: var(--current);
+  }
+
+  .level-pips {
+    display: flex;
+    gap: 8px;
+  }
+  .pip {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-panel-2);
+    border: 1.5px solid var(--border-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .pip.active {
+    background: var(--accent-teal);
+    border-color: var(--accent-teal);
+    color: var(--bg-deep);
+  }
+  .pip.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .pip.done:not(.active) {
+    border-color: var(--accent-teal);
+    color: var(--accent-teal);
+  }
+
+  .status-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    border: 1px solid var(--border-soft);
+    background: rgba(255,255,255,0.02);
+    transition: all 0.25s ease;
+  }
+  .status-pill.on {
+    border-color: var(--current);
+    color: var(--current);
+    background: rgba(251,191,36,0.1);
+    box-shadow: 0 0 16px rgba(251,191,36,0.25);
+  }
+  .status-pill.sandbox {
+    border-color: var(--accent-teal);
+    color: var(--accent-teal);
+    background: rgba(45,212,191,0.08);
+  }
+  .pip.sandbox-pip {
+    width: 38px;
+    font-size: 16px;
+  }
+
+  /* Layout */
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 18px;
+    padding: 18px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .panel {
+    background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow-y: auto;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--accent-teal);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  #levelName {
+    font-size: 21px;
+    margin: 0 0 10px;
+    line-height: 1.25;
+  }
+  #missionText {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-main);
+    margin: 0 0 10px;
+  }
+  .tip {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--text-dim);
+    background: rgba(45,212,191,0.05);
+    border-left: 2.5px solid var(--accent-teal);
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin: 0 0 16px;
+  }
+
+  .legend {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+  }
+
+  .bulb-readouts {
+    border-top: 1px solid var(--line-soft);
+    padding-top: 12px;
+    margin-top: auto;
+  }
+  .readout {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    padding: 6px 0;
+    color: var(--text-dim);
+  }
+  .readout.lit {
+    color: var(--current);
+    font-weight: 600;
+  }
+
+  .controls {
+    margin-top: 14px;
+  }
+  button {
+    width: 100%;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border-soft);
+    color: var(--text-main);
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  button:hover {
+    background: var(--border-soft);
+  }
+  button.primary {
+    background: var(--accent-teal);
+    color: var(--bg-deep);
+    border-color: var(--accent-teal);
+  }
+  button.primary:hover {
+    background: var(--accent-teal-hover);
+  }
+
+  .win-banner {
+    margin-top: 16px;
+    background: rgba(45,212,191,0.1);
+    border: 1px solid var(--accent-teal);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+  .win-banner p {
+    font-size: 13px;
+    margin: 0 0 8px;
+    color: var(--accent-teal);
+    font-weight: 600;
+  }
+
+  .board-wrap {
+    background: linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    padding: 14px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  #board {
+    width: 100%;
+    height: 100%;
+    max-height: 520px;
+    background: radial-gradient(circle at 1px 1px, rgba(138,109,74,0.15) 1.4px, transparent 1.8px) 0 0/34px 34px, #0b1220;
+    border-radius: 12px;
+    border: 1px solid var(--border-soft);
+  }
+  .hint-line {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-faint);
+    margin: 10px 0 2px;
+  }
+
+  /* SVG Styles */
+  .pad-terminal {
+    fill: var(--copper);
+    stroke: var(--line-soft);
+    stroke-width: 2.5;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .pad-terminal:hover {
+    fill: var(--accent-teal);
+    stroke: var(--current);
+    filter: drop-shadow(0 0 5px var(--accent-teal));
+  }
+  .pad { fill: var(--copper); stroke: #000; stroke-opacity: .25; stroke-width: 1; }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--text-faint);
+    text-anchor: middle;
+    user-select: none;
+  }
+  .battery-plus { stroke: var(--current); stroke-width: 3; }
+  .battery-minus { stroke: var(--text-dim); stroke-width: 6; }
+  .battery-lead { stroke: var(--copper); stroke-width: 3; transition: stroke 0.25s ease; }
+  .battery-lead.live { stroke: var(--copper); }
+  .battery-sign {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .battery-sign.plus { fill: var(--current); }
+  .battery-sign.minus { fill: var(--text-dim); }
+
+  .slot-line {
+    stroke: var(--copper-dim);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 2 10;
+    cursor: pointer;
+    transition: stroke .2s ease;
+    animation: dashShimmer 1.4s linear infinite;
+  }
+  .slot-line:hover { stroke: var(--accent-teal); }
+  @keyframes dashShimmer { to { stroke-dashoffset: -24; } }
+  .slot-plug { fill: var(--bg-deep); stroke: var(--accent-teal); stroke-width: 2; cursor: pointer; }
+  .slot-hit { stroke: transparent; stroke-width: 24; cursor: pointer; pointer-events: stroke; }
+
+  .slot-line.active {
+    stroke: var(--copper-mid);
+    stroke-dasharray: none;
+    animation: none;
+  }
+  .slot-line.active.live {
+    stroke: var(--copper-mid);
+    stroke-dasharray: none;
+    animation: none;
+    filter: none;
+  }
+  @keyframes flowDash { to { stroke-dashoffset: -14; } }
+
+  .resistor-path {
+    fill: none;
+    stroke: var(--copper);
+    stroke-width: 3.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    transition: stroke .25s ease;
+  }
+  .resistor-path.live {
+    stroke: var(--copper);
+    filter: none;
+  }
+  .resistor-lead { stroke: var(--copper); stroke-width: 3; }
+  .resistor-lead.live { stroke: var(--copper); }
+
+  .switch-lead { stroke: var(--copper); stroke-width: 3; }
+  .switch-lead.live { stroke: var(--copper); }
+  .switch-lever {
+    stroke: var(--copper-mid);
+    stroke-width: 4;
+    stroke-linecap: round;
+    transition: all .2s ease;
+  }
+  .switch-lever.closed.live { stroke: var(--copper-mid); filter: none; }
+  .switch-lever.open { stroke: var(--danger); }
+  .switch-hit { stroke: transparent; stroke-width: 24; cursor: pointer; pointer-events: stroke; }
+  .switch-hinge { fill: var(--copper-mid); }
+  .switch-gap-dot { fill: var(--danger); opacity: .85; }
+
+  .bulb-lead { stroke: var(--copper); stroke-width: 3; }
+  .bulb-lead.live { stroke: var(--copper); }
+  .bulb-halo { opacity: 0; transition: opacity .4s ease; filter: blur(13px); }
+  .bulb-glass {
+    stroke: #333c4d;
+    stroke-width: 2;
+    fill: #232c3d;
+    transition: all .4s ease;
+  }
+  .bulb-filament {
+    fill: none;
+    stroke: #4a5265;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: all .4s ease;
+  }
+  .bulb[data-bright="55"] .bulb-glass { fill: #5a4a2a; stroke: #8a6d3a; }
+  .bulb[data-bright="55"] .bulb-filament { stroke: var(--current-soft); }
+  .bulb[data-bright="55"] .bulb-halo { opacity: .4; fill: var(--bulb-glow); }
+  .bulb[data-bright="100"] .bulb-glass { fill: #7a5f2f; stroke: var(--current); }
+  .bulb[data-bright="100"] .bulb-filament { stroke: #fff6df; }
+  .bulb[data-bright="100"] .bulb-halo { opacity: .85; fill: var(--bulb-glow); }
+
+  #log-box {
+    margin-top: 14px;
+    background: rgba(0,0,0,0.22);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    padding: 10px;
+    height: 90px;
+    overflow-y: auto;
+  }
+  #log-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  #log-list li {
+    margin-bottom: 4px;
+  }
+  #log-list li:first-child {
+    color: var(--accent-teal);
+  }
+  .cursor {
+    animation: blink 0.9s steps(2, start) infinite;
+  }
+  @keyframes blink { to { visibility: hidden; } }
+
+  @media (prefers-reduced-motion: reduce){
+    .slot-line, .slot-line.active.live, .app { animation: none !important; }
+  }
+
+  /* ---- SANDBOX TOOLBAR ---- */
+  .sb-toolbar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .sb-tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 13px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    width: auto;
+  }
+  .sb-tool-btn:hover { background: var(--border-soft); border-color: var(--accent-teal); }
+  .sb-tool-btn.active { background: rgba(45,212,191,0.14); border-color: var(--accent-teal); color: var(--accent-teal); }
+  .sb-tool-btn.danger { border-color: var(--danger); color: var(--danger); }
+  .sb-tool-btn.danger:hover { background: rgba(239,68,68,0.1); }
+  .sb-sep { width:1px; height:26px; background:var(--border-soft); margin: 0 2px; }
+  .sb-hint { font-size: 10.5px; color: var(--text-faint); margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="brand-icon">⚡</span><span>NỐI MẠCH</span></div>
+    <div class="level-pips" id="levelPips"></div>
+    <div class="status-pill" id="statusPill">● MẠCH HỞ</div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel">
+      <div>
+        <div class="eyebrow" id="conceptTag"></div>
+        <h1 id="levelName"></h1>
+        <p id="missionText"></p>
+        <p class="tip" id="tipText"></p>
+
+      </div>
+
+      <div>
+        <div class="bulb-readouts" id="bulbReadouts"></div>
+        <div class="controls">
+          <button id="resetBtn">↺ Đặt lại</button>
+        </div>
+        <div id="log-box">
+          <ul id="log-list"></ul>
+        </div>
+        <div class="win-banner" id="winBanner" hidden>
+          <p id="winText"></p>
+          <button class="primary" id="nextBtn">Cấp độ tiếp theo →</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="board-wrap">
+      <div class="sb-toolbar" id="sbToolbar">
+        <button class="sb-tool-btn active" data-type="pointer">🖱️ Con trỏ</button>
+        <button class="sb-tool-btn" data-type="battery">🔋 Pin DC</button>
+        <button class="sb-tool-btn" data-type="ac_source">🔌 Nguồn AC</button>
+        <button class="sb-tool-btn" data-type="bulb">💡 Đèn</button>
+        <button class="sb-tool-btn" data-type="led">🚨 Đèn LED</button>
+        <button class="sb-tool-btn" data-type="motor">🌀 Động cơ</button>
+        <button class="sb-tool-btn" data-type="switch">🎛️ C.tắc SPST</button>
+        <button class="sb-tool-btn" data-type="spdt">🔀 C.tắc SPDT</button>
+        <button class="sb-tool-btn" data-type="resistor">〰 Điện trở</button>
+        <button class="sb-tool-btn" data-type="rheostat">🎚️ Biến trở</button>
+        <button class="sb-tool-btn" data-type="npn">🔌 Transistor</button>
+        <button class="sb-tool-btn" data-type="diode">▶️ Điốt</button>
+        <button class="sb-tool-btn" data-type="led">🚨 Đèn LED</button>
+        <button class="sb-tool-btn" data-type="fuse">💥 Cầu chì</button>
+        <button class="sb-tool-btn" data-type="capacitor">🥛 Tụ điện</button>
+        <button class="sb-tool-btn" data-type="buzzer">🔊 Còi báo</button>
+        <button class="sb-tool-btn" data-type="relay">🧲 Rơ le</button>
+        <button class="sb-tool-btn" data-type="ammeter">📟 Ampe kế</button>
+        <button class="sb-tool-btn" data-type="voltmeter">📟 Vôn kế</button>
+        <div class="sb-sep"></div>
+        <button class="sb-tool-btn danger" id="sb-btn-clear">🗑 Xóa hết</button>
+        <span class="sb-hint">Chọn linh kiện → Click để đặt · Click đầu nối (●) để nối dây · Double-click để xóa linh kiện · Click dây để ngắt</span>
+      </div>
+      <svg id="board" viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg"></svg>
+      <p class="hint-line" id="hintLine">💡 Kéo chuột/chạm từ nút đồng này sang nút đồng khác để nối dây · Click vào dây để ngắt · Click công tắc để đóng/mở</p>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+
+/* =========================================================
+   LEVEL DATA
+========================================================= */
+const LEVELS = [
+  {
+    key:'l1', name:'Mạch kín cơ bản',
+    concept:'Khái niệm: Mạch kín',
+    mission:'Nối hai đoạn dây còn thiếu để khép kín vòng mạch và thắp sáng bóng đèn.',
+    tip:'Dòng điện chỉ chạy khi có một vòng khép kín, không có khe hở nào trên đường đi từ cực dương (+) đến cực âm (–) của pin.',
+    viewBox:'0 0 760 380',
+    nodes:{A:{x:150,y:90}, B:{x:610,y:90}, C:{x:610,y:290}, D:{x:150,y:290}},
+    battery:{from:'D', to:'A', plus:'A', minus:'D'},
+    fixed:[ {id:'bulb1', type:'bulb', from:'B', to:'C'} ],
+    slots:[ {id:'w1', from:'A', to:'B'}, {id:'w2', from:'D', to:'C'} ],
+    bulbs:['bulb1']
+  },
+  {
+    key:'l2', name:'Công tắc điều khiển',
+    concept:'Khái niệm: Công tắc',
+    mission:'Nối dây còn thiếu ở phía dưới, sau đó chạm vào công tắc để đóng mạch.',
+    tip:'Công tắc là một khe hở có chủ đích. Khi mở, mạch bị ngắt; khi đóng, dòng điện được phép chạy qua.',
+    viewBox:'0 0 760 380',
+    nodes:{A:{x:150,y:90}, B:{x:610,y:90}, C:{x:610,y:290}, D:{x:150,y:290}},
+    battery:{from:'D', to:'A', plus:'A', minus:'D'},
+    fixed:[
+      {id:'sw1', type:'switch', from:'A', to:'B', closed:false},
+      {id:'bulb1', type:'bulb', from:'B', to:'C'}
+    ],
+    slots:[ {id:'w2', from:'D', to:'C'} ],
+    bulbs:['bulb1']
+  },
+  {
+    key:'l3', name:'Điện trở trong mạch',
+    concept:'Khái niệm: Điện trở',
+    mission:'Nối dây còn thiếu để khép kín mạch. Chú ý độ sáng của bóng đèn.',
+    tip:'Điện trở cản bớt dòng điện đi qua, vì vậy bóng đèn vẫn sáng nhưng mờ hơn so với mạch không có điện trở.',
+    viewBox:'0 0 760 380',
+    nodes:{A:{x:150,y:90}, B:{x:610,y:90}, C:{x:610,y:290}, D:{x:150,y:290}},
+    battery:{from:'D', to:'A', plus:'A', minus:'D'},
+    fixed:[
+      {id:'r1', type:'resistor', from:'A', to:'B'},
+      {id:'bulb1', type:'bulb', from:'B', to:'C'}
+    ],
+    slots:[ {id:'w2', from:'D', to:'C'} ],
+    bulbs:['bulb1']
+  },
+  {
+    key:'l4', name:'Mạch song song',
+    concept:'Khái niệm: Mạch song song',
+    mission:'Nối hai dây dẫn (trên và dưới) để cấp điện cho cả hai nhánh đèn.',
+    tip:'Trong mạch song song, mỗi nhánh hoạt động độc lập. Hãy thử tắt công tắc của nhánh phải — bóng đèn còn lại vẫn sáng bình thường!',
+    viewBox:'0 0 800 380',
+    nodes:{BT:{x:120,y:70}, BB:{x:120,y:320}, JT:{x:560,y:70}, JB:{x:560,y:320}, SW:{x:700,y:195}},
+    battery:{from:'BB', to:'BT', plus:'BT', minus:'BB'},
+    fixed:[
+      {id:'bulbA', type:'bulb', from:'JT', to:'JB'},
+      {id:'swB', type:'switch', from:'JT', to:'SW', closed:true},
+      {id:'bulbB', type:'bulb', from:'SW', to:'JB'}
+    ],
+    slots:[ {id:'rt', from:'BT', to:'JT'}, {id:'rb', from:'BB', to:'JB'} ],
+    bulbs:['bulbA','bulbB']
+  },
+  {
+    key:'l5', name:'Thử thách tổng hợp',
+    concept:'Khái niệm: Kết hợp nối tiếp & song song',
+    mission:'Nối hai dây dẫn và đóng công tắc chính để thắp sáng cả hai bóng đèn.',
+    tip:'Công tắc chính nằm trước điểm chia nhánh, nên nếu mở nó, CẢ HAI bóng đèn đều tắt — khác với mạch song song ở cấp trước.',
+    viewBox:'0 0 780 380',
+    nodes:{BT:{x:100,y:90}, BB:{x:100,y:300}, N1:{x:280,y:90}, JT:{x:430,y:90}, RJ:{x:560,y:30}, JB2:{x:680,y:195}},
+    battery:{from:'BB', to:'BT', plus:'BT', minus:'BB'},
+    fixed:[
+      {id:'msw', type:'switch', from:'N1', to:'JT', closed:false},
+      {id:'res1', type:'resistor', from:'JT', to:'RJ'},
+      {id:'bulbA', type:'bulb', from:'RJ', to:'JB2'},
+      {id:'bulbB', type:'bulb', from:'JT', to:'JB2'}
+    ],
+    slots:[ {id:'rt', from:'BT', to:'N1'}, {id:'rb', from:'JB2', to:'BB'} ],
+    bulbs:['bulbA','bulbB']
+  },
+  {
+    key:'l6', name:'Phòng chơi tự do (Sandbox)',
+    concept:'Tự do sáng tạo',
+    mission:'Hãy tự do nối các dây dẫn để thiết kế bất kỳ mạch điện nào bạn muốn. Bạn có thể mắc nối tiếp, song song hoặc thử nghiệm chập mạch.',
+    tip:'Không có điều kiện thắng bắt buộc ở màn này. Hãy tự do bật công tắc và quan sát độ sáng bóng đèn!',
+    viewBox:'0 0 780 380',
+    isSandbox: true,
+    nodes:{
+      BAT_P:{x:60,y:195}, BAT_N:{x:60,y:290},
+      N1:{x:180,y:90}, N2:{x:310,y:90}, N3:{x:440,y:90}, N4:{x:570,y:90}, N5:{x:700,y:90},
+      N6:{x:180,y:290}, N7:{x:310,y:290}, N8:{x:440,y:290}, N9:{x:570,y:290}, N10:{x:700,y:290}
+    },
+    battery:{from:'BAT_N', to:'BAT_P', plus:'BAT_P', minus:'BAT_N'},
+    fixed:[
+      {id:'sw1', type:'switch', from:'N1', to:'N2', closed:false},
+      {id:'bulb1', type:'bulb', from:'N2', to:'N3'},
+      {id:'r1', type:'resistor', from:'N3', to:'N4'},
+      {id:'sw2', type:'switch', from:'N6', to:'N7', closed:false},
+      {id:'bulb2', type:'bulb', from:'N7', to:'N8'}
+    ],
+    slots:[
+      // battery to nodes
+      {id:'s_bp1', from:'BAT_P', to:'N1'},
+      {id:'s_bn1', from:'BAT_N', to:'N6'},
+      {id:'s_bp2', from:'BAT_P', to:'N6'},
+      {id:'s_bn2', from:'BAT_N', to:'N1'},
+      // vertical slots
+      {id:'s_v1', from:'N1', to:'N6'},
+      {id:'s_v2', from:'N2', to:'N7'},
+      {id:'s_v3', from:'N3', to:'N8'},
+      {id:'s_v4', from:'N4', to:'N9'},
+      {id:'s_v5', from:'N5', to:'N10'},
+      // horizontal slots
+      {id:'s_h1', from:'N4', to:'N5'},
+      {id:'s_h2', from:'N8', to:'N9'},
+      {id:'s_h3', from:'N9', to:'N10'}
+    ],
+    bulbs:['bulb1','bulb2']
+  }
+];
+
+/* =========================================================
+   STATE
+========================================================= */
+let state = {
+  levelIndex:0,
+  unlocked:6,
+  levels: LEVELS.map(cloneLevel)
+};
+
+function cloneLevel(lv){
+  const copy = JSON.parse(JSON.stringify(lv));
+  copy.fixed.forEach((f,i)=> f.uid = 'f'+i);
+  copy.slots.forEach((s,i)=>{
+    s.uid = 's'+i;
+    s.active = false;
+    s.type = 'wire';
+  });
+  return copy;
+}
+
+/* =========================================================
+   GRAPH / CIRCUIT EVALUATION
+========================================================= */
+function conductingEdges(level){
+  const edges = [];
+  level.fixed.forEach(f=>{
+    if(f.type === 'switch'){ if(f.closed) edges.push(f); }
+    else edges.push(f);
+  });
+  level.slots.forEach(s=>{
+    if(s.active) edges.push(s);
+  });
+  return edges;
+}
+
+function reachable(startId, targetId, edges){
+  if(startId === targetId) return true;
+  const adj = {};
+  edges.forEach(e=>{
+    (adj[e.from] = adj[e.from] || []).push(e.to);
+    (adj[e.to] = adj[e.to] || []).push(e.from);
+  });
+  const seen = new Set([startId]);
+  const stack = [startId];
+  while(stack.length){
+    const n = stack.pop();
+    if(n === targetId) return true;
+    (adj[n] || []).forEach(nb=>{
+      if(!seen.has(nb)){ seen.add(nb); stack.push(nb); }
+    });
+  }
+  return seen.has(targetId);
+}
+
+function isEdgeLive(level, edge, edges){
+  const plus = level.battery.plus, minus = level.battery.minus;
+  const rest = edges.filter(e => e.uid !== edge.uid);
+  return (reachable(edge.from, plus, rest) && reachable(edge.to, minus, rest)) ||
+         (reachable(edge.from, minus, rest) && reachable(edge.to, plus, rest));
+}
+
+function evaluateCircuit(level){
+  const edges = conductingEdges(level);
+  const liveUids = new Set();
+  edges.forEach(e=>{ if(isEdgeLive(level, e, edges)) liveUids.add(e.uid); });
+
+  const edgesNoResistor = edges.filter(e => e.type !== 'resistor');
+  const brightness = {};
+  level.bulbs.forEach(bid=>{
+    const bulbEdge = level.fixed.find(f=>f.id===bid);
+    if(!bulbEdge) return;
+    const lit = liveUids.has(bulbEdge.uid);
+    if(!lit){ brightness[bid] = 0; return; }
+    const litWithoutResistor = isEdgeLive(level, bulbEdge, edgesNoResistor);
+    brightness[bid] = litWithoutResistor ? 100 : 55;
+  });
+
+  return { liveUids, brightness };
+}
+
+/* =========================================================
+   RENDERING
+========================================================= */
+const svg = document.getElementById('board');
+const NS = 'http://www.w3.org/2000/svg';
+
+function el(tag, attrs){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function dist(p1,p2){ return Math.hypot(p2.x-p1.x, p2.y-p1.y); }
+function lerp(p1,p2,t){ return {x:p1.x+(p2.x-p1.x)*t, y:p1.y+(p2.y-p1.y)*t}; }
+
+function renderLevel(){
+  const level = state.levels[state.levelIndex];
+  const sbToolbar = document.getElementById('sbToolbar');
+  const hintLine  = document.getElementById('hintLine');
+  if(level.isSandbox){
+    sbToolbar.style.display = 'flex';
+    hintLine.textContent = '💡 Chọn linh kiện → Click để đặt · Click đầu nối ● để nối dây · Double-click để xóa · Click dây để ngắt';
+    sbRender();
+    updateSidePanel(level, null);
+    return;
+  }
+  sbToolbar.style.display = 'none';
+  hintLine.textContent = '💡 Kéo từ nút đồng này sang nút đồng khác để nối dây · Click dây để ngắt · Click công tắc để đóng/mở';
+
+  svg.setAttribute('viewBox', level.viewBox);
+  svg.innerHTML = '';
+
+  const { liveUids, brightness } = evaluateCircuit(level);
+
+  // --- battery ---
+  const bFrom = level.nodes[level.battery.from], bTo = level.nodes[level.battery.to];
+  const plusNode = level.nodes[level.battery.plus];
+  const p1 = lerp(bFrom,bTo,0.40), p2 = lerp(bFrom,bTo,0.60);
+  const p1IsNearPlus = dist(p1, plusNode) < dist(p2, plusNode);
+  const batteryLive = liveUids.size > 0; // any active closed path makes battery active
+  svg.appendChild(el('line',{x1:bFrom.x, y1:bFrom.y, x2:p1.x, y2:p1.y, class:'battery-lead' + (batteryLive ? ' live' : '')}));
+  svg.appendChild(el('line',{x1:p2.x, y1:p2.y, x2:bTo.x, y2:bTo.y, class:'battery-lead' + (batteryLive ? ' live' : '')}));
+  const barPlusY = p1IsNearPlus ? p1.y : p2.y;
+  const barMinusY = p1IsNearPlus ? p2.y : p1.y;
+  svg.appendChild(el('line',{x1:bFrom.x-20, y1:barPlusY, x2:bFrom.x+20, y2:barPlusY, class:'battery-plus'}));
+  svg.appendChild(el('line',{x1:bFrom.x-11, y1:barMinusY, x2:bFrom.x+11, y2:barMinusY, class:'battery-minus'}));
+  svg.appendChild(textEl(bFrom.x+34, barPlusY+4, '+', 'battery-sign plus'));
+  svg.appendChild(textEl(bFrom.x+34, barMinusY+4, '–', 'battery-sign minus'));
+  svg.appendChild(textEl(bFrom.x, Math.min(bFrom.y,bTo.y)-14, 'PIN', 'label'));
+  svg.appendChild(el('circle',{cx:bFrom.x, cy:bFrom.y, r:6, class:'pad'}));
+  svg.appendChild(el('circle',{cx:bTo.x, cy:bTo.y, r:6, class:'pad'}));
+
+  // --- fixed components ---
+  level.fixed.forEach(f=>{
+    const from = level.nodes[f.from], to = level.nodes[f.to];
+    const live = liveUids.has(f.uid);
+    if(f.type === 'bulb') renderBulb(f, from, to, live, brightness[f.id]);
+    else if(f.type === 'switch') renderSwitch(f, from, to, live);
+    else if(f.type === 'resistor') renderResistor(f, from, to, live);
+  });
+
+  // --- wire slots ---
+  level.slots.forEach(s=>{
+    const from = level.nodes[s.from], to = level.nodes[s.to];
+    const live = s.active && liveUids.has(s.uid);
+    renderSlot(s, from, to, live);
+    
+    // Add overlay hit line
+    const gHit = el('line',{x1:from.x, y1:from.y, x2:to.x, y2:to.y, class:'slot-hit', 'data-role':'slot', 'data-uid':s.uid});
+    svg.appendChild(gHit);
+  });
+
+  // --- pads at every node ---
+  const seen = new Set();
+  Object.keys(level.nodes).forEach(id=>{
+    if(seen.has(id)) return;
+    seen.add(id);
+    const n = level.nodes[id];
+    const term = el('circle',{cx:n.x, cy:n.y, r:11, class:'pad-terminal', 'data-role':'node', 'data-id':id});
+    svg.appendChild(term);
+    svg.appendChild(el('circle',{cx:n.x, cy:n.y, r:4, fill:'#070b14', 'pointer-events':'none'}));
+  });
+
+  updateSidePanel(level, brightness);
+}
+
+function textEl(x,y,str,cls){
+  const t = el('text',{x, y, class:cls, 'text-anchor':'middle'});
+  t.textContent = str;
+  return t;
+}
+
+function renderBulb(f, from, to, live, bright){
+  const mid = lerp(from,to,0.5);
+  const dx = to.x-from.x, dy = to.y-from.y;
+  const len = Math.hypot(dx,dy) || 1;
+  const ux = dx/len, uy = dy/len;
+  const r = 24;
+  const leadFromEnd = {x:mid.x-ux*r, y:mid.y-uy*r};
+  const leadToStart = {x:mid.x+ux*r, y:mid.y+uy*r};
+
+  const g = el('g',{class:'bulb', 'data-bright':bright});
+  g.appendChild(el('line',{x1:from.x,y1:from.y,x2:leadFromEnd.x,y2:leadFromEnd.y, class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:leadToStart.x,y1:leadToStart.y,x2:to.x,y2:to.y, class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('circle',{cx:mid.x, cy:mid.y, r:40, class:'bulb-halo'}));
+  g.appendChild(el('circle',{cx:mid.x, cy:mid.y, r, class:'bulb-glass'}));
+  const fx = mid.x, fy = mid.y;
+  g.appendChild(el('path',{d:`M ${fx-9} ${fy+7} L ${fx-4} ${fy-8} L ${fx} ${fy+7} L ${fx+4} ${fy-8} L ${fx+9} ${fy+7}`, class:'bulb-filament'}));
+  g.appendChild(textEl(mid.x, mid.y+46, 'Bóng đèn', 'label'));
+  svg.appendChild(g);
+}
+
+// Fixed switch Closed/Open toggle inside renderSwitch
+function renderSwitch(f, from, to, live){
+  const hinge = lerp(from,to,0.42);
+  const g = el('g',{class:'switch'});
+  g.appendChild(el('line',{x1:from.x,y1:from.y,x2:hinge.x,y2:hinge.y, class:'switch-lead'+(live?' live':'')}));
+
+  if(f.closed){
+    g.appendChild(el('line',{x1:hinge.x,y1:hinge.y,x2:to.x,y2:to.y, class:'switch-lever closed'+(live?' live':'')}));
+  } else {
+    const full = dist(hinge,to);
+    const ang = Math.atan2(to.y-hinge.y, to.x-hinge.x) - 0.55;
+    const leverEnd = {x:hinge.x+Math.cos(ang)*full*0.72, y:hinge.y+Math.sin(ang)*full*0.72};
+    g.appendChild(el('line',{x1:hinge.x,y1:hinge.y,x2:leverEnd.x,y2:leverEnd.y, class:'switch-lever open'}));
+    g.appendChild(el('circle',{cx:to.x, cy:to.y, r:3.5, class:'switch-gap-dot'}));
+  }
+  g.appendChild(el('circle',{cx:hinge.x, cy:hinge.y, r:4, class:'switch-hinge'}));
+  const mid = lerp(from,to,0.5);
+  g.appendChild(textEl(mid.x, mid.y - 20, 'Công tắc', 'label'));
+  
+  // Hit-box for switch toggle
+  const swHit = el('line',{x1:hinge.x, y1:hinge.y, x2:to.x, y2:to.y, class:'switch-hit', 'stroke-width':22, 'data-role':'switch', 'data-uid':f.uid});
+  g.appendChild(swHit);
+  
+  svg.appendChild(g);
+}
+
+function renderResistor(f, from, to, live){
+  const dx = to.x-from.x, dy = to.y-from.y;
+  const len = Math.hypot(dx,dy) || 1;
+  const ux = dx/len, uy = dy/len;
+  const px = -uy, py = ux; // perpendicular
+  const zigStart = 0.32, zigEnd = 0.68, teeth = 6;
+  const s = lerp(from,to,zigStart), e2 = lerp(from,to,zigEnd);
+  let d = `M ${from.x} ${from.y} L ${s.x} ${s.y} `;
+  const segLen = dist(s,e2)/teeth;
+  for(let i=0;i<=teeth;i++){
+    const base = lerp(s,e2,i/teeth);
+    const amp = (i===0||i===teeth) ? 0 : (i%2===1 ? 10 : -10);
+    d += `L ${base.x+px*amp} ${base.y+py*amp} `;
+  }
+  d += `L ${e2.x} ${e2.y} L ${to.x} ${to.y}`;
+  const g = el('g',{class:'resistor'});
+  g.appendChild(el('path',{d, class:'resistor-path'+(live?' live':'')}));
+  const mid = lerp(from,to,0.5);
+  g.appendChild(textEl(mid.x, mid.y - 18, 'Điện trở', 'label'));
+  svg.appendChild(g);
+}
+
+function renderSlot(s, from, to, live){
+  const g = el('g',{class:'slot'});
+  const cls = 'slot-line' + (s.active ? ' active' : '') + (live ? ' live' : '');
+  g.appendChild(el('line',{x1:from.x,y1:from.y,x2:to.x,y2:to.y, class:cls, 'data-role':'slot', 'data-uid':s.uid}));
+  if(!s.active){
+    g.appendChild(el('circle',{cx:from.x, cy:from.y, r:5, class:'slot-plug', 'data-role':'slot', 'data-uid':s.uid}));
+    g.appendChild(el('circle',{cx:to.x, cy:to.y, r:5, class:'slot-plug', 'data-role':'slot', 'data-uid':s.uid}));
+  }
+  svg.appendChild(g);
+}
+
+/* =========================================================
+   INTERACTION (DRAG TO DRAW WIRE)
+========================================================= */
+let activeDrag = null; // { startNodeId, x1, y1 }
+let previewLine = null;
+
+function getSVGCoords(ev){
+  const rect = svg.getBoundingClientRect();
+  const viewBoxAttr = svg.getAttribute('viewBox') || "0 0 760 380";
+  const vb = viewBoxAttr.split(' ').map(Number);
+  const vbW = vb[2] || 760;
+  const vbH = vb[3] || 380;
+  
+  let clientX, clientY;
+  if(ev.touches && ev.touches.length){
+    clientX = ev.touches[0].clientX;
+    clientY = ev.touches[0].clientY;
+  } else if(ev.changedTouches && ev.changedTouches.length){
+    clientX = ev.changedTouches[0].clientX;
+    clientY = ev.changedTouches[0].clientY;
+  } else {
+    clientX = ev.clientX;
+    clientY = ev.clientY;
+  }
+  
+  return {
+    x: (clientX - rect.left) * (vbW / rect.width),
+    y: (clientY - rect.top) * (vbH / rect.height)
+  };
+}
+
+function dragStart(ev, targetNode){
+  const nodeId = targetNode.getAttribute('data-id');
+  const level = state.levels[state.levelIndex];
+  const node = level.nodes[nodeId];
+  activeDrag = { startNodeId: nodeId, x1: node.x, y1: node.y };
+  
+  previewLine = el('line', {
+    x1: node.x, y1: node.y,
+    x2: node.x, y2: node.y,
+    stroke: 'var(--accent-teal)',
+    'stroke-width': 4.5,
+    'stroke-linecap': 'round',
+    'stroke-dasharray': '6 5'
+  });
+  svg.appendChild(previewLine);
+}
+
+function dragMove(ev){
+  if(activeDrag && previewLine){
+    const coords = getSVGCoords(ev);
+    previewLine.setAttribute('x2', coords.x);
+    previewLine.setAttribute('y2', coords.y);
+  }
+}
+
+function dragEnd(ev, targetNode){
+  if(activeDrag){
+    if(previewLine){ previewLine.remove(); previewLine = null; }
+    
+    if(targetNode){
+      const endNodeId = targetNode.getAttribute('data-id');
+      const startNodeId = activeDrag.startNodeId;
+      if(startNodeId !== endNodeId){
+        const level = state.levels[state.levelIndex];
+        const slot = level.slots.find(s=>
+          (s.from === startNodeId && s.to === endNodeId) ||
+          (s.from === endNodeId && s.to === startNodeId)
+        );
+        if(slot){
+          slot.active = true;
+          renderLevel();
+          checkWin();
+        }
+      }
+    }
+    activeDrag = null;
+  }
+}
+
+// Mouse listeners — sandbox-aware
+svg.addEventListener('mousedown', (ev)=>{
+  if(isSandboxMode()){ sbMouseDown(ev); return; }
+  const nodeTarget = ev.target.closest('[data-role="node"]');
+  if(nodeTarget){ dragStart(ev, nodeTarget); ev.preventDefault(); }
+});
+svg.addEventListener('mousemove', (ev)=>{
+  if(isSandboxMode()){ sbMouseMove(ev); return; }
+  dragMove(ev);
+});
+window.addEventListener('mouseup', (ev)=>{
+  if(isSandboxMode()){ sbMouseUp(); return; }
+  const nodeTarget = ev.target.closest('[data-role="node"]');
+  dragEnd(ev, nodeTarget);
+});
+
+// Touch — sandbox gets touchstart as click
+svg.addEventListener('touchstart', (ev)=>{
+  if(isSandboxMode()){
+    sbMouseDown(ev);
+    ev.preventDefault();
+    return;
+  }
+  const nodeTarget = ev.target.closest('[data-role="node"]');
+  if(nodeTarget){ dragStart(ev, nodeTarget); ev.preventDefault(); }
+}, {passive: false});
+svg.addEventListener('touchmove', (ev)=>{
+  if(isSandboxMode()){ sbMouseMove(ev); if(SB.dragging||SB.pendingWire) ev.preventDefault(); return; }
+  dragMove(ev);
+  if(activeDrag) ev.preventDefault();
+}, {passive: false});
+svg.addEventListener('touchend', (ev)=>{
+  if(isSandboxMode()){ sbMouseUp(); return; }
+  let targetNode = null;
+  if(ev.changedTouches && ev.changedTouches.length){
+    const touch = ev.changedTouches[0];
+    const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+    if(elem) targetNode = elem.closest('[data-role="node"]');
+  }
+  dragEnd(ev, targetNode);
+});
+
+// Double-click: delete sandbox component
+svg.addEventListener('dblclick', (ev)=>{
+  if(!isSandboxMode()) return;
+  const t = ev.target.closest('[data-role="sbdrag"],[data-role="sbcomp"]');
+  if(t){
+    const cid = parseInt(t.getAttribute('data-cid'));
+    SB.components = SB.components.filter(c => c.id !== cid);
+    SB.wires = SB.wires.filter(w => !w.from.startsWith(cid+'-') && !w.to.startsWith(cid+'-'));
+    sbRender();
+    ev.preventDefault();
+  }
+});
+
+// Click: level switches/slots (non-sandbox only)
+svg.addEventListener('click', (ev)=>{
+  if(isSandboxMode()) return; // handled by sbMouseDown
+  const target = ev.target.closest('[data-role]');
+  if(!target) return;
+  const level = state.levels[state.levelIndex];
+  const role = target.getAttribute('data-role');
+  const uid = target.getAttribute('data-uid');
+  if(role === 'slot'){
+    const slot = level.slots.find(s=>s.uid===uid);
+    if(slot && slot.active){ slot.active = false; renderLevel(); checkWin(); }
+  } else if(role === 'switch'){
+    const sw = level.fixed.find(f=>f.uid===uid);
+    if(sw){ sw.closed = !sw.closed; renderLevel(); checkWin(); }
+  }
+});
+
+/* =========================================================
+   SIDE PANEL / STATUS
+========================================================= */
+const bulbLabels = { bulb1:'Bóng đèn', bulbA:'Bóng đèn A', bulbB:'Bóng đèn B' };
+
+function updateSidePanel(level, brightness){
+  document.getElementById('conceptTag').textContent = level.concept;
+  document.getElementById('missionText').textContent = level.mission;
+  document.getElementById('tipText').textContent = level.tip;
+
+  const readoutBox = document.getElementById('bulbReadouts');
+  readoutBox.innerHTML = '';
+  const pill = document.getElementById('statusPill');
+  const levelNameEl = document.getElementById('levelName');
+
+  if(level.isSandbox){
+    // Dynamic readouts from SB state
+    const {bright} = sbEval();
+    SB.components.filter(c=>c.type==='bulb').forEach((c,i)=>{
+      const b = bright[c.id]||0;
+      const row = document.createElement('div');
+      row.className = 'readout'+(b>0?' lit':'');
+      row.innerHTML = `<span>Đèn ${i+1}</span><span>${b>0?b+'% ☀️':'TẮT'}</span>`;
+      readoutBox.appendChild(row);
+    });
+    if(SB.components.filter(c=>c.type==='bulb').length===0){
+      const row = document.createElement('div');
+      row.className = 'readout';
+      row.innerHTML = '<span style="color:var(--text-faint)">Chưa có đèn nào</span>';
+      readoutBox.appendChild(row);
+    }
+    pill.textContent = '🔬 TỰ DO';
+    pill.className = 'status-pill sandbox';
+    levelNameEl.textContent = '🔬 ' + level.name;
+    return;
+  }
+
+  level.bulbs.forEach(bid=>{
+    const b = brightness[bid];
+    const row = document.createElement('div');
+    row.className = 'readout' + (b>0 ? ' lit' : '');
+    const label = bulbLabels[bid] || bid;
+    row.innerHTML = `<span>${label}</span><span>${b>0 ? b+'% ☀️' : 'TẮT'}</span>`;
+    readoutBox.appendChild(row);
+  });
+  const allLit = level.bulbs.every(bid=>brightness[bid] > 0);
+  pill.textContent = allLit ? '● MẠCH ĐÓNG' : '● MẠCH HỞ';
+  pill.className = 'status-pill' + (allLit ? ' on' : '');
+  levelNameEl.textContent = (state.levelIndex+1) + '. ' + level.name;
+}
+
+const logCooldown = {};
+const logListEl = document.getElementById('log-list');
+let logMessages = ['🧪 Chào mừng! Hãy kết nối các cực để thắp sáng các bóng đèn và tìm hiểu nguyên lý mạch điện.'];
+
+function logEvent(key,msg){
+  const now = state.levels[state.levelIndex].slots.map(s=>s.active).join('') + state.levels[state.levelIndex].fixed.map(f=>f.closed).join('');
+  if(logCooldown[key] === now) return;
+  logCooldown[key] = now;
+  logMessages.unshift(msg);
+  if(logMessages.length>5) logMessages.length=5;
+  renderLog();
+}
+
+function renderLog(){
+  let html='';
+  for(let i=0;i<logMessages.length;i++){
+    if(i===0) html += '<li>'+logMessages[i]+' <span class="cursor">▌</span></li>';
+    else html += '<li>'+logMessages[i]+'</li>';
+  }
+  logListEl.innerHTML = html;
+}
+renderLog();
+
+function checkWin(){
+  const level = state.levels[state.levelIndex];
+  
+  // Check for short circuit achievement
+  const plus = level.battery.plus, minus = level.battery.minus;
+  const edges = conductingEdges(level);
+  const lowResistanceEdges = edges.filter(e => {
+    if (e.id && (e.id.startsWith('b') || e.id.startsWith('r'))) return false;
+    if (e.type === 'bulb' || e.type === 'resistor') return false;
+    return true;
+  });
+  if (reachable(plus, minus, lowResistanceEdges)) {
+    try {
+      window.parent.postMessage({
+        type: "UNLOCK_ACHIEVEMENT",
+        id: "circuit_short",
+        name: "⚡ Kỹ Sư Đoản Mạch",
+        desc: "Gây ra ngắn mạch (nối âm dương trực tiếp) trong phòng Lắp mạch!",
+        icon: "💥"
+      }, "*");
+    } catch(e) {}
+  }
+  
+  const banner = document.getElementById('winBanner');
+  // Sandbox level: never show win banner
+  if(level.isSandbox){
+    banner.hidden = true;
+    return;
+  }
+  const { brightness } = evaluateCircuit(level);
+  const allLit = level.bulbs.every(bid=>brightness[bid] > 0);
+  const nextBtn = document.getElementById('nextBtn');
+  if(allLit){
+    banner.hidden = false;
+    // Index 4 = level 5 (last non-sandbox), index 5 = sandbox
+    const isLastReal = state.levelIndex === LEVELS.length-2;
+    const isLast = state.levelIndex === LEVELS.length-1;
+    if(isLastReal){
+      document.getElementById('winText').textContent = '🎉 Xuất sắc! Bạn đã học xong cả 5 mạch điện. Thử sáng tạo ở Phòng chơi tự do!';
+      nextBtn.textContent = '🎮 Vào Phòng chơi tự do →';
+    } else {
+      document.getElementById('winText').textContent = '🎉 Hoàn thành! Bạn đã hiểu được nguyên lý của mạch này.';
+      nextBtn.textContent = 'Cấp độ tiếp theo →';
+    }
+    if(state.unlocked < state.levelIndex+2) state.unlocked = state.levelIndex+2;
+    renderPips();
+  } else {
+    banner.hidden = true;
+  }
+}
+
+/* =========================================================
+   LEVEL PIPS / NAV
+========================================================= */
+function renderPips(){
+  const box = document.getElementById('levelPips');
+  box.innerHTML = '';
+  LEVELS.forEach((lv,i)=>{
+    const unlocked = i < state.unlocked;
+    const pip = document.createElement('div');
+    const isSandbox = !!lv.isSandbox;
+    pip.className = 'pip' + (i===state.levelIndex ? ' active':'') + (!unlocked ? ' locked':'') + (unlocked && i<state.levelIndex && !isSandbox ? ' done':'');
+    pip.textContent = isSandbox ? '🔬' : (i+1);
+    pip.title = isSandbox ? 'Phòng chơi tự do (Sandbox)' : 'Màn ' + (i+1);
+    if(unlocked){
+      pip.addEventListener('click', ()=>{
+        state.levelIndex = i;
+        SB.placing = null;
+        SB.pendingWire = null;
+        const toolbar = document.getElementById('sbToolbar');
+        if(toolbar){
+          toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+          const ptr = toolbar.querySelector('[data-type="pointer"]');
+          if(ptr) ptr.classList.add('active');
+        }
+        document.getElementById('winBanner').hidden = true;
+        renderLevel();
+        checkWin();
+        renderPips();
+      });
+    }
+    box.appendChild(pip);
+  });
+}
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(isSandboxMode()){
+    SB.components=[]; SB.wires=[]; SB.pendingWire=null; SB.dragging=null; SB.placing=null;
+    const toolbar = document.getElementById('sbToolbar');
+    if(toolbar){
+      toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+      const ptr = toolbar.querySelector('[data-type="pointer"]');
+      if(ptr) ptr.classList.add('active');
+    }
+    sbRender();
+    updateSidePanel(state.levels[state.levelIndex], null);
+    return;
+  }
+  const fresh = cloneLevel(LEVELS[state.levelIndex]);
+  state.levels[state.levelIndex] = fresh;
+  document.getElementById('winBanner').hidden = true;
+  renderLevel();
+  checkWin();
+});
+
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  const isLast = state.levelIndex === LEVELS.length-1;
+  if(isLast){
+    // Restart: keep all levels unlocked, go back to level 1
+    state = { levelIndex:0, unlocked:6, levels: LEVELS.map(cloneLevel) };
+  } else {
+    state.levelIndex += 1;
+    if(state.unlocked < state.levelIndex+1) state.unlocked = state.levelIndex+1;
+  }
+  
+  // reset sandbox placing when switching levels
+  SB.placing = null;
+  SB.pendingWire = null;
+  const toolbar = document.getElementById('sbToolbar');
+  if(toolbar){
+    toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+    const ptr = toolbar.querySelector('[data-type="pointer"]');
+    if(ptr) ptr.classList.add('active');
+  }
+
+  document.getElementById('winBanner').hidden = true;
+  renderLevel();
+  checkWin();
+  renderPips();
+});
+
+/* =========================================================
+   SANDBOX ENGINE
+========================================================= */
+const SB = {
+  components: [], wires: [], nextId: 1,
+  pendingWire: null, dragging: null, placing: null,
+  mouse: {x:390, y:210}
+};
+const SB_DEFS = {
+  battery:  { w:52, h:84, terms:[{x:0,y:-38},{x:0,y:38}] },
+  ac_source:{ w:52, h:84, terms:[{x:0,y:-38},{x:0,y:38}] },
+  bulb:     { w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] },
+  switch:   { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  spdt:     { w:84, h:64, terms:[{x:-38,y:0},{x:38,y:-16},{x:38,y:16}] },
+  resistor: { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  diode:    { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  led:      { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  fuse:     { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  capacitor:{ w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] },
+  motor:    { w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] },
+  rheostat: { w:84, h:48, terms:[{x:-38,y:0},{x:38,y:0}] },
+  npn:      { w:64, h:64, terms:[{x:-30,y:0},{x:15,y:-24},{x:15,y:24}] },
+  buzzer:   { w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] },
+  relay:    { w:84, h:64, terms:[{x:-38,y:-16},{x:-38,y:16},{x:38,y:-16},{x:38,y:16}] },
+  ammeter:  { w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] },
+  voltmeter:{ w:64, h:64, terms:[{x:-30,y:0},{x:30,y:0}] }
+};
+function isSandboxMode(){ return !!(state.levels[state.levelIndex] && state.levels[state.levelIndex].isSandbox); }
+function sbTermKey(cid,idx){ return cid+'-'+idx; }
+function sbAbsTerm(comp,idx){ const t=SB_DEFS[comp.type].terms[idx]; return {x:comp.x+t.x,y:comp.y+t.y}; }
+function sbGetComp(cid){ return SB.components.find(c=>c.id==cid); }
+
+function findNodes() {
+  const adjacency = {};
+  const allTerms = [];
+  SB.components.forEach(c => {
+    const def = SB_DEFS[c.type];
+    def.terms.forEach((_, idx) => {
+      const tKey = sbTermKey(c.id, idx);
+      allTerms.push(tKey);
+      adjacency[tKey] = [];
+    });
+  });
+  
+  SB.wires.forEach(w => {
+    if (adjacency[w.from] && adjacency[w.to]) {
+      adjacency[w.from].push(w.to);
+      adjacency[w.to].push(w.from);
+    }
+  });
+  
+  const visited = new Set();
+  const nodeMap = {};
+  let nodeCount = 0;
+  
+  allTerms.forEach(t => {
+    if (!visited.has(t)) {
+      const q = [t];
+      visited.add(t);
+      while (q.length > 0) {
+        const curr = q.shift();
+        nodeMap[curr] = nodeCount;
+        adjacency[curr].forEach(neigh => {
+          if (!visited.has(neigh)) {
+            visited.add(neigh);
+            q.push(neigh);
+          }
+        });
+      }
+      nodeCount++;
+    }
+  });
+  
+  return { nodeMap, nodeCount };
+}
+
+function solveLinearSystem(A, B) {
+  const n = B.length;
+  for (let i = 0; i < n; i++) {
+    let maxEl = Math.abs(A[i][i]);
+    let maxRow = i;
+    for (let k = i + 1; k < n; k++) {
+      if (Math.abs(A[k][i]) > maxEl) {
+        maxEl = Math.abs(A[k][i]);
+        maxRow = k;
+      }
+    }
+    for (let k = i; k < n; k++) {
+      const tmp = A[maxRow][k];
+      A[maxRow][k] = A[i][k];
+      A[i][k] = tmp;
+    }
+    const tmp = B[maxRow];
+    B[maxRow] = B[i];
+    B[i] = tmp;
+    
+    if (Math.abs(A[i][i]) < 1e-12) {
+      A[i][i] = 1e-6;
+    }
+    
+    for (let k = i + 1; k < n; k++) {
+      const c = -A[k][i] / A[i][i];
+      for (let j = i; j < n; j++) {
+        if (i === j) {
+          A[k][j] = 0;
+        } else {
+          A[k][j] += c * A[i][j];
+        }
+      }
+      B[k] += c * B[i];
+    }
+  }
+  
+  const X = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    X[i] = B[i];
+    for (let j = i + 1; j < n; j++) {
+      X[i] -= A[i][j] * X[j];
+    }
+    X[i] /= A[i][i];
+  }
+  return X;
+}
+
+function addConductance(A, i, j, g) {
+  if (i >= 0) A[i][i] += g;
+  if (j >= 0) A[j][j] += g;
+  if (i >= 0 && j >= 0) {
+    A[i][j] -= g;
+    A[j][i] -= g;
+  }
+}
+
+function addVoltageSource(A, B, i, j, k, V_val) {
+  if (i >= 0) {
+    A[i][k] += 1;
+    A[k][i] += 1;
+  }
+  if (j >= 0) {
+    A[j][k] -= 1;
+    A[k][j] -= 1;
+  }
+  B[k] = V_val;
+}
+
+let simTime = 0.0;
+
+function sbEval(){
+  const { nodeMap, nodeCount } = findNodes();
+  if (nodeCount <= 1) {
+    return { live: new Set(), bright: {}, currents: {}, voltages: {} };
+  }
+  const N = nodeCount - 1;
+  let M = 0;
+  const vSources = [];
+  SB.components.forEach(c => {
+    if (c.type === 'battery' || c.type === 'ac_source') {
+      vSources.push(c);
+      M++;
+    }
+  });
+  const totalVars = N + M;
+  if (totalVars === 0) {
+    return { live: new Set(), bright: {}, currents: {}, voltages: {} };
+  }
+  
+  const mapNode = (tKey) => {
+    const idx = nodeMap[tKey];
+    if (idx === undefined || idx === 0) return -1;
+    return idx - 1;
+  };
+  
+  let diodeStates = {};
+  SB.components.forEach(c => {
+    if (c.type === 'diode' || c.type === 'led') {
+      diodeStates[c.id] = 1.0;
+    }
+  });
+  
+  let X = new Array(totalVars).fill(0);
+  const getV = (tKey) => {
+    const idx = mapNode(tKey);
+    return idx >= 0 ? X[idx] : 0.0;
+  };
+  for (let iter = 0; iter < 5; iter++) {
+    const A = Array.from({ length: totalVars }, () => new Array(totalVars).fill(0));
+    const B = new Array(totalVars).fill(0);
+    let vSrcIdx = 0;
+    SB.components.forEach(c => {
+      const n0 = mapNode(c.id + '-0');
+      const n1 = mapNode(c.id + '-1');
+      if (c.type === 'battery') {
+        addVoltageSource(A, B, n0, n1, N + vSrcIdx, 9.0);
+        vSrcIdx++;
+      } else if (c.type === 'ac_source') {
+        const vAc = 12.0 * Math.sin(2 * Math.PI * 1.5 * simTime);
+        addVoltageSource(A, B, n0, n1, N + vSrcIdx, vAc);
+        vSrcIdx++;
+      } else if (c.type === 'bulb') {
+        addConductance(A, n0, n1, 1 / 10.0);
+      } else if (c.type === 'motor') {
+        addConductance(A, n0, n1, 1 / 15.0);
+      } else if (c.type === 'resistor') {
+        addConductance(A, n0, n1, 1 / 100.0);
+      } else if (c.type === 'rheostat') {
+        if (c.val === undefined) c.val = 50;
+        const rRhea = 1.0 + c.val * 5.0; // 1 to 501 ohms
+        addConductance(A, n0, n1, 1 / rRhea);
+      } else if (c.type === 'npn') {
+        const n2 = mapNode(c.id + '-2'); // Emitter
+        const vB = getV(c.id + '-0');
+        const vE = n2 >= 0 ? X[n2] : 0;
+        const vDiffBE = vB - vE;
+        const conducts = vDiffBE > 0.7;
+        const rBE = conducts ? 100.0 : 1e7;
+        const rCE = conducts ? 1.0 : 1e7;
+        addConductance(A, n0, n2, 1 / rBE);
+        addConductance(A, n1, n2, 1 / rCE);
+      } else if (c.type === 'switch') {
+        const rSw = c.closed ? 1e-4 : 1e7;
+        addConductance(A, n0, n1, 1 / rSw);
+      } else if (c.type === 'spdt') {
+        const n2 = mapNode(c.id + '-2');
+        const r1 = (!c.toggled) ? 1e-4 : 1e7;
+        const r2 = (c.toggled) ? 1e-4 : 1e7;
+        addConductance(A, n0, n1, 1 / r1);
+        addConductance(A, n0, n2, 1 / r2);
+      } else if (c.type === 'diode' || c.type === 'led') {
+        const rDiode = diodeStates[c.id];
+        addConductance(A, n0, n1, 1 / rDiode);
+      } else if (c.type === 'fuse') {
+        const rFuse = c.isBlown ? 1e7 : 0.01;
+        addConductance(A, n0, n1, 1 / rFuse);
+      } else if (c.type === 'capacitor') {
+        if (!c.charge) c.charge = 0.0;
+        const rCap = 0.1 + c.charge * 1e6;
+        addConductance(A, n0, n1, 1 / rCap);
+      } else if (c.type === 'buzzer') {
+        addConductance(A, n0, n1, 1 / 50.0);
+      } else if (c.type === 'relay') {
+        const n2 = mapNode(c.id + '-2'); // Switch A
+        const n3 = mapNode(c.id + '-3'); // Switch B
+        const vCoil = getV(c.id + '-0') - getV(c.id + '-1');
+        const iCoil = vCoil / 100.0;
+        const relayClosed = Math.abs(iCoil) > 0.015; // 15mA threshold
+        addConductance(A, n0, n1, 1 / 100.0); // coil resistance
+        addConductance(A, n2, n3, 1 / (relayClosed ? 1e-4 : 1e7)); // contact
+      } else if (c.type === 'ammeter') {
+        addConductance(A, n0, n1, 1 / 0.01);
+      } else if (c.type === 'voltmeter') {
+        addConductance(A, n0, n1, 1 / 1e7);
+      }
+    });
+    
+    X = solveLinearSystem(A, B);
+    
+    SB.components.forEach(c => {
+      if (c.type === 'diode' || c.type === 'led') {
+        const n0 = mapNode(c.id + '-0');
+        const n1 = mapNode(c.id + '-1');
+        const v0 = n0 >= 0 ? X[n0] : 0;
+        const v1 = n1 >= 0 ? X[n1] : 0;
+        const vDiff = v0 - v1;
+        diodeStates[c.id] = (vDiff > 0.6) ? 0.5 : 1e7;
+      }
+    });
+  }
+  
+  const live = new Set();
+  const bright = {};
+  const currents = {};
+  const voltages = {};
+  
+  SB.components.forEach(c => {
+    const n0 = mapNode(c.id + '-0');
+    const n1 = mapNode(c.id + '-1');
+    const v0 = getV(c.id + '-0');
+    const v1 = getV(c.id + '-1');
+    const vDiff = v0 - v1;
+    let current = 0.0;
+    if (c.type === 'battery' || c.type === 'ac_source') {
+      const srcIdx = vSources.indexOf(c);
+      if (srcIdx >= 0) current = X[N + srcIdx];
+    } else if (c.type === 'bulb') {
+      current = vDiff / 10.0;
+    } else if (c.type === 'motor') {
+      current = vDiff / 15.0;
+    } else if (c.type === 'resistor') {
+      current = vDiff / 100.0;
+    } else if (c.type === 'rheostat') {
+      current = vDiff / (1.0 + c.val * 5.0);
+    } else if (c.type === 'npn') {
+      const vE = getV(c.id + '-2');
+      const conducts = (v0 - vE) > 0.7;
+      current = (v1 - vE) / (conducts ? 1.0 : 1e7);
+    } else if (c.type === 'switch') {
+      current = vDiff / (c.closed ? 1e-4 : 1e7);
+    } else if (c.type === 'spdt') {
+      const v2 = getV(c.id + '-2');
+      const i1 = (v0 - v1) / ((!c.toggled) ? 1e-4 : 1e7);
+      const i2 = (v0 - v2) / ((c.toggled) ? 1e-4 : 1e7);
+      current = i1 + i2;
+    } else if (c.type === 'diode' || c.type === 'led') {
+      current = vDiff / diodeStates[c.id];
+    } else if (c.type === 'fuse') {
+      current = vDiff / (c.isBlown ? 1e7 : 0.01);
+      if (!c.isBlown && Math.abs(current) > 3.0) {
+        c.isBlown = true;
+        logEvent('fuse-blow', '💥 Cầu chì đã bị đứt do dòng điện quá tải (> 3A)!');
+      }
+    } else if (c.type === 'capacitor') {
+      current = vDiff / (0.1 + c.charge * 1e6);
+      if (Math.abs(vDiff) > 0.1) {
+        c.charge = Math.min(1.0, c.charge + Math.abs(current) * 0.02);
+      } else {
+        c.charge = Math.max(0.0, c.charge - 0.005);
+      }
+    } else if (c.type === 'buzzer') {
+      current = vDiff / 50.0;
+    } else if (c.type === 'relay') {
+      current = vDiff / 100.0; // coil current
+    } else if (c.type === 'ammeter') {
+      current = vDiff / 0.01;
+    } else if (c.type === 'voltmeter') {
+      current = vDiff / 1e7;
+    }
+    currents[c.id] = current;
+    voltages[c.id] = vDiff;
+    c.lastCurrent = current;
+    c.lastVoltage = vDiff;
+    if (Math.abs(current) > 0.001) live.add('comp-' + c.id);
+    if (c.type === 'bulb') {
+      const aCurrent = Math.abs(current);
+      if (aCurrent > 0.1) {
+        bright[c.id] = 100;
+      } else if (aCurrent > 0.005) {
+        bright[c.id] = 55;
+      } else {
+        bright[c.id] = 0;
+      }
+    } else if (c.type === 'led') {
+      bright[c.id] = (current > 0.01) ? 100 : 0;
+    }
+  });
+  
+  SB.wires.forEach(w => {
+    const fk = w.from.split('-');
+    const tk = w.to.split('-');
+    const isLive = live.has('comp-' + fk[0]) || live.has('comp-' + tk[0]);
+    if (isLive) live.add('wire-' + w.id);
+  });
+  
+  // --- Check sandbox achievements ---
+  vSources.forEach(src => {
+    const current = Math.abs(currents[src.id] || 0);
+    if (current > 5.0) {
+      try {
+        window.parent.postMessage({
+          type: "UNLOCK_ACHIEVEMENT",
+          id: "circuit_short",
+          name: "⚡ Kỹ Sư Đoản Mạch",
+          desc: "Gây ra ngắn mạch (nối âm dương trực tiếp) trong phòng Lắp mạch!",
+          icon: "💥"
+        }, "*");
+      } catch(e) {}
+    }
+  });
+
+  const hasSuperBrightBulb = SB.components.some(c => c.type === 'bulb' && (bright[c.id] || 0) >= 100);
+  if (hasSuperBrightBulb) {
+    try {
+      window.parent.postMessage({
+        type: "UNLOCK_ACHIEVEMENT",
+        id: "circuit_bright",
+        name: "💡 Siêu Sáng",
+        desc: "Lắp đặt mạch điện giúp bóng đèn sáng 100% công suất (không qua điện trở)!",
+        icon: "☀️"
+      }, "*");
+    } catch(e) {}
+  }
+
+  const anySwitchClosed = SB.components.some(c => c.type === 'switch' && c.closed);
+  const hasBulb = SB.components.some(c => c.type === 'bulb');
+  const allBulbsDark = SB.components.filter(c => c.type === 'bulb').every(c => (bright[c.id] || 0) === 0);
+  if (anySwitchClosed && hasBulb && allBulbsDark) {
+    try {
+      window.parent.postMessage({
+        type: "UNLOCK_ACHIEVEMENT",
+        id: "circuit_dark",
+        name: "🌑 Đêm Tối",
+        desc: "Bật công tắc nhưng tất cả các bóng đèn vẫn đứng tối tăm!",
+        icon: "🦇"
+      }, "*");
+    } catch(e) {}
+  }
+
+  // --- New Sandbox Achievements ---
+  const batteryCount = SB.components.filter(c => c.type === 'battery').length;
+  if (batteryCount >= 2) {
+    try {
+      window.parent.postMessage({
+        type: "UNLOCK_ACHIEVEMENT",
+        id: "circuit_battery",
+        name: "🔋 Trạm Phát Năng Lượng",
+        desc: "Sử dụng từ 2 nguồn điện (pin) trở lên trong cùng một mạch điện!",
+        icon: "🔋"
+      }, "*");
+    } catch(e) {}
+  }
+
+  const compCount = SB.components.length;
+  if (compCount >= 6) {
+    try {
+      window.parent.postMessage({
+        type: "UNLOCK_ACHIEVEMENT",
+        id: "circuit_many",
+        name: "🏗️ Kỹ Sư Lão Luyện",
+        desc: "Thiết kế một mạch điện phức tạp chứa từ 6 linh kiện trở lên!",
+        icon: "🏗️"
+      }, "*");
+    } catch(e) {}
+  }
+
+  return { live, bright, currents, voltages };
+}
+
+function sbRender(){
+  svg.setAttribute('viewBox','0 0 780 420');
+  svg.innerHTML='';
+  const {live,bright}=sbEval();
+  // Wires
+  SB.wires.forEach(w=>{
+    const fk=w.from.split('-'),tk=w.to.split('-');
+    const fc=sbGetComp(parseInt(fk[0])),tc=sbGetComp(parseInt(tk[0]));
+    if(!fc||!tc) return;
+    const fp=sbAbsTerm(fc,parseInt(fk[1])),tp=sbAbsTerm(tc,parseInt(tk[1]));
+    const isLive=live.has('wire-'+w.id);
+    const iVal = fc ? (fc.lastCurrent || 0) : 0;
+    const dirStyle = iVal < 0 ? 'animation-direction: reverse;' : '';
+    svg.appendChild(el('line',{x1:fp.x,y1:fp.y,x2:tp.x,y2:tp.y,
+      class:'slot-line active'+(isLive?' live':''),style:dirStyle,'pointer-events':'none'}));
+    svg.appendChild(el('line',{x1:fp.x,y1:fp.y,x2:tp.x,y2:tp.y,
+      stroke:'transparent','stroke-width':18,cursor:'pointer',
+      'data-role':'sbwire','data-wid':w.id,'pointer-events':'stroke'}));
+  });
+  // Preview wire
+  if(SB.pendingWire){
+    svg.appendChild(el('line',{x1:SB.pendingWire.x,y1:SB.pendingWire.y,
+      x2:SB.mouse.x,y2:SB.mouse.y,
+      stroke:'var(--accent-teal)','stroke-width':2.5,
+      'stroke-dasharray':'6 4','stroke-linecap':'round','pointer-events':'none'}));
+  }
+  // Placement ghost
+  if(SB.placing){
+    const d=SB_DEFS[SB.placing];
+    svg.appendChild(el('rect',{x:SB.mouse.x-d.w/2-8,y:SB.mouse.y-d.h/2-8,
+      width:d.w+16,height:d.h+16,rx:8,
+      fill:'rgba(45,212,191,0.07)',stroke:'var(--accent-teal)',
+      'stroke-width':1.5,'stroke-dasharray':'5 3','pointer-events':'none'}));
+  }
+  // Components
+  SB.components.forEach(comp=>{
+    const isLiveComp=live.has('comp-'+comp.id);
+    const g=el('g',{'data-role':'sbcomp','data-cid':comp.id});
+    const d=SB_DEFS[comp.type];
+    g.appendChild(el('rect',{x:comp.x-d.w/2-8,y:comp.y-d.h/2-8,
+      width:d.w+16,height:d.h+16,fill:'transparent',rx:6,
+      cursor:'grab','data-role':'sbdrag','data-cid':comp.id}));
+    
+    if(comp.type==='battery') sbDrawBat(g,comp,isLiveComp);
+    else if(comp.type==='ac_source') sbDrawAcSource(g,comp,isLiveComp);
+    else if(comp.type==='bulb') sbDrawBulb(g,comp,isLiveComp,bright[comp.id]||0);
+    else if(comp.type==='switch') sbDrawSw(g,comp,isLiveComp);
+    else if(comp.type==='spdt') sbDrawSpdt(g,comp,isLiveComp);
+    else if(comp.type==='resistor') sbDrawRes(g,comp,isLiveComp);
+    else if(comp.type==='rheostat') sbDrawRheostat(g,comp,isLiveComp);
+    else if(comp.type==='npn') sbDrawNpn(g,comp,isLiveComp);
+    else if(comp.type==='diode') sbDrawDiode(g,comp,isLiveComp);
+    else if(comp.type==='led') sbDrawLed(g,comp,isLiveComp,bright[comp.id]||0);
+    else if(comp.type==='fuse') sbDrawFuse(g,comp,isLiveComp);
+    else if(comp.type==='capacitor') sbDrawCap(g,comp,isLiveComp);
+    else if(comp.type==='buzzer') sbDrawBuzzer(g,comp,isLiveComp,comp.lastCurrent||0);
+    else if(comp.type==='relay') sbDrawRelay(g,comp,isLiveComp,comp.lastCurrent||0);
+    else if(comp.type==='ammeter') sbDrawAmmeter(g,comp,isLiveComp,comp.lastCurrent||0);
+    else if(comp.type==='voltmeter') sbDrawVoltmeter(g,comp,isLiveComp,comp.lastVoltage||0);
+    else if(comp.type==='motor') sbDrawMotor(g,comp,isLiveComp,comp.lastCurrent||0);
+    
+    if(comp.id === SB.selectedId){
+      g.appendChild(el('rect',{
+        x:comp.x-d.w/2-10, y:comp.y-d.h/2-10,
+        width:d.w+20, height:d.h+20,
+        fill:'none', stroke:'#ef4444', 'stroke-width':1.5,
+        'stroke-dasharray':'4 3', rx:8, 'pointer-events':'none'
+      }));
+      const bx = comp.x + d.w/2 + 8;
+      const by = comp.y - d.h/2 - 8;
+      g.appendChild(el('circle',{
+        cx:bx, cy:by, r:10,
+        fill:'#ef4444', stroke:'#080d1a', 'stroke-width':1.5,
+        'data-role':'sbdelbtn', 'data-cid':comp.id, cursor:'pointer'
+      }));
+      g.appendChild(el('line',{
+        x1:bx-4, y1:by-4, x2:bx+4, y2:by+4,
+        stroke:'white', 'stroke-width':2, 'pointer-events':'none'
+      }));
+      g.appendChild(el('line',{
+        x1:bx+4, y1:by-4, x2:bx-4, y2:by+4,
+        stroke:'white', 'stroke-width':2, 'pointer-events':'none'
+      }));
+    }
+    
+    SB_DEFS[comp.type].terms.forEach((t,idx)=>{
+      const tx=comp.x+t.x,ty=comp.y+t.y;
+      const tKey=sbTermKey(comp.id,idx);
+      const isPending=SB.pendingWire&&SB.pendingWire.termKey===tKey;
+      if(isPending) g.appendChild(el('circle',{cx:tx,cy:ty,r:14,
+        fill:'rgba(45,212,191,0.18)',stroke:'var(--accent-teal)','stroke-width':1.5,'pointer-events':'none'}));
+      g.appendChild(el('circle',{cx:tx,cy:ty,r:12,fill:'transparent',stroke:'transparent',
+        'data-role':'sbterm','data-termkey':tKey,cursor:'crosshair'}));
+      g.appendChild(el('circle',{cx:tx,cy:ty,r:5,
+        fill:isPending?'var(--accent-teal)':(isLiveComp?'var(--current)':'var(--copper)'),
+        'pointer-events':'none',stroke:'#080d1a','stroke-width':1.5}));
+    });
+    svg.appendChild(g);
+  });
+  updateSidePanel(state.levels[state.levelIndex],null);
+}
+function sbDrawBat(g,c,live){
+  const x=c.x,y=c.y,lc='battery-lead'+(live?' live':'');
+  g.appendChild(el('line',{x1:x,y1:y-38,x2:x,y2:y-13,class:lc}));
+  g.appendChild(el('line',{x1:x,y1:y+13,x2:x,y2:y+38,class:lc}));
+  g.appendChild(el('line',{x1:x-18,y1:y-13,x2:x+18,y2:y-13,class:'battery-plus'}));
+  g.appendChild(el('line',{x1:x-10,y1:y+13,x2:x+10,y2:y+13,class:'battery-minus'}));
+  const tp=el('text',{x:x+28,y:y-9,class:'battery-sign plus','text-anchor':'middle'}); tp.textContent='+'; g.appendChild(tp);
+  const tm=el('text',{x:x+28,y:y+17,class:'battery-sign minus','text-anchor':'middle'}); tm.textContent='–'; g.appendChild(tm);
+  g.appendChild(textEl(x,y+56,'Pin DC','label'));
+}
+function sbDrawAcSource(g,c,live){
+  const x=c.x,y=c.y,lc='battery-lead'+(live?' live':'');
+  g.appendChild(el('line',{x1:x,y1:y-38,x2:x,y2:y-14,class:lc}));
+  g.appendChild(el('line',{x1:x,y1:y+14,x2:x,y2:y+38,class:lc}));
+  g.appendChild(el('circle',{cx:x,cy:y,r:14,fill:'none',stroke:live?'var(--current)':'var(--copper)','stroke-width':2.5}));
+  g.appendChild(el('path',{d:`M ${x-7} ${y} Q ${x-3.5} ${y-5} ${x} ${y} T ${x+7} ${y}`,fill:'none',stroke:live?'var(--current)':'var(--copper)','stroke-width':2}));
+  g.appendChild(textEl(x,y+56,'Nguồn AC','label'));
+}
+function sbDrawBulb(g,c,live,bright){
+  const bg=el('g',{class:'bulb','data-bright':bright});
+  const x=c.x,y=c.y,r=22,lc='bulb-lead'+(live?' live':'');
+  bg.appendChild(el('line',{x1:x-30,y1:y,x2:x-r,y2:y,class:lc}));
+  bg.appendChild(el('line',{x1:x+r,y1:y,x2:x+30,y2:y,class:lc}));
+  bg.appendChild(el('circle',{cx:x,cy:y,r:38,class:'bulb-halo'}));
+  bg.appendChild(el('circle',{cx:x,cy:y,r,class:'bulb-glass'}));
+  bg.appendChild(el('path',{d:`M${x-8} ${y+6} L${x-3} ${y-7} L${x} ${y+6} L${x+3} ${y-7} L${x+8} ${y+6}`,class:'bulb-filament'}));
+  bg.appendChild(textEl(x,y+46,'Đèn','label'));
+  g.appendChild(bg);
+}
+function sbDrawSw(g,c,live){
+  const x=c.x,y=c.y,hx=x-38+76*0.42;
+  const lc='switch-lead'+(live?' live':'');
+  g.appendChild(el('line',{x1:x-38,y1:y,x2:hx,y2:y,class:lc}));
+  if(c.closed){
+    g.appendChild(el('line',{x1:hx,y1:y,x2:x+38,y2:y,class:'switch-lever closed'+(live?' live':'')}));
+  } else {
+    const ang=-0.55,len=76*0.58*0.72;
+    g.appendChild(el('line',{x1:hx,y1:y,x2:hx+Math.cos(ang)*len,y2:y+Math.sin(ang)*len,class:'switch-lever open'}));
+    g.appendChild(el('circle',{cx:x+38,cy:y,r:3.5,class:'switch-gap-dot'}));
+  }
+  g.appendChild(el('circle',{cx:hx,cy:y,r:4,class:'switch-hinge'}));
+  g.appendChild(textEl(x,y-26,'Công tắc SPST','label'));
+  g.appendChild(el('line',{x1:hx,y1:y,x2:x+38,y2:y,stroke:'transparent',
+    'stroke-width':22,'data-role':'sbswitch','data-cid':c.id,
+    cursor:'pointer','pointer-events':'stroke'}));
+}
+function sbDrawSpdt(g,c,live){
+  const x=c.x,y=c.y;
+  g.appendChild(el('line',{x1:x-38,y1:y,x2:x-14,y2:y,class:'switch-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+14,y1:y-16,x2:x+38,y2:y-16,class:'switch-lead'}));
+  g.appendChild(el('line',{x1:x+14,y1:y+16,x2:x+38,y2:y+16,class:'switch-lead'}));
+  const leverY = c.toggled ? y+16 : y-16;
+  g.appendChild(el('line',{x1:x-14,y1:y,x2:x+14,y2:leverY,class:'switch-lever closed'+(live?' live':'')}));
+  g.appendChild(el('circle',{cx:x-14,cy:y,r:4,class:'switch-hinge'}));
+  g.appendChild(el('circle',{cx:x+14,cy:y-16,r:3,class:'switch-gap-dot'}));
+  g.appendChild(el('circle',{cx:x+14,cy:y+16,r:3,class:'switch-gap-dot'}));
+  g.appendChild(textEl(x,y-26,'Công tắc SPDT','label'));
+  g.appendChild(el('line',{x1:x-14,y1:y,x2:x+14,y2:y-16,stroke:'transparent',
+    'stroke-width':16,'data-role':'sbspdt','data-cid':c.id,'data-choice':'L1',cursor:'pointer','pointer-events':'stroke'}));
+  g.appendChild(el('line',{x1:x-14,y1:y,x2:x+14,y2:y+16,stroke:'transparent',
+    'stroke-width':16,'data-role':'sbspdt','data-cid':c.id,'data-choice':'L2',cursor:'pointer','pointer-events':'stroke'}));
+}
+function sbDrawRes(g,c,live){
+  const from={x:c.x-38,y:c.y},to={x:c.x+38,y:c.y};
+  const dx=to.x-from.x,dy=to.y-from.y,len=Math.hypot(dx,dy)||1;
+  const ux=dx/len,uy=dy/len,px=-uy,py=ux;
+  const sx=from.x+dx*0.32,sy=from.y+dy*0.32,ex=from.x+dx*0.68,ey=from.y+dy*0.68;
+  let d=`M${from.x} ${from.y} L${sx} ${sy} `;
+  for(let i=0;i<=6;i++){
+    const t=i/6,bx=sx+(ex-sx)*t,by=sy+(ey-sy)*t;
+    const amp=(i===0||i===6)?0:(i%2===1?10:-10);
+    d+=`L${bx+px*amp} ${by+py*amp} `;
+  }
+  d+=`L${ex} ${ey} L${to.x} ${to.y}`;
+  g.appendChild(el('path',{d,class:'resistor-path'+(live?' live':'')}));
+  g.appendChild(textEl(c.x,c.y-26,'Điện trở','label'));
+}
+function sbDrawDiode(g,c,live){
+  const x=c.x,y=c.y;
+  const col = live ? 'var(--current)' : 'var(--copper)';
+  g.appendChild(el('line',{x1:x-38,y1:y,x2:x-10,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+10,y1:y,x2:x+38,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('polygon',{points:`${x-10},${y-12} ${x-10},${y+12} ${x+10},${y}`,fill:'none',stroke:col,'stroke-width':2.5}));
+  g.appendChild(el('line',{x1:x+10,y1:y-12,x2:x+10,y2:y+12,stroke:col,'stroke-width':2.5}));
+  g.appendChild(textEl(x,y-24,'Điốt','label'));
+}
+function sbDrawLed(g,c,live,bright){
+  const x=c.x,y=c.y;
+  const isGlowing = bright > 0;
+  const col = isGlowing ? '#ef4444' : 'var(--copper)';
+  g.appendChild(el('line',{x1:x-38,y1:y,x2:x-10,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+10,y1:y,x2:x+38,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  if(isGlowing) {
+    g.appendChild(el('circle',{cx:x,cy:y,r:24,fill:'rgba(239,68,68,0.22)',filter:'blur(8px)'}));
+  }
+  g.appendChild(el('polygon',{points:`${x-10},${y-12} ${x-10},${y+12} ${x+10},${y}`,fill:isGlowing?'#ef4444':'none',stroke:col,'stroke-width':2.5}));
+  g.appendChild(el('line',{x1:x+10,y1:y-12,x2:x+10,y2:y+12,stroke:col,'stroke-width':2.5}));
+  g.appendChild(el('path',{d:`M ${x-2} ${y-14} L ${x+4} ${y-20} M ${x+4} ${y-20} L ${x} ${y-20} M ${x+4} ${y-20} L ${x+4} ${y-16}`,stroke:col,'stroke-width':1.5,fill:'none'}));
+  g.appendChild(el('path',{d:`M ${x+4} ${y-10} L ${x+10} ${y-16} M ${x+10} ${y-16} L ${x+6} ${y-16} M ${x+10} ${y-16} L ${x+10} ${y-12}`,stroke:col,'stroke-width':1.5,fill:'none'}));
+  g.appendChild(textEl(x,y-24,'Đèn LED','label'));
+}
+function sbDrawFuse(g,c,live){
+  const x=c.x,y=c.y;
+  g.appendChild(el('line',{x1:x-38,y1:y,x2:x-20,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+20,y1:y,x2:x+38,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('rect',{x:x-20,y:y-8,width:40,height:16,rx:2,fill:'none',stroke:c.isBlown?'#ef4444':'var(--copper)','stroke-width':2}));
+  if(c.isBlown) {
+    g.appendChild(el('line',{x1:x-20,y1:y,x2:x-6,y2:y-2,stroke:'#64748b','stroke-width':1.5}));
+    g.appendChild(el('line',{x1:x+6,y1:y+2,x2:x+20,y2:y,stroke:'#64748b','stroke-width':1.5}));
+    g.appendChild(el('circle',{cx:x,cy:y,r:4,fill:'#ef4444',opacity:0.65}));
+  } else {
+    g.appendChild(el('line',{x1:x-20,y1:y,x2:x+20,y2:y,stroke:live?'var(--current)':'#d97706','stroke-width':1.5}));
+  }
+  g.appendChild(textEl(x,y-16,c.isBlown?'ĐỨT CẦU CHÌ':'Cầu chì','label'));
+  g.appendChild(el('rect',{x:x-20,y:y-8,width:40,height:16,fill:'transparent',cursor:'pointer','data-role':'sbfuse','data-cid':c.id}));
+}
+function sbDrawCap(g,c,live){
+  const x=c.x,y=c.y;
+  const col = live ? 'var(--current)' : 'var(--copper)';
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-6,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+6,y1:y,x2:x+30,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x-6,y1:y-18,x2:x-6,y2:y+18,stroke:col,'stroke-width':3.5}));
+  g.appendChild(el('line',{x1:x+6,y1:y-18,x2:x+6,y2:y+18,stroke:col,'stroke-width':3.5}));
+  g.appendChild(textEl(x,y-24,'Tụ điện','label'));
+}
+function sbDrawAmmeter(g,c,live,val){
+  const x=c.x,y=c.y;
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-20,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+20,y1:y,x2:x+30,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('circle',{cx:x,cy:y,r:20,fill:'#0f172a',stroke:'var(--accent-teal)','stroke-width':2}));
+  g.appendChild(textEl(x,y-24,'Ampe kế','label'));
+  const sign = val < 0 ? '-' : '';
+  const displayVal = sign + Math.abs(val).toFixed(2) + ' A';
+  g.appendChild(el('text',{x,y:y+5,fill:'var(--accent-teal)','font-size':'11px','font-family':'var(--font-mono)','text-anchor':'middle','font-weight':'bold'})
+    .appendChild(document.createTextNode(displayVal)).parentNode);
+}
+function sbDrawVoltmeter(g,c,live,val){
+  const x=c.x,y=c.y;
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-20,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+20,y1:y,x2:x+30,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('circle',{cx:x,cy:y,r:20,fill:'#0f172a',stroke:'var(--current)','stroke-width':2}));
+  g.appendChild(textEl(x,y-24,'Vôn kế','label'));
+  const sign = val < 0 ? '-' : '';
+  const displayVal = sign + Math.abs(val).toFixed(2) + ' V';
+  g.appendChild(el('text',{x,y:y+5,fill:'var(--current)','font-size':'11px','font-family':'var(--font-mono)','text-anchor':'middle','font-weight':'bold'})
+    .appendChild(document.createTextNode(displayVal)).parentNode);
+}
+function sbDrawMotor(g,c,live,current){
+  const x=c.x,y=c.y;
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-20,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+20,y1:y,x2:x+30,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('circle',{cx:x,cy:y,r:20,fill:'#1e293b',stroke:live?'var(--current)':'var(--copper)','stroke-width':2.5}));
+  
+  const labelText=el('text',{x,y:y+5,fill:'rgba(255,255,255,0.15)','font-size':'14px','font-weight':'bold','text-anchor':'middle'});
+  labelText.textContent='M';
+  g.appendChild(labelText);
+  
+  if(!c.rotAngle) c.rotAngle=0;
+  c.rotAngle += current * 12.0;
+  
+  const pg=el('g',{transform:`rotate(${c.rotAngle}, ${x}, ${y})`});
+  pg.appendChild(el('line',{x1:x-14,y1:y,x2:x+14,y2:y,stroke:'#f8fafc','stroke-width':3.2,'stroke-linecap':'round'}));
+  pg.appendChild(el('line',{x1:x,y1:y-14,x2:x,y2:y+14,stroke:'#f8fafc','stroke-width':3.2,'stroke-linecap':'round'}));
+  pg.appendChild(el('circle',{cx:x,cy:y,r:4,fill:'#ef4444'}));
+  g.appendChild(pg);
+  
+  g.appendChild(textEl(x,y-24,'Động cơ','label'));
+}
+function sbDrawRheostat(g,c,live){
+  const x=c.x,y=c.y;
+  const from={x:x-38,y:y},to={x:x+38,y:y};
+  const dx=to.x-from.x,dy=to.y-from.y,len=Math.hypot(dx,dy)||1;
+  const ux=dx/len,uy=dy/len,px=-uy,py=ux;
+  const sx=from.x+dx*0.32,sy=from.y+dy*0.32,ex=from.x+dx*0.68,ey=from.y+dy*0.68;
+  let d=`M${from.x} ${from.y} L${sx} ${sy} `;
+  for(let i=0;i<=6;i++){
+    const t=i/6,bx=sx+(ex-sx)*t,by=sy+(ey-sy)*t;
+    const amp=(i===0||i===6)?0:(i%2===1?6:-6);
+    d+=`L${bx+px*amp} ${by+py*amp} `;
+  }
+  d+=`L${ex} ${ey} L${to.x} ${to.y}`;
+  g.appendChild(el('path',{d,class:'resistor-path'+(live?' live':''),opacity:0.65}));
+
+  const ty = y - 12;
+  g.appendChild(el('line',{x1:x-20,y1:ty,x2:x+20,y2:ty,stroke:'#64748b','stroke-width':3,'stroke-linecap':'round'}));
+  
+  if(c.val===undefined) c.val=50;
+  const kx = x - 20 + 40 * (c.val/100);
+  g.appendChild(el('circle',{cx:kx,cy:ty,r:6,fill:'#ef4444',stroke:'#f8fafc','stroke-width':1.5,cursor:'pointer'}));
+  
+  const rVal = Math.round(1.0 + c.val * 5.0);
+  g.appendChild(textEl(x,y-24,`Biến trở: ${rVal} Ω`,'label'));
+}
+function sbDrawNpn(g,c,live){
+  const x=c.x,y=c.y;
+  const col = live ? 'var(--current)' : 'var(--copper)';
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-10,y2:y,class:'resistor-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+15,y1:y-24,x2:x+15,y2:y-12,class:'resistor-lead'}));
+  g.appendChild(el('line',{x1:x+15,y1:y+12,x2:x+15,y2:y+24,class:'resistor-lead'}));
+  g.appendChild(el('circle',{cx:x,cy:y,r:22,fill:'none',stroke:col,'stroke-width':2}));
+  g.appendChild(el('line',{x1:x-10,y1:y-12,x2:x-10,y2:y+12,stroke:col,'stroke-width':2.5}));
+  g.appendChild(el('line',{x1:x-10,y1:y-4,x2:x+10,y2:y-12,stroke:col,'stroke-width':2}));
+  g.appendChild(el('line',{x1:x-10,y1:y+4,x2:x+10,y2:y+12,stroke:col,'stroke-width':2}));
+  g.appendChild(el('polygon',{points:`${x+2},${y+9} ${x+10},${y+12} ${x+6},${y+5}`,fill:col}));
+  g.appendChild(textEl(x,y-30,'Transistor NPN','label'));
+}
+function sbDrawBuzzer(g,c,live,current){
+  const x=c.x,y=c.y;
+  const isActive = Math.abs(current) > 0.001;
+  const col = isActive ? 'var(--current)' : 'var(--copper)';
+  g.appendChild(el('line',{x1:x-30,y1:y,x2:x-16,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x+16,y1:y,x2:x+30,y2:y,class:'bulb-lead'+(live?' live':'')}));
+  g.appendChild(el('rect',{x:x-16,y:y-18,width:32,height:36,rx:4,fill:'#1e293b',stroke:col,'stroke-width':2}));
+  g.appendChild(el('line',{x1:x-8,y1:y-8,x2:x-8,y2:y+8,stroke:'#64748b','stroke-width':2}));
+  g.appendChild(el('line',{x1:x,y1:y-10,x2:x,y2:y+10,stroke:'#64748b','stroke-width':2}));
+  g.appendChild(el('line',{x1:x+8,y1:y-8,x2:x+8,y2:y+8,stroke:'#64748b','stroke-width':2}));
+  if(isActive){
+    const waveOffset = (Math.floor(Date.now() / 150) % 3) * 3;
+    g.appendChild(el('path',{d:`M ${x+22} ${y-8-waveOffset} Q ${x+28+waveOffset} ${y} ${x+22} ${y+8+waveOffset}`,fill:'none',stroke:'#eab308','stroke-width':1.5}));
+    g.appendChild(el('path',{d:`M ${x-22} ${y-8-waveOffset} Q ${x-28-waveOffset} ${y} ${x-22} ${y+8+waveOffset}`,fill:'none',stroke:'#eab308','stroke-width':1.5}));
+  }
+  g.appendChild(textEl(x,y-24,'Còi báo','label'));
+}
+function sbDrawRelay(g,c,live,current){
+  const x=c.x,y=c.y;
+  const isCoilActive = Math.abs(current) > 0.015;
+  const col = live ? 'var(--current)' : 'var(--copper)';
+  g.appendChild(el('rect',{x:x-38,y:y-30,width:76,height:60,fill:'#0f172a',stroke:isCoilActive?'#eab308':'#334155','stroke-width':1.5,'stroke-dasharray':'4 4',rx:4}));
+  g.appendChild(el('line',{x1:x-38,y1:y-16,x2:x-20,y2:y-16,class:'switch-lead'+(live?' live':'')}));
+  g.appendChild(el('line',{x1:x-38,y1:y+16,x2:x-20,y2:y+16,class:'switch-lead'+(live?' live':'')}));
+  g.appendChild(el('rect',{x:x-20,y:y-18,width:10,height:36,rx:2,fill:isCoilActive?'rgba(234,179,8,0.15)':'#1e293b',stroke:col,'stroke-width':1.5}));
+  for(let i=0;i<4;i++){
+    g.appendChild(el('ellipse',{cx:x-15,cy:y-12+i*8,rx:4,ry:3,fill:'none',stroke:col,'stroke-width':1.5}));
+  }
+  g.appendChild(el('line',{x1:x+20,y1:y-16,x2:x+38,y2:y-16,class:'switch-lead'}));
+  g.appendChild(el('line',{x1:x+20,y1:y+16,x2:x+38,y2:y+16,class:'switch-lead'}));
+  if(isCoilActive){
+    g.appendChild(el('line',{x1:x+20,y1:y+16,x2:x+20,y2:y-16,stroke:'var(--current)','stroke-width':2.5}));
+  } else {
+    g.appendChild(el('line',{x1:x+20,y1:y+16,x2:x+10,y2:y-12,stroke:'var(--copper)','stroke-width':2.5}));
+    g.appendChild(el('circle',{cx:x+20,cy:y-16,r:2,fill:'var(--copper)'}));
+  }
+  g.appendChild(textEl(x,y-34,'Rơ le','label'));
+}
+
+// ---- Sandbox interaction handlers ----
+function sbMouseDown(ev){
+  const delTarget=ev.target.closest('[data-role="sbdelbtn"]');
+  if(delTarget){
+    const cid=parseInt(delTarget.getAttribute('data-cid'));
+    SB.components=SB.components.filter(c=>c.id!==cid);
+    SB.wires=SB.wires.filter(w=>{
+      const fk=w.from.split('-'),tk=w.to.split('-');
+      return parseInt(fk[0])!==cid && parseInt(tk[0])!==cid;
+    });
+    SB.selectedId=null;
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+
+  // 0. Rheostat slider check
+  if(!SB.placing){
+    const rheaComps = SB.components.filter(c=>c.type==='rheostat');
+    for(const comp of rheaComps){
+      const coords=getSVGCoords(ev);
+      const ty = comp.y - 12;
+      const kx = comp.x - 20 + 40 * ((comp.val || 50)/100);
+      const dist = Math.hypot(coords.x - kx, coords.y - ty);
+      if(dist < 15){
+        SB.slidingId = comp.id;
+        ev.stopPropagation(); ev.preventDefault(); return;
+      }
+    }
+  }
+
+  const termTarget=ev.target.closest('[data-role="sbterm"]');
+  const swTarget=ev.target.closest('[data-role="sbswitch"]');
+  const dragTarget=ev.target.closest('[data-role="sbdrag"],[data-role="sbcomp"]');
+  const wireTarget=ev.target.closest('[data-role="sbwire"]');
+
+  // 1. Terminal — start/complete wire
+  if(termTarget && !SB.placing){
+    const tKey=termTarget.getAttribute('data-termkey');
+    const parts=tKey.split('-');
+    const comp=sbGetComp(parseInt(parts[0]));
+    if(!comp) return;
+    const pos=sbAbsTerm(comp,parseInt(parts[1]));
+    if(SB.pendingWire){
+      if(SB.pendingWire.termKey!==tKey){
+        const dup=SB.wires.find(w=>(w.from===SB.pendingWire.termKey&&w.to===tKey)||(w.from===tKey&&w.to===SB.pendingWire.termKey));
+        if(!dup) SB.wires.push({id:SB.nextId++,from:SB.pendingWire.termKey,to:tKey});
+      }
+      SB.pendingWire=null;
+    } else {
+      SB.pendingWire={termKey:tKey,x:pos.x,y:pos.y};
+    }
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+  // 2. Switch toggle
+  if(swTarget && !SB.placing){
+    const cid=parseInt(swTarget.getAttribute('data-cid'));
+    const comp=sbGetComp(cid);
+    if(comp) comp.closed=!comp.closed;
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+  // 2.5 SPDT Switch toggle
+  const spdtTarget=ev.target.closest('[data-role="sbspdt"]');
+  if(spdtTarget && !SB.placing){
+    const cid=parseInt(spdtTarget.getAttribute('data-cid'));
+    const comp=sbGetComp(cid);
+    if(comp) comp.toggled=!comp.toggled;
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+  // 2.7 Fuse reset
+  const fuseTarget=ev.target.closest('[data-role="sbfuse"]');
+  if(fuseTarget && !SB.placing){
+    const cid=parseInt(fuseTarget.getAttribute('data-cid'));
+    const comp=sbGetComp(cid);
+    if(comp && comp.isBlown){
+      comp.isBlown=false;
+      logEvent('fuse-replace', '🔧 Đã thay cầu chì mới.');
+    }
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+  // 3. Delete wire on click
+  if(wireTarget && !SB.placing){
+    const wid=parseInt(wireTarget.getAttribute('data-wid'));
+    SB.wires=SB.wires.filter(w=>w.id!==wid);
+    sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
+  }
+  // 4. Drag component
+  if(dragTarget && !SB.placing){
+    const cid=parseInt(dragTarget.getAttribute('data-cid'));
+    const comp=sbGetComp(cid);
+    if(comp){
+      SB.selectedId=cid;
+      const coords=getSVGCoords(ev);
+      SB.dragging={compId:cid,ox:coords.x-comp.x,oy:coords.y-comp.y};
+    }
+    sbRender(); ev.preventDefault(); return;
+  }
+  // 5. Place component
+  if(SB.placing){
+    const coords=getSVGCoords(ev);
+    const cx=Math.round(coords.x), cy=Math.round(coords.y);
+    SB.components.push({id:SB.nextId++,type:SB.placing,x:cx,y:cy,closed:SB.placing==='switch'?false:undefined});
+    SB.placing=null;
+    const toolbar=document.getElementById('sbToolbar');
+    if(toolbar){
+      toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+      const ptr=toolbar.querySelector('[data-type="pointer"]');
+      if(ptr) ptr.classList.add('active');
+    }
+    sbRender(); ev.preventDefault(); return;
+  }
+  // 6. Cancel pending wire / Deselect selected component
+  let changed = false;
+  if(SB.pendingWire){ SB.pendingWire=null; changed = true; }
+  if(SB.selectedId){ SB.selectedId=null; changed = true; }
+  if(changed) sbRender();
+}
+function sbMouseMove(ev){
+  const coords=getSVGCoords(ev);
+  SB.mouse=coords;
+  if(SB.slidingId){
+    const comp=sbGetComp(SB.slidingId);
+    if(comp){
+      const pct=Math.max(0, Math.min(100, Math.round(((coords.x - (comp.x - 20)) / 40) * 100)));
+      comp.val=pct;
+      if (pct === 0 || pct === 100) {
+        try {
+          window.parent.postMessage({
+            type: "UNLOCK_ACHIEVEMENT",
+            id: "circuit_control",
+            name: "🎛️ Bộ Điều Chỉnh",
+            desc: "Điều chỉnh biến trở đạt mức tối thiểu (0%) hoặc tối đa (100%)!",
+            icon: "🎚️"
+          }, "*");
+        } catch(e) {}
+      }
+      sbRender();
+    }
+  } else if(SB.dragging){
+    const comp=sbGetComp(SB.dragging.compId);
+    if(comp){ comp.x=Math.round(coords.x-SB.dragging.ox); comp.y=Math.round(coords.y-SB.dragging.oy); sbRender(); }
+  } else if(SB.pendingWire||SB.placing){ sbRender(); }
+}
+function sbMouseUp(){ SB.dragging=null; SB.slidingId=null; }
+
+// ---- Toolbar wiring ----
+function initSbToolbar(){
+  const toolbar=document.getElementById('sbToolbar');
+  toolbar.querySelectorAll('[data-type]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const type=btn.getAttribute('data-type');
+      toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+      if(type==='pointer'){
+        SB.placing=null;
+        btn.classList.add('active');
+      } else {
+        if(SB.placing===type){
+          SB.placing=null;
+          const ptr=toolbar.querySelector('[data-type="pointer"]');
+          if(ptr) ptr.classList.add('active');
+        } else {
+          SB.placing=type;
+          SB.pendingWire=null;
+          btn.classList.add('active');
+        }
+      }
+      if(isSandboxMode()) sbRender();
+    });
+  });
+  document.getElementById('sb-btn-clear').addEventListener('click',()=>{
+    SB.components=[]; SB.wires=[]; SB.pendingWire=null; SB.dragging=null; SB.placing=null;
+    toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+    const ptr=toolbar.querySelector('[data-type="pointer"]');
+    if(ptr) ptr.classList.add('active');
+    if(isSandboxMode()) sbRender();
+  });
+  document.addEventListener('keydown',ev=>{
+    if(ev.key==='Escape'){
+      SB.placing=null; SB.pendingWire=null;
+      toolbar.querySelectorAll('[data-type]').forEach(b=>b.classList.remove('active'));
+      const ptr=toolbar.querySelector('[data-type="pointer"]');
+      if(ptr) ptr.classList.add('active');
+      if(isSandboxMode()) sbRender();
+    }
+  });
+}
+
+let lastLoopTime = Date.now();
+function animLoop(){
+  requestAnimationFrame(animLoop);
+  if(isSandboxMode()){
+    const now = Date.now();
+    const dt = (now - lastLoopTime)/1000.0;
+    lastLoopTime = now;
+    simTime += dt;
+    sbRender();
+  } else {
+    lastLoopTime = Date.now();
+  }
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+initSbToolbar();
+renderPips();
+renderLevel();
+checkWin();
+animLoop();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Phòng Thí Nghiệm Hóa Học · Sandbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c1315;
+    --panel:#121c1f;
+    --panel2:#182428;
+    --border:#243338;
+    --border-soft:#1c282c;
+    --text:#dfe9e8;
+    --text-dim:#7c9195;
+    --accent:#6fe08a;
+    --accent-dim:#3f7a52;
+    --amber:#f2a53c;
+    --red:#e15b4f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;}
+  body{
+    min-height:100vh;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(111,224,138,0.05), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(242,165,60,0.05), transparent 40%);
+  }
+  .eyebrow{font-size:11px;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;font-weight:500;}
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px;
+    font-weight:700;
+    margin:2px 0 0 0;
+    letter-spacing:-0.01em;
+  }
+  header{
+    padding:18px 22px 14px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  header p{margin:6px 0 0 0;color:var(--text-dim);font-size:12.5px;max-width:520px;line-height:1.5;}
+  .stats{font-size:11px;color:var(--text-dim);text-align:right;line-height:1.7;white-space:nowrap;}
+  .stats b{color:var(--accent);}
+  .app{
+    display:grid;
+    grid-template-columns:296px 1fr;
+    gap:16px;
+    padding:16px 22px 26px;
+    max-width:1280px;
+    margin:0 auto;
+  }
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;}
+  }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px;
+  }
+  #palette-panel{
+    max-height: 540px;
+    overflow-y: auto;
+  }
+  .sidebar{display:flex;flex-direction:column;gap:14px;}
+  .section-title{
+    font-size:10.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 8px 0;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .section-title::after{content:'';flex:1;height:1px;background:var(--border-soft);}
+  .swatch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+  .swatch{
+    display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:transparent;border:1px solid transparent;border-radius:8px;
+    padding:5px 2px 6px;cursor:pointer;color:var(--text-dim);
+    transition:border-color .12s, background .12s, transform .08s;
+  }
+  .swatch:hover{background:var(--panel2);}
+  .swatch:active{transform:scale(0.94);}
+  .swatch.selected{border-color:var(--accent);background:var(--panel2);color:var(--accent);}
+  .chip{width:24px;height:24px;border-radius:5px;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08);}
+  .swatch span{font-size:8.5px;letter-spacing:0.02em;text-align:center;line-height:1.15;}
+  .group-block{margin-bottom:10px;}
+  .group-block:last-child{margin-bottom:0;}
+  .group-label{font-size:9.5px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;margin:0 0 6px 2px;opacity:0.75;}
+
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+  .row:last-child{margin-bottom:0;}
+  .row label{font-size:11px;color:var(--text-dim);}
+  input[type=range]{
+    -webkit-appearance:none;flex:1;height:3px;background:var(--border);border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);cursor:pointer;
+    box-shadow:0 0 0 3px rgba(111,224,138,0.15);
+  }
+  .val-badge{font-size:11px;color:var(--accent);min-width:16px;text-align:right;}
+
+  .btn{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.03em;
+    background:var(--panel2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:7px;
+    padding:8px 10px;
+    cursor:pointer;
+    flex:1;
+    transition:border-color .12s, color .12s;
+  }
+  .btn:hover{border-color:var(--accent-dim);}
+  .btn.primary{color:var(--accent);border-color:var(--accent-dim);}
+  .btn.danger:hover{border-color:var(--red);color:var(--red);}
+  .btn-row{display:flex;gap:8px;}
+
+  #info-name{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--text);display:flex;align-items:center;gap:8px;}
+  #info-dot{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+  #info-desc{font-size:11.5px;line-height:1.6;color:var(--text-dim);margin-top:7px;}
+
+  .log-list{list-style:none;margin:0;padding:0;font-size:11px;line-height:1.6;color:var(--accent);max-height:170px;overflow-y:auto;}
+  .log-list li{padding:3px 0;border-bottom:1px dashed var(--border-soft);color:var(--text-dim);}
+  .log-list li:first-child{color:var(--accent);}
+  .cursor{display:inline-block;color:var(--accent);animation:blink 1s step-start infinite;}
+  @keyframes blink{50%{opacity:0;}}
+
+  .canvas-wrap{
+    position:relative;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    overflow:auto;
+    min-height:200px;
+  }
+  .canvas-inner{position:relative;display:inline-block;line-height:0;}
+  canvas{
+    display:block;
+    border-radius:4px;
+    background:#070c0d;
+    image-rendering:pixelated;
+    cursor:crosshair;
+    touch-action:none;
+  }
+  .canvas-inner::after{
+    content:'';
+    position:absolute;inset:0;
+    border-radius:4px;
+    pointer-events:none;
+    background:repeating-linear-gradient(rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.05) 3px);
+    opacity:0.5;
+  }
+  .resize-handle{
+    position:absolute;
+    right:1px;
+    bottom:1px;
+    width:18px;
+    height:18px;
+    cursor:nwse-resize;
+    z-index:5;
+    border-radius:0 0 4px 0;
+    background:
+      linear-gradient(135deg, transparent 0 46%, var(--accent) 46% 54%, transparent 54% 100%),
+      linear-gradient(135deg, transparent 0 66%, var(--accent) 66% 74%, transparent 74% 100%);
+    opacity:0.5;
+    transition:opacity .12s;
+  }
+  .ach-list {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-height:190px;
+    overflow-y:auto;
+    padding-right:4px;
+  }
+  .ach-item {
+    border-radius:6px;
+    padding:8px 10px;
+    font-size:11px;
+    border:1px solid var(--border-soft);
+    transition:background .12s, border-color .12s;
+  }
+  .ach-item.unlocked {
+    background:rgba(111,224,138,0.06);
+    border-color:rgba(111,224,138,0.2);
+  }
+  .ach-item.unlocked .ach-header {
+    color:var(--accent);
+    font-weight:bold;
+  }
+  .ach-item.locked {
+    background:rgba(255,255,255,0.02);
+    opacity:0.65;
+  }
+  .ach-item.locked .ach-header {
+    color:var(--text-dim);
+  }
+  .ach-item .ach-desc {
+    font-size:9.5px;
+    color:var(--text-dim);
+    margin-top:3px;
+  }
+  .toast-ach {
+    position:fixed;
+    top:20px;
+    right:20px;
+    background:rgba(18,18,18,0.95);
+    border:1px solid var(--accent);
+    border-radius:12px;
+    padding:16px 20px;
+    color:#fff;
+    font-family:'JetBrains Mono',monospace;
+    box-shadow:0 10px 30px rgba(111,224,138,0.25);
+    z-index:10000;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    transform:translateX(120%);
+    transition:transform .4s cubic-bezier(0.175,0.885,0.32,1.275);
+  }
+  .toast-ach.show {
+    transform:translateX(0);
+  }
+  .toast-ach .icon {
+    font-size:24px;
+  }
+  .toast-ach .title {
+    font-weight:bold;
+    color:var(--accent);
+    margin-bottom:2px;
+  }
+  .toast-ach .desc {
+    font-size:11px;
+    color:var(--text-dim);
+  }
+  footer{
+    text-align:center;font-size:10.5px;color:var(--text-dim);padding:6px 0 24px;
+  }
+  footer b{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">Mô phỏng vật lý &amp; phản ứng hoá học</div>
+    <h1>Phòng Thí Nghiệm Hoá Học</h1>
+    <p>Sandbox hạt (falling-sand) kiểu Sandboxels — vẽ các nguyên liệu lên khung và quan sát chúng rơi, chảy, bay hơi, cháy nổ và phản ứng với nhau theo tính chất hoá học thực tế.</p>
+  </div>
+  <div class="stats">
+    Hạt đang hoạt động: <b id="stat-count">0</b><br>
+    FPS: <b id="stat-fps">0</b>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="panel" id="palette-panel">
+      <div class="section-title">Nguyên liệu</div>
+      <div id="palette"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Điều khiển</div>
+      <div class="row">
+        <label>Cỡ bút</label>
+        <input type="range" id="brush" min="0" max="5" value="2">
+        <span class="val-badge" id="brush-val">2</span>
+      </div>
+      <div class="row">
+        <label>Tốc độ</label>
+        <input type="range" id="speed" min="1" max="3" value="1">
+        <span class="val-badge" id="speed-val">1×</span>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn primary" id="btn-pause">⏸ Tạm dừng</button>
+        <button class="btn danger" id="btn-clear">🗑 Xoá hết</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Đang chọn</div>
+      <div id="info-name"><span id="info-dot" class="chip"></span><span id="info-name-text">—</span></div>
+      <div id="info-desc"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-title">Nhật ký phản ứng</div>
+      <ul class="log-list" id="log-list"></ul>
+    </div>
+  </aside>
+
+  <div class="canvas-wrap">
+    <div class="canvas-inner">
+      <canvas id="sim"></canvas>
+      <div class="resize-handle" id="resize-handle" title="Kéo để thay đổi kích thước khung"></div>
+    </div>
+  </div>
+</div>
+
+<footer>Vẽ bằng chuột hoặc chạm · thử đổ <b>nước</b> vào <b>dung nham</b>, thả <b>Natri</b> xuống nước, hoặc châm <b>lửa</b> vào <b>khí mê-tan</b>.</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================= CẤU HÌNH LƯỚI ============================= */
+const SIZE = 7;
+const COLS = 120;
+const ROWS = 76;
+
+const canvas = document.getElementById('sim');
+canvas.width = COLS*SIZE;
+canvas.height = ROWS*SIZE;
+const ctx = canvas.getContext('2d');
+
+function idx(x,y){ return y*COLS+x; }
+function inBounds(x,y){ return x>=0 && x<COLS && y>=0 && y<ROWS; }
+function randInt(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+
+/* ============================= BẢNG NGUYÊN LIỆU ============================= */
+const FIRE_LIFE=[25,45], STEAM_LIFE=[90,160], SMOKE_LIFE=[70,130], METHANE_LIFE=[420,680];
+
+const CATALOG = {
+  sand:      { name:'Cát',          cat:'powder', density:5,   flammable:false, colors:['#d9c384','#cdb672','#e0cc95'],
+               desc:'Chủ yếu là silic đioxit (SiO₂). Khi bị nung nóng liên tục bởi lửa hoặc dung nham, cát nóng chảy và nguội thành thuỷ tinh.' },
+  salt:      { name:'Muối',         cat:'powder', density:3,   flammable:false, colors:['#f4f3ec','#eceae0'],
+               desc:'Tinh thể natri clorua (NaCl). Tan trong nước, tạo thành dung dịch nước muối.' },
+  ash:       { name:'Tro',          cat:'powder', density:1,   flammable:false, colors:['#8f8a82','#7c776f'],
+               desc:'Phần khoáng chất còn sót lại sau khi vật liệu hữu cơ (gỗ, cây) cháy hết.' },
+  sodium:    { name:'Natri (Na)',   cat:'powder', density:0.6, flammable:false, colors:['#c9b8e8','#b39ddb'],
+               desc:'Kim loại kiềm, nhẹ hơn nước nên nổi trên mặt. Phản ứng dữ dội với nước: 2Na + 2H₂O → 2NaOH + H₂↑, toả nhiệt mạnh và có thể bốc cháy.' },
+  gunpowder: { name:'Thuốc súng',    cat:'powder', density:4,   flammable:true,  colors:['#424949','#343a40','#212529'],
+               desc:'Hỗn hợp nhạy cháy, bốc cháy cực nhanh khi tiếp xúc với lửa/dung nham.' },
+  bakingsoda:{ name:'Baking Soda',   cat:'powder', density:2.5, flammable:false, colors:['#f2f3f4','#eaecee'],
+               desc:'Natri bicacbonat (NaHCO₃). Phản ứng trung hoà sủi bọt khí CO₂ mạnh mẽ khi gặp axit.' },
+  rust:      { name:'Gỉ sắt',        cat:'powder', density:2.8, flammable:false, colors:['#ba4a00','#a04000'],
+               desc:'Oxit sắt Fe₂O₃ được hình thành khi sắt bị ăn mòn bởi axit hoặc hơi ẩm.' },
+  glass_shard:{ name:'Mảnh kính',     cat:'powder', density:4.5, flammable:false, colors:['#aed6f1','#d6eaf8'],
+               desc:'Mảnh vỡ thuỷ tinh, chìm sâu dưới đáy các chất lỏng, trơ hóa học.' },
+  magnesium: { name:'Magie (Mg)',    cat:'powder', density:1.7, flammable:false, colors:['#b2bec3','#dfe6e9','#dcdde1'],
+               desc:'Kim loại magie bột màu xám bạc. Rất dễ cháy, khi bắt lửa sẽ cháy với ngọn lửa trắng lóa mắt và tỏa nhiệt lượng cực cao.' },
+  magnesia:  { name:'Magnesia (MgO)',cat:'powder', density:1.5, flammable:false, colors:['#f5f6fa','#ecefe6'],
+               desc:'Magie Oxit (MgO) dạng bột mịn màu trắng tuyết sinh ra sau khi magie cháy.' },
+  sulfur:    { name:'Lưu huỳnh (S)', cat:'powder', density:2.0, flammable:false, colors:['#f1c40f','#f5b041','#f39c12'],
+               desc:'Bột lưu huỳnh màu vàng chanh. Dễ bắt cháy tạo ra ngọn lửa màu xanh lam đậm đặc trưng và giải phóng khí độc SO₂.' },
+
+  water:     { name:'Nước',         cat:'liquid', density:1,   flammable:false, colors:['#3d7fd8','#3572c4'],
+               desc:'H₂O — dung môi phổ biến nhất. Dập tắt lửa, làm nguội dung nham thành đá, hoà tan muối.' },
+  saltwater: { name:'Nước muối',    cat:'liquid', density:1.2, flammable:false, colors:['#5f88a8','#527a99'],
+               desc:'Dung dịch nước có hoà tan NaCl, dẫn điện tốt hơn nước tinh khiết.' },
+  oil:       { name:'Dầu',          cat:'liquid', density:0.8, flammable:true,  colors:['#3a2c1e','#2f2418'],
+               desc:'Hydrocacbon lỏng, nhẹ hơn nước nên nổi lên trên. Rất dễ bắt lửa.' },
+  petrol:    { name:'Xăng',          cat:'liquid', density:0.7, flammable:true,  colors:['#f5d35c','#e67e22'],
+               desc:'Chất lỏng hydrocacbon cực kỳ dễ bay hơi và bắt cháy nhanh hơn dầu.' },
+  acid:      { name:'Axit',         cat:'liquid', density:1.1, flammable:false, colors:['#9fe83d','#8fd42f'],
+               desc:'Dung dịch axit mạnh, ăn mòn kim loại, đá, gỗ — hoà tan chúng dần theo thời gian.' },
+  vinegar:   { name:'Giấm',          cat:'liquid', density:1.01,flammable:false, colors:['#e6ecdb','#c3cfb8'],
+               desc:'Axit axetic loãng (CH₃COOH). Phản ứng sủi bọt chậm với baking soda và ăn mòn kim loại nhẹ.' },
+  lava:      { name:'Dung nham',    cat:'liquid', density:3,   flammable:false, colors:['#e2540f','#c8460c'],
+               desc:'Đá nóng chảy ở nhiệt độ trên 700°C. Đốt cháy vật liệu dễ cháy, nguội thành đá ngay khi gặp nước.' },
+  algae:     { name:'Tảo xanh',      cat:'liquid', density:0.95,flammable:true,  colors:['#196f3d','#145a32'],
+               desc:'Thực vật thuỷ sinh, sinh sản nhân đôi rất nhanh khi ở trong nước ẩm.' },
+  peroxide:  { name:'Oxy già (H₂O₂)',cat:'liquid', density:1.45,flammable:false, colors:['#e8f8f5','#d1f2eb'],
+               desc:'Nước oxy già (H₂O₂). Phân hủy cực nhanh khi gặp xúc tác tro, gỉ sắt hoặc magie, sủi bọt giải phóng lượng lớn khí Oxy (O₂).' },
+  nitroglycerin: { name:'Nitroglycerin',cat:'liquid', density:1.6,flammable:false, colors:['#e67e22','#d35400'],
+               desc:'Chất nổ lỏng nitroglycerin cực kỳ không ổn định. Phát nổ lớn khi tiếp xúc với nhiệt độ cao hoặc lửa.' },
+  mercury:   { name:'Thuỷ ngân (Hg)',cat:'liquid', density:13.6,flammable:false, colors:['#bdc3c7','#7f8c8d'],
+               desc:'Kim loại dạng lỏng ở nhiệt độ thường. Cực kỳ nặng (density = 13.6), trơ với nước nhưng ăn mòn mạnh nhôm tạo amalgam.' },
+
+  steam:     { name:'Hơi nước',     cat:'gas', flammable:false, colors:['#e7f3f7','#dcedf2'], life:STEAM_LIFE,
+               desc:'Nước ở thể khí, sinh ra khi nước gặp nhiệt độ cao. Ngưng tụ trở lại thành nước theo thời gian.' },
+  smoke:     { name:'Khói',         cat:'gas', flammable:false, colors:['#5c5d63','#4d4e53'], life:SMOKE_LIFE,
+               desc:'Hạt mịn và khí sinh ra khi cháy, bay lên rồi tan dần vào không khí.' },
+  gas:       { name:'Khí mê-tan',   cat:'gas', flammable:true,  colors:['#d8e0a0','#cdd692'], life:METHANE_LIFE,
+               desc:'CH₄ — khí nhẹ hơn không khí, cực kỳ dễ cháy và có thể gây nổ khi gặp lửa.' },
+  oxygen:    { name:'Khí Oxy (O₂)',  cat:'gas',    flammable:false, colors:['#c1f4ff','#dff7ff'], life:[250,450],
+               desc:'Khí duy trì sự cháy. Làm ngọn lửa cháy to hơn hoặc bùng phát.' },
+  co2:       { name:'Khí CO₂',       cat:'gas',    flammable:false, colors:['#e1ebed','#cfdbde'], life:[200,350],
+               desc:'Khí trơ, dập tắt sự cháy và làm nguội dung nham thành đá.' },
+  chlorine:  { name:'Khí Clo (Cl₂)', cat:'gas',    flammable:false, colors:['#d6efb3','#b9e585'], life:[300,500],
+               desc:'Khí độc màu vàng lục, phản ứng với nước tạo axit và ăn mòn kim loại.' },
+  so2:       { name:'Khí SO₂',       cat:'gas',    flammable:false, colors:['#ebf5fb','#d6eaf8'], life:[250,400],
+               desc:'Khí lưu huỳnh đioxit mùi xốc. Phản ứng với nước tạo axit sunfurơ ăn mòn nhẹ, diệt tảo xanh.' },
+  acetylene: { name:'Khí Axetilen',  cat:'gas',    flammable:true,  colors:['#f9ebd2','#f5cba7'], life:[450,750],
+               desc:'Khí axetilen (C₂H₂), nhẹ hơn không khí, cực kỳ nhạy nổ khi tiếp xúc với bất kỳ tia lửa nào.' },
+
+  stone:     { name:'Đá',           cat:'solid', flammable:false, colors:['#6b6f76','#5f636a'],
+               desc:'Hình thành khi dung nham nguội đi nhanh chóng, thường là khi tiếp xúc với nước.' },
+  wood:      { name:'Gỗ',           cat:'solid', flammable:true,  colors:['#7a5230','#6b4527'],
+               desc:'Vật liệu hữu cơ giàu cellulose, dễ cháy, để lại tro sau khi cháy hết.' },
+  ice:       { name:'Băng',         cat:'solid', flammable:false, colors:['#c3ecfb','#b3e3f5'],
+               desc:'Nước ở thể rắn, dưới 0°C. Tan chảy thành nước khi ở gần nguồn nhiệt.' },
+  metal:     { name:'Kim loại',     cat:'solid', flammable:false, colors:['#a3aab2','#8f96a0'],
+               desc:'Sắt (Fe) dẫn nhiệt tốt, bị axit ăn mòn dần và giải phóng khí hydro.' },
+  wall:      { name:'Tường',        cat:'solid', flammable:false, indestructible:true, colors:['#33383d'],
+               desc:'Vật liệu trơ, không phản ứng và không bị phá huỷ — dùng để dựng khung chứa.' },
+  glass:     { name:'Thuỷ tinh',    cat:'solid', flammable:false, colors:['#cdeae7','#bfe0dd'],
+               desc:'Cát (SiO₂) nóng chảy rồi nguội đi, tạo thành thuỷ tinh trong suốt.' },
+  seed:      { name:'Hạt giống',    cat:'solid', flammable:true,  colors:['#5c7a34'],
+               desc:'Nảy mầm thành cây khi có nước ở gần.' },
+  plant:     { name:'Cây',          cat:'solid', flammable:true,  colors:['#3f8f3f','#357b35'],
+               desc:'Thực vật quang hợp, dễ cháy giống gỗ, để lại tro sau khi cháy.' },
+  tnt:       { name:'Thuốc nổ',     cat:'solid', flammable:false, colors:['#c0392b'],
+               desc:'Phát nổ dữ dội khi tiếp xúc với lửa hoặc dung nham, phá huỷ khu vực xung quanh.' },
+  uranium:   { name:'Uranium (U)',   cat:'solid',  flammable:false, colors:['#2ecc71','#27ae60'],
+               desc:'Nguyên tố phóng xạ. Phát ra bức xạ nhiệt, phát sáng màu xanh lá và phát nổ khi gặp thuốc nổ/TNT.' },
+  torch:     { name:'Nguồn nhiệt',   cat:'solid',  flammable:false, indestructible:true, colors:['#ff5722','#e64a19'],
+               desc:'Nguồn nhiệt vô hạn liên tục toả lửa để kích hoạt các phản ứng.' },
+  carbide:   { name:'Đất đèn (CaC₂)',cat:'solid',  flammable:false, colors:['#4d5656','#5d6d7e'],
+               desc:'Canxi cacbua (CaC₂). Khi tiếp xúc với nước, sủi bọt giải phóng khí axetilen (C₂H₂) nhạy nổ.' },
+  amalgam:   { name:'Amalgam',      cat:'solid',  flammable:false, colors:['#7f8c8d','#95a5a6'],
+               desc:'Hợp kim thuỷ ngân giòn sinh ra khi thuỷ ngân ăn mòn kim loại, dễ bị axit phá huỷ nhanh.' },
+
+  fire:      { name:'Lửa',          cat:'special', flammable:false, colors:['#ff6a2b','#ff9a3d','#ffcf4d'], life:FIRE_LIFE,
+               desc:'Phản ứng oxy hoá toả nhiệt. Lan sang vật liệu dễ cháy, bị dập tắt ngay khi gặp nước.' },
+  whitefire: { name:'Lửa trắng',     cat:'special', flammable:false, colors:['#ffffff','#f5f6fa','#ffeaa7'], life:[15,30],
+               desc:'Lửa nhiệt độ siêu cao sinh ra khi magie cháy. Làm nóng cát siêu nhanh.' },
+  bluefire:  { name:'Lửa xanh',      cat:'special', flammable:false, colors:['#2980b9','#3498db','#5dade2'], life:[20,35],
+               desc:'Lửa lưu huỳnh cháy. Nhiệt độ trung bình, khi tắt giải phóng ra khí SO₂.' },
+};
+
+const TOOLS = {
+  eraser: { name:'Tẩy', colors:['#0000'], desc:'Xoá các ô đã vẽ, trả về khoảng trống.' }
+};
+
+const GROUPS = [
+  { label:'Bột',      items:['sand','salt','ash','sodium','gunpowder','bakingsoda','rust','glass_shard','magnesium','magnesia','sulfur'] },
+  { label:'Chất lỏng',items:['water','saltwater','oil','petrol','acid','vinegar','lava','algae','peroxide','nitroglycerin','mercury'] },
+  { label:'Khí',      items:['steam','smoke','gas','oxygen','co2','chlorine','so2','acetylene'] },
+  { label:'Chất rắn', items:['stone','wood','ice','metal','wall','glass','seed','plant','tnt','uranium','torch','carbide','amalgam'] },
+  { label:'Đặc biệt', items:['fire','whitefire','bluefire'] },
+  { label:'Công cụ',  items:['eraser'] },
+];
+
+const EXTRA_ELEMENTS = [
+  // category: Bột (Powders) - 25 elements
+  { id: 'limestone_p', name: 'Bột đá vôi', cat: 'powder', density: 2.7, colors: ['#eaeae6', '#dfdfd9'], desc: 'Canxi cacbonat (CaCO₃) dạng bột. Phản ứng với axit giải phóng khí CO₂.' },
+  { id: 'clay_p', name: 'Bột đất sét', cat: 'powder', density: 2.5, colors: ['#bcaaa4', '#a1887f'], desc: 'Đất sét mịn. Khi gặp nước biến thành bùn nhão.' },
+  { id: 'coal_p', name: 'Bột than', cat: 'powder', density: 1.5, flammable: true, colors: ['#2c3e50', '#1a252f'], desc: 'Cacbon dạng bột. Dễ cháy tạo khí CO₂.' },
+  { id: 'copper_p', name: 'Bột đồng', cat: 'powder', density: 8.9, colors: ['#d35400', '#e67e22'], desc: 'Kim loại đồng dạng bột. Bị axit ăn mòn tạo dung dịch xanh lam.' },
+  { id: 'iron_p', name: 'Bột sắt', cat: 'powder', density: 7.8, colors: ['#7f8c8d', '#95a5a6'], desc: 'Kim loại sắt dạng bột. Bị axit ăn mòn tạo gỉ sắt.' },
+  { id: 'aluminum_p', name: 'Bột nhôm', cat: 'powder', density: 2.7, colors: ['#bdc3c7', '#ecf0f1'], desc: 'Kim loại nhôm bột. Phản ứng mạnh với axit giải phóng khí Hydro.' },
+  { id: 'zinc_p', name: 'Bột kẽm', cat: 'powder', density: 7.1, colors: ['#95a5a6', '#bdc3c7'], desc: 'Bột kim loại kẽm. Phản ứng với axit sinh khí Hydro.' },
+  { id: 'lead_p', name: 'Bột chì', cat: 'powder', density: 11.3, colors: ['#566573', '#7f8c8d'], desc: 'Kim loại chì dạng bột rất nặng. Độc hại và trơ hóa học hơn kẽm.' },
+  { id: 'sugar_p', name: 'Đường cát', cat: 'powder', density: 1.6, flammable: true, colors: ['#ffffff', '#f5f6fa'], desc: 'Đường saccharose. Tan trong nước, bị axit sunfurơ hóa than đen.' },
+  { id: 'flour_p', name: 'Bột mì', cat: 'powder', density: 1.2, flammable: true, colors: ['#fcfcfc', '#f5f6fa'], desc: 'Tinh bột mịn. Dễ bắt lửa tạo đám cháy bụi.' },
+  { id: 'chalk_p', name: 'Bột phấn', cat: 'powder', density: 2.2, colors: ['#f1f2f6', '#ffffff'], desc: 'Canxi cacbonat tinh khiết dùng làm phấn viết.' },
+  { id: 'gypsum_p', name: 'Bột thạch cao', cat: 'powder', density: 2.3, colors: ['#f5f6fa', '#dfe6e9'], desc: 'Thạch cao khan. Hút nước hóa rắn thành khối thạch cao cứng.' },
+  { id: 'potassium_p', name: 'Kali bột', cat: 'powder', density: 0.86, colors: ['#bdc3c7', '#dfe6e9'], desc: 'Kim loại kiềm Kali. Phản ứng nổ cực mạnh với nước.' },
+  { id: 'phosphorus_p', name: 'Phốt pho đỏ', cat: 'powder', density: 2.2, flammable: true, colors: ['#c0392b', '#962d22'], desc: 'Phốt pho đỏ. Bắt lửa ở nhiệt độ cao hơn phốt pho trắng.' },
+  { id: 'urea_p', name: 'Bột urê', cat: 'powder', density: 1.3, colors: ['#ffffff', '#eceff1'], desc: 'Phân đạm urê (NH₂)₂CO. Tan rất mạnh trong nước.' },
+  { id: 'starch_p', name: 'Tinh bột', cat: 'powder', density: 1.5, flammable: true, colors: ['#f8f9fa', '#e9ecef'], desc: 'Chất hữu cơ thực vật. Tan trong nước nóng thành hồ tinh bột.' },
+  { id: 'gold_p', name: 'Bột vàng', cat: 'powder', density: 19.3, colors: ['#f1c40f', '#f39c12'], desc: 'Kim loại vàng nguyên chất cực nặng. Hoàn toàn trơ hóa học.' },
+  { id: 'silver_p', name: 'Bột bạc', cat: 'powder', density: 10.5, colors: ['#bdc3c7', '#dfe6e9'], desc: 'Kim loại bạc dạng bột. Dẫn điện tốt nhất.' },
+  { id: 'calcium_p', name: 'Canxi bột', cat: 'powder', density: 1.54, colors: ['#dfe6e9', '#b2bec3'], desc: 'Kim loại kiềm thổ Canxi. Phản ứng mạnh với nước tạo bọt khí Hydro.' },
+  { id: 'carbon_p', name: 'Bột cacbon', cat: 'powder', density: 2.1, flammable: true, colors: ['#1e272e', '#2f3542'], desc: 'Bột than hoạt tính hấp phụ độc chất.' },
+  { id: 'soda_p', name: 'Soda Ash', cat: 'powder', density: 2.5, colors: ['#f1f2f6', '#ced6e0'], desc: 'Natri cacbonat (Na₂CO₃). Dùng trong công nghiệp thủy tinh.' },
+  { id: 'borax_p', name: 'Hàn sa', cat: 'powder', density: 1.7, colors: ['#ffffff', '#f1f2f6'], desc: 'Natri borat dùng làm chất tẩy rửa.' },
+  { id: 'silica_p', name: 'Silica Gel', cat: 'powder', density: 2.1, colors: ['#74b9ff', '#81ecec'], desc: 'Hạt hút ẩm silica gel.' },
+  { id: 'nitrate_p', name: 'Muối diêm', cat: 'powder', density: 2.1, colors: ['#f1f2f6', '#ffffff'], desc: 'Kali nitrat (KNO₃), chất oxy hóa mạnh chế tạo thuốc súng.' },
+  { id: 'rust_copper', name: 'Rỉ đồng', cat: 'powder', density: 4.0, colors: ['#1abc9c', '#16a085'], desc: 'Đồng cacbonat bazơ màu xanh ngọc khi đồng bị ăn mòn.' },
+
+  // category: Chất lỏng (Liquids) - 25 elements
+  { id: 'ethanol', name: 'Cồn (Ethanol)', cat: 'liquid', density: 0.789, flammable: true, colors: ['#a5f3fc', '#e0f2fe'], desc: 'Rượu etylic (C₂H₅OH). Dễ cháy tạo ngọn lửa xanh lam nhẹ.' },
+  { id: 'acetone', name: 'Nước rửa móng', cat: 'liquid', density: 0.784, flammable: true, colors: ['#ecfeff', '#cffafe'], desc: 'Axeton, dung môi hữu cơ bay hơi cực nhanh và rất dễ cháy.' },
+  { id: 'glycerin', name: 'Glycerol', cat: 'liquid', density: 1.26, colors: ['#f1f5f9', '#e2e8f0'], desc: 'Chất lỏng nhớt, ngọt, dùng chế tạo chất nổ.' },
+  { id: 'diesel', name: 'Dầu Diesel', cat: 'liquid', density: 0.85, flammable: true, colors: ['#b5c490', '#9da97e'], desc: 'Nhiên liệu diesel cho động cơ lớn.' },
+  { id: 'honey', name: 'Mật ong', cat: 'liquid', density: 1.42, colors: ['#d35400', '#f39c12'], desc: 'Chất lỏng rất nhớt, ngọt. Tan chậm trong nước.' },
+  { id: 'milk', name: 'Sữa', cat: 'liquid', density: 1.03, colors: ['#f8fafc', '#f1f5f9'], desc: 'Hỗn dịch dinh dưỡng, hòa tan hoàn toàn trong nước.' },
+  { id: 'coffee', name: 'Cà phê', cat: 'liquid', density: 1.0, colors: ['#4a3728', '#3d2e22'], desc: 'Nước cà phê đậm đặc màu nâu.' },
+  { id: 'tea', name: 'Nước trà', cat: 'liquid', density: 1.0, colors: ['#d4ac0d', '#f4d03f'], desc: 'Nước trà màu vàng nhạt chứa tanin.' },
+  { id: 'juice', name: 'Nước cam', cat: 'liquid', density: 1.05, colors: ['#ff7f50', '#ff9f43'], desc: 'Nước trái cây chứa axit citric loãng.' },
+  { id: 'soap', name: 'Nước xà phòng', cat: 'liquid', density: 1.02, colors: ['#e2e8f0', '#cbd5e1'], desc: 'Dung dịch tẩy rửa kiềm nhẹ.' },
+  { id: 'ink_blue', name: 'Mực xanh', cat: 'liquid', density: 1.01, colors: ['#2563eb', '#1d4ed8'], desc: 'Dung dịch mực viết máy màu xanh.' },
+  { id: 'ink_red', name: 'Mực đỏ', cat: 'liquid', density: 1.01, colors: ['#dc2626', '#b91c1c'], desc: 'Dung dịch mực viết màu đỏ.' },
+  { id: 'paint_green', name: 'Sơn xanh lá', cat: 'liquid', density: 1.15, colors: ['#16a34a', '#15803d'], desc: 'Chất lỏng nhớt làm sơn phủ.' },
+  { id: 'tar_liquid', name: 'Hắc ín lỏng', cat: 'liquid', density: 1.2, flammable: true, colors: ['#0f172a', '#020617'], desc: 'Nhựa đường lỏng nhớt và bám dính cực mạnh.' },
+  { id: 'blood', name: 'Máu', cat: 'liquid', density: 1.06, colors: ['#991b1b', '#7f1d1d'], desc: 'Chất lỏng sinh học chứa huyết cầu tố đỏ.' },
+  { id: 'coconut_w', name: 'Nước dừa', cat: 'liquid', density: 1.0, colors: ['#f8fafc', '#ffffff'], desc: 'Nước ngọt tự nhiên.' },
+  { id: 'bromine_l', name: 'Brom lỏng', cat: 'liquid', density: 3.1, colors: ['#78350f', '#9a3412'], desc: 'Phi kim lỏng màu đỏ nâu, dễ bay hơi tạo khí độc Brom ăn mòn.' },
+  { id: 'gallium_l', name: 'Gali lỏng', cat: 'liquid', density: 5.9, colors: ['#94a3b8', '#cbd5e1'], desc: 'Kim loại gali nóng chảy ở 29.7°C.' },
+  { id: 'ammonia_l', name: 'Nước amoniac', cat: 'liquid', density: 0.9, colors: ['#e0f2fe', '#bae6fd'], desc: 'Dung dịch NH₃ khai sộc và kiềm.' },
+  { id: 'nitric_acid', name: 'Axit Nitric', cat: 'liquid', density: 1.4, colors: ['#fef08a', '#fde047'], desc: 'HNO₃ đặc ăn mòn cực mạnh, phản ứng giải phóng khí NO₂.' },
+  { id: 'sulfuric_a', name: 'Axit Sulfuric', cat: 'liquid', density: 1.8, colors: ['#f1f5f9', '#cbd5e1'], desc: 'H₂SO₄ đặc háo nước mạnh, cacbon hóa gỗ/cây.' },
+  { id: 'chlorine_w', name: 'Nước clo', cat: 'liquid', density: 1.1, colors: ['#ecfccb', '#d9f99d'], desc: 'Nước clo khử trùng chứa khí clo hòa tan.' },
+  { id: 'olive_oil', name: 'Dầu ô liu', cat: 'liquid', density: 0.91, flammable: true, colors: ['#a3e635', '#84cc16'], desc: 'Dầu thực vật nhẹ.' },
+  { id: 'hydro_perox', name: 'Nước oxy già', cat: 'liquid', density: 1.11, colors: ['#f0fdfa', '#ccfbf1'], desc: 'Dung dịch H₂O₂ loãng sát trùng.' },
+  { id: 'salt_mud', name: 'Bùn muối', cat: 'liquid', density: 1.4, colors: ['#78716c', '#57534e'], desc: 'Hỗn hợp bùn đất cát và nước muối.' },
+
+  // category: Khí (Gases) - 25 elements
+  { id: 'hydrogen', name: 'Khí Hydro (H₂)', cat: 'gas', flammable: true, colors: ['#ecfeff', '#cffafe'], life: [300, 500], desc: 'Khí nhẹ nhất, dễ cháy nổ tạo thành nước.' },
+  { id: 'helium', name: 'Khí Heli (He)', cat: 'gas', colors: ['#faf5ff', '#f3e8ff'], life: [400, 600], desc: 'Khí quý siêu nhẹ, hoàn toàn trơ.' },
+  { id: 'nitrogen', name: 'Khí Nitơ (N₂)', cat: 'gas', colors: ['#f8fafc', '#f1f5f9'], life: [350, 550], desc: 'Khí trơ chiếm 78% không khí.' },
+  { id: 'neon', name: 'Khí Neon (Ne)', cat: 'gas', colors: ['#ffedd5', '#fed7aa'], life: [500, 700], desc: 'Khí trơ phát ánh sáng cam đỏ khi phóng điện.' },
+  { id: 'argon', name: 'Khí Argon (Ar)', cat: 'gas', colors: ['#f0fdfa', '#ccfbf1'], life: [450, 650], desc: 'Khí bảo vệ hàn kim loại.' },
+  { id: 'co_gas', name: 'Khí CO', cat: 'gas', flammable: true, colors: ['#cbd5e1', '#94a3b8'], life: [300, 500], desc: 'Cacbon monoxit độc, cháy ngọn lửa xanh lam.' },
+  { id: 'n2o_gas', name: 'Khí cười (N₂O)', cat: 'gas', colors: ['#fdf2f8', '#fbcfe8'], life: [300, 480], desc: 'Dinitơ oxit gây tê nhẹ.' },
+  { id: 'ammonia_g', name: 'Khí Amoniac', cat: 'gas', colors: ['#eff6ff', '#dbeafe'], life: [280, 450], desc: 'NH₃ nhẹ mùi khai đặc trưng.' },
+  { id: 'h2s_gas', name: 'Khí H₂S', cat: 'gas', flammable: true, colors: ['#fef3c7', '#fde68a'], life: [260, 420], desc: 'Khí hydro sunfua mùi trứng thối độc hại.' },
+  { id: 'ethylene', name: 'Khí Etilen', cat: 'gas', flammable: true, colors: ['#fafaf9', '#f5f5f4'], life: [400, 600], desc: 'Khí hydrocarbon kích thích quả chín.' },
+  { id: 'propane', name: 'Khí Propane', cat: 'gas', flammable: true, colors: ['#fff7ed', '#ffedd5'], life: [420, 620], desc: 'Khí hóa lỏng dùng trong bình gas.' },
+  { id: 'butane', name: 'Khí Butane', cat: 'gas', flammable: true, colors: ['#fffbeb', '#fef3c7'], life: [410, 610], desc: 'Khí gas bật lửa.' },
+  { id: 'fluorine', name: 'Khí Flo (F₂)', cat: 'gas', colors: ['#fef9c3', '#fef08a'], life: [200, 350], desc: 'Khí độc màu vàng nhạt phản ứng nổ với mọi chất.' },
+  { id: 'bromine_v', name: 'Hơi Brom', cat: 'gas', colors: ['#fde8e8', '#fbd5d5'], life: [250, 420], desc: 'Hơi halogen màu đỏ nâu nặng và ăn mòn.' },
+  { id: 'ozone', name: 'Khí Ôzôn (O₃)', cat: 'gas', colors: ['#e0f2fe', '#bae6fd'], life: [150, 300], desc: 'Oxy hoạt tính dập khuẩn cực mạnh.' },
+  { id: 'so3_gas', name: 'Khí SO₃', cat: 'gas', colors: ['#f1f5f9', '#cbd5e1'], life: [200, 350], desc: 'Lưu huỳnh trioxit ngưng tụ tạo axit sulfuric.' },
+  { id: 'no2_gas', name: 'Khí NO₂', cat: 'gas', colors: ['#78350f', '#9a3412'], life: [240, 400], desc: 'Khí nitơ đioxit màu nâu đỏ độc hại.' },
+  { id: 'hydro_g', name: 'Khí HCl', cat: 'gas', colors: ['#f5f5f4', '#e7e5e4'], life: [220, 380], desc: 'Khí hydro clorua mùi xốc tạo khói axit.' },
+  { id: 'methane_p', name: 'Mê-tan nguyên chất', cat: 'gas', flammable: true, colors: ['#e2f0d9', '#c5e0b4'], life: [400, 600], desc: 'Khí mỏ dầu siêu sạch.' },
+  { id: 'steam_hot', name: 'Hơi nước nóng', cat: 'gas', colors: ['#ffffff', '#f1f5f9'], life: [80, 120], desc: 'Hơi nước quá nhiệt.' },
+  { id: 'smoke_dark', name: 'Khói đen', cat: 'gas', colors: ['#1e293b', '#0f172a'], life: [100, 180], desc: 'Khói chứa bồ hóng than cháy dở.' },
+  { id: 'smoke_white', name: 'Khói trắng', cat: 'gas', colors: ['#f8fafc', '#cbd5e1'], life: [120, 200], desc: 'Khói chứa hạt oxit phốt pho.' },
+  { id: 'gas_leak', name: 'Khí rò rỉ', cat: 'gas', flammable: true, colors: ['#fef08a', '#fde047'], life: [300, 500], desc: 'Hỗn hợp khí gas dễ cháy.' },
+  { id: 'xenon', name: 'Khí Xenon (Xe)', cat: 'gas', colors: ['#faf5ff', '#f3e8ff'], life: [500, 750], desc: 'Khí trơ siêu nặng dùng làm đèn chớp.' },
+  { id: 'krypton', name: 'Khí Krypton', cat: 'gas', colors: ['#fdf2f8', '#fbcfe8'], life: [480, 700], desc: 'Khí hiếm dùng trong kính quang học.' },
+
+  // category: Chất rắn (Solids) - 25 elements
+  { id: 'concrete', name: 'Bê tông', cat: 'solid', colors: ['#94a3b8', '#64748b'], desc: 'Vật liệu xây dựng cứng rắn chống chịu lửa.' },
+  { id: 'brick', name: 'Gạch nung', cat: 'solid', colors: ['#b91c1c', '#991b1b'], desc: 'Đá nhân tạo từ đất sét nung trơ hóa học.' },
+  { id: 'plastic', name: 'Nhựa (Plastic)', cat: 'solid', flammable: true, colors: ['#3b82f6', '#1d4ed8'], desc: 'Polyme dẻo nóng chảy khi gặp nhiệt.' },
+  { id: 'rubber', name: 'Cao su', cat: 'solid', flammable: true, colors: ['#1e293b', '#334155'], desc: 'Polyme đàn hồi bắt lửa tạo khói đen kịt.' },
+  { id: 'wax', name: 'Sáp Paraffin', cat: 'solid', flammable: true, colors: ['#fef08a', '#fef9c3'], desc: 'Sáp làm nến, nóng chảy nhanh thành dầu parafin.' },
+  { id: 'dry_ice', name: 'Băng khô', cat: 'solid', colors: ['#e2e8f0', '#f1f5f9'], desc: 'CO₂ thể rắn thăng hoa trực tiếp thành khí CO₂ lạnh giá.' },
+  { id: 'potassium', name: 'Kali khối', cat: 'solid', colors: ['#94a3b8', '#cbd5e1'], desc: 'Kim loại Kali phản ứng cực nổ mạnh với nước.' },
+  { id: 'calcium', name: 'Canxi khối', cat: 'solid', colors: ['#b2bec3', '#dfe6e9'], desc: 'Kim loại canxi kiềm thổ phản ứng mạnh.' },
+  { id: 'copper_solid', name: 'Đồng khối', cat: 'solid', colors: ['#ea580c', '#c2410c'], desc: 'Đồng dẫn nhiệt và điện rất tốt.' },
+  { id: 'zinc_solid', name: 'Kẽm khối', cat: 'solid', colors: ['#64748b', '#475569'], desc: 'Kẽm kim loại tráng bảo vệ tôn rỉ.' },
+  { id: 'aluminum_s', name: 'Nhôm khối', cat: 'solid', colors: ['#cbd5e1', '#cbd5e1'], desc: 'Nhôm kim loại nhẹ làm vỏ máy bay.' },
+  { id: 'lead_solid', name: 'Chì khối', cat: 'solid', colors: ['#334155', '#1e293b'], desc: 'Kim loại chì siêu nặng cản tia phóng xạ.' },
+  { id: 'tin_solid', name: 'Thiếc khối', cat: 'solid', colors: ['#94a3b8', '#e2e8f0'], desc: 'Thiếc làm chất hàn hợp kim.' },
+  { id: 'gold_solid', name: 'Vàng khối', cat: 'solid', colors: ['#fbbf24', '#f59e0b'], desc: 'Kim loại quý trang sức trơ vĩnh cửu.' },
+  { id: 'silver_s', name: 'Bạc khối', cat: 'solid', colors: ['#cbd5e1', '#f1f5f9'], desc: 'Bạc kim loại dẫn điện ưu việt.' },
+  { id: 'sugar_c', name: 'Phèn đường', cat: 'solid', colors: ['#f1f5f9', '#ffffff'], desc: 'Tinh thể đường kết tinh.' },
+  { id: 'salt_c', name: 'Đá muối', cat: 'solid', colors: ['#fca5a5', '#fee2e2'], desc: 'Tinh thể muối halite màu hồng.' },
+  { id: 'charcoal', name: 'Than củi', cat: 'solid', flammable: true, colors: ['#1e293b', '#0f172a'], desc: 'Than làm từ gỗ cháy kị khí.' },
+  { id: 'silicon', name: 'Bán dẫn Silic', cat: 'solid', colors: ['#475569', '#334155'], desc: 'Silic tinh thể chế tạo vi mạch.' },
+  { id: 'glass_dark', name: 'Kính màu', cat: 'solid', colors: ['#0f766e', '#115e59'], desc: 'Thuỷ tinh chứa oxit kim loại màu xanh đen.' },
+  { id: 'celluloid', name: 'Nhựa Xenlulo', cat: 'solid', flammable: true, colors: ['#fb923c', '#f97316'], desc: 'Chất nhựa cực nhạy lửa.' },
+  { id: 'brass', name: 'Đồng thau', cat: 'solid', colors: ['#ca8a04', '#a16207'], desc: 'Hợp kim của đồng và kẽm.' },
+  { id: 'bronze', name: 'Đồng điếu', cat: 'solid', colors: ['#854d0e', '#713f12'], desc: 'Hợp kim của đồng và thiếc.' },
+  { id: 'steel', name: 'Thép carbon', cat: 'solid', colors: ['#475569', '#334155'], desc: 'Thép hợp kim cứng cáp chịu lực.' },
+  { id: 'magnesium_s', name: 'Magie khối', cat: 'solid', colors: ['#94a3b8', '#cbd5e1'], desc: 'Kim loại magie khối cháy ngọn lửa trắng.' },
+  { id: 'plutonium', name: 'Plutonium (Pu)', cat: 'solid', colors: ['#a855f7', '#7c3aed', '#4c1d95'], desc: 'Nguyên tố phóng xạ đặc biệt nặng và siêu nhạy nổ. Gây phản ứng nhiệt hạch kinh hoàng.' }
+];
+
+const GENERIC_REACTIONS = [
+  { a: 'acid', b: 'copper_p', outA: 'water', outB: 'rust_copper', prob: 0.03, msg: '⚗️ Axit ăn mòn bột đồng tạo rỉ đồng màu xanh ngọc.' },
+  { a: 'acid', b: 'iron_p', outA: 'water', outB: 'rust', prob: 0.04, msg: '⚗️ Axit ăn mòn bột sắt giải phóng khí Hydro và tạo gỉ sắt.' },
+  { a: 'acid', b: 'aluminum_p', outA: 'hydrogen', outB: null, prob: 0.08, msg: '⚗️ Axit ăn mòn bột nhôm mạnh mẽ giải phóng khí Hydro.' },
+  { a: 'acid', b: 'zinc_p', outA: 'hydrogen', outB: null, prob: 0.07, msg: '⚗️ Axit phản ứng với kẽm tạo khí Hydro.' },
+  { a: 'acid', b: 'lead_p', outA: 'hydrogen', outB: null, prob: 0.01, msg: '⚗️ Axit ăn mòn bột chì chậm chạp giải phóng khí Hydro.' },
+  { a: 'acid', b: 'amalgam', outA: 'mercury', outB: 'acid', prob: 0.09, msg: '⚗️ Axit ăn mòn amalgam giải phóng thuỷ ngân lỏng.' },
+  { a: 'sulfuric_a', b: 'sugar_p', outA: 'steam', outB: 'coal_p', prob: 0.15, msg: '⚗️ Axit sunfuric đặc háo nước cực mạnh hoá than đường.' },
+  { a: 'sulfuric_a', b: 'sugar_c', outA: 'steam', outB: 'charcoal', prob: 0.12, msg: '⚗️ Axit sunfuric đặc ăn mòn phèn đường tạo cột than xốp.' },
+  { a: 'sulfuric_a', b: 'wood', outA: 'steam', outB: 'charcoal', prob: 0.03, msg: '⚗️ Axit sunfuric đặc ăn mòn gỗ hoá than đen.' },
+  { a: 'carbide', b: 'water', outA: 'ash', outB: 'acetylene', prob: 0.12, msg: '🫧 Đất đèn sủi bọt khí axetilen C₂H₂ nhạy nổ.' },
+  { a: 'carbide', b: 'saltwater', outA: 'ash', outB: 'acetylene', prob: 0.1, msg: '🫧 Đất đèn phản ứng với nước muối sủi bọt khí C₂H₂.' },
+  { a: 'potassium_p', b: 'water', outA: 'fire', outB: 'hydrogen', prob: 0.8, msg: '⚡ Bột Kali kiềm phản ứng nổ mãnh liệt khi gặp nước!' },
+  { a: 'potassium', b: 'water', outA: 'fire', outB: 'hydrogen', prob: 0.75, msg: '⚡ Kali kim loại khối nổ tung bắn lửa khi chạm nước!' },
+  { a: 'calcium_p', b: 'water', outA: 'steam', outB: 'hydrogen', prob: 0.2, msg: '🫧 Canxi bột phản ứng sủi bọt khí Hydro dữ dội với nước.' },
+  { a: 'calcium', b: 'water', outA: 'steam', outB: 'hydrogen', prob: 0.15, msg: '🫧 Canxi khối phản ứng sủi bọt khí Hydro giải phóng nhiệt.' },
+  { a: 'bromine_l', b: 'aluminum_p', outA: 'smoke', outB: null, prob: 0.15, msg: '⚡ Brom lỏng phản ứng bốc khói dữ dội với bột nhôm!' },
+  { a: 'mercury', b: 'metal', outA: 'mercury', outB: 'amalgam', prob: 0.01, msg: '🧪 Thuỷ ngân ăn mòn kim loại tạo hỗn hồng amalgam.' },
+  { a: 'mercury', b: 'copper_p', outA: 'mercury', outB: 'amalgam', prob: 0.03, msg: '🧪 Thuỷ ngân phản ứng bột đồng tạo amalgam đồng.' },
+  { a: 'hydro_perox', b: 'ash', outA: 'water', outB: 'oxygen', prob: 0.12, msg: '🫧 Nước oxy già phân hủy tạo khí Oxy dưới xúc tác tro.' },
+  { a: 'hydro_perox', b: 'rust', outA: 'water', outB: 'oxygen', prob: 0.1, msg: '🫧 Nước oxy già sủi bọt khí Oxy dưới xúc tác gỉ sắt.' },
+  { a: 'dry_ice', b: 'lava', outA: 'co2', outB: 'stone', prob: 0.15, msg: '💨 Băng khô gặp nhiệt độ cao thăng hoa lập tức thành khí CO₂ lạnh.' },
+  { a: 'dry_ice', b: 'fire', outA: 'co2', outB: null, prob: 0.2, msg: '💨 Lửa làm thăng hoa băng khô thành khí CO₂ dập tắt chính ngọn lửa.' }
+];
+
+// Register extra elements dynamically
+EXTRA_ELEMENTS.forEach(el => {
+  CATALOG[el.id] = {
+    name: el.name,
+    cat: el.cat,
+    density: el.density || 1.0,
+    flammable: el.flammable || false,
+    colors: el.colors,
+    desc: el.desc
+  };
+  if(el.life) CATALOG[el.id].life = el.life;
+  
+  let grpLabel = '';
+  if(el.cat === 'powder') grpLabel = 'Bột';
+  else if(el.cat === 'liquid') grpLabel = 'Chất lỏng';
+  else if(el.cat === 'gas') grpLabel = 'Khí';
+  else if(el.cat === 'solid') grpLabel = 'Chất rắn';
+  
+  const grp = GROUPS.find(g => g.label === grpLabel);
+  if(grp) {
+    grp.items.push(el.id);
+  }
+});
+
+function reactGeneric(x, y, cell) {
+  const nb = neighbors8(x, y);
+  for (let k = 0; k < nb.length; k++) {
+    const n = nb[k];
+    if (!n.cell) continue;
+    const rx = GENERIC_REACTIONS.find(r => 
+      (r.a === cell.type && r.b === n.cell.type) || 
+      (r.b === cell.type && r.a === n.cell.type)
+    );
+    if (rx && Math.random() < rx.prob) {
+      if (rx.a === cell.type) {
+        grid[idx(x, y)] = rx.outA ? createCell(rx.outA) : null;
+        grid[n.idx] = rx.outB ? createCell(rx.outB) : null;
+      } else {
+        grid[idx(x, y)] = rx.outB ? createCell(rx.outB) : null;
+        grid[n.idx] = rx.outA ? createCell(rx.outA) : null;
+      }
+      if (rx.msg) logEvent(rx.a + '-' + rx.b, rx.msg);
+      
+      // Trigger achievements based on reaction
+      if ((rx.a === 'sulfuric_a' && rx.b === 'sugar_p') || (rx.a === 'sulfuric_a' && rx.b === 'sugar_c')) {
+        unlockAchievement('darksorcerer');
+      }
+      if (rx.outA === 'hydrogen' || rx.outB === 'hydrogen') {
+        unlockAchievement('cleanenergy');
+      }
+      if (rx.a === 'dry_ice' && rx.b === 'fire') {
+        unlockAchievement('extinguisher');
+      }
+      
+      return true;
+    }
+  }
+  return false;
+}
+
+function lookup(type){ return CATALOG[type] || TOOLS[type]; }
+
+/* ============================= TRẠNG THÁI LƯỚI ============================= */
+let grid = new Array(COLS*ROWS).fill(null);
+let moved = new Uint8Array(COLS*ROWS);
+let frameCount = 0;
+
+function createCell(type){
+  const info = CATALOG[type];
+  const cell = { type: type, v: (info.colors && info.colors.length>1) ? randInt(0, info.colors.length-1) : 0 };
+  if(info.life) cell.life = randInt(info.life[0], info.life[1]);
+  if(type==='sand') cell.heat = 0;
+  return cell;
+}
+
+/* ============================= CẢNH KHỞI ĐẦU ============================= */
+function seedDemo(){
+  const floorY = ROWS-4;
+  for(let y=floorY;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      grid[idx(x,y)] = { type:'stone', v: randInt(0,1) };
+    }
+  }
+  // Đống gỗ đang cháy, bên trái
+  const wx0=10, wy0=floorY-6, ww=11, wh=6;
+  for(let y=wy0;y<wy0+wh;y++){
+    for(let x=wx0;x<wx0+ww;x++){
+      if(Math.random()<0.85) grid[idx(x,y)] = { type:'wood', v: randInt(0,1) };
+    }
+  }
+  for(let x=wx0+3;x<wx0+ww-3;x++){
+    grid[idx(x,wy0-1)] = createCell('fire');
+  }
+  // Hồ nước với lớp dầu nổi, bên phải
+  const px0=COLS-38, py0=floorY-9, pw=28, ph=9;
+  for(let y=py0;y<py0+ph;y++){
+    for(let x=px0;x<px0+pw;x++){
+      grid[idx(x,y)] = { type:'water', v: randInt(0,1) };
+    }
+  }
+  for(let x=px0;x<px0+pw;x++){
+    grid[idx(x,py0)]   = { type:'oil', v: randInt(0,1) };
+    grid[idx(x,py0+1)] = { type:'oil', v: randInt(0,1) };
+  }
+}
+seedDemo();
+
+/* ============================= HÀNG XÓM ============================= */
+function neighbors8(x,y){
+  const res = [];
+  for(let dy=-1; dy<=1; dy++){
+    for(let dx=-1; dx<=1; dx++){
+      if(dx===0 && dy===0) continue;
+      const nx=x+dx, ny=y+dy;
+      if(!inBounds(nx,ny)) continue;
+      const nidx = idx(nx,ny);
+      res.push({ x:nx, y:ny, idx:nidx, cell:grid[nidx] });
+    }
+  }
+  return res;
+}
+
+/* ============================= VẬT LÝ DI CHUYỂN ============================= */
+function canFallInto(moverInfo, target){
+  if(!target) return true;
+  const t = CATALOG[target.type];
+  if(!t) return true;
+  if(t.cat==='gas') return true;
+  if(t.cat==='liquid' && (moverInfo.cat==='liquid' || moverInfo.cat==='powder')){
+    return (moverInfo.density||1) > (t.density||1);
+  }
+  if(t.cat==='powder' && moverInfo.cat==='powder'){
+    return (moverInfo.density||1) > (t.density||1);
+  }
+  return false;
+}
+
+function tryFall(x,y,cell,info){
+  const i0 = idx(x,y);
+  const order = Math.random()<0.5 ? [[0,1],[-1,1],[1,1]] : [[0,1],[1,1],[-1,1]];
+  for(let k=0;k<order.length;k++){
+    const dx=order[k][0], dy=order[k][1];
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)) continue;
+    const ni = idx(nx,ny);
+    if(moved[ni]) continue;
+    const target = grid[ni];
+    if(canFallInto(info,target)){
+      grid[ni]=cell; grid[i0]=target;
+      moved[ni]=1; moved[i0]=1;
+      return true;
+    }
+  }
+  if(info.cat==='liquid'){
+    const dir = Math.random()<0.5 ? 1 : -1;
+    const dirs=[dir,-dir];
+    for(let k=0;k<dirs.length;k++){
+      const nx=x+dirs[k], ny=y;
+      if(!inBounds(nx,ny)) continue;
+      const ni = idx(nx,ny);
+      if(moved[ni]) continue;
+      if(!grid[ni]){
+        grid[ni]=cell; grid[i0]=null;
+        moved[ni]=1; moved[i0]=1;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function tryRise(x,y,cell){
+  const i0 = idx(x,y);
+  const order = Math.random()<0.5 ? [[0,-1],[-1,-1],[1,-1]] : [[0,-1],[1,-1],[-1,-1]];
+  for(let k=0;k<order.length;k++){
+    const dx=order[k][0], dy=order[k][1];
+    const nx=x+dx, ny=y+dy;
+    if(!inBounds(nx,ny)) continue;
+    const ni = idx(nx,ny);
+    if(moved[ni]) continue;
+    if(!grid[ni]){
+      grid[ni]=cell; grid[i0]=null;
+      moved[ni]=1; moved[i0]=1;
+      return true;
+    }
+  }
+  const dir = Math.random()<0.5 ? 1 : -1;
+  const dirs=[dir,-dir];
+  for(let k=0;k<dirs.length;k++){
+    const nx=x+dirs[k], ny=y;
+    if(!inBounds(nx,ny)) continue;
+    const ni = idx(nx,ny);
+    if(moved[ni]) continue;
+    if(!grid[ni]){
+      grid[ni]=cell; grid[i0]=null;
+      moved[ni]=1; moved[i0]=1;
+      return true;
+    }
+  }
+  return false;
+}
+
+function processCellMove(x,y){
+  const i = idx(x,y);
+  if(moved[i]) return;
+  const cell = grid[i];
+  if(!cell) return;
+  const info = CATALOG[cell.type];
+  if(!info) return;
+  if(info.cat==='powder' || info.cat==='liquid'){
+    tryFall(x,y,cell,info);
+  } else if(info.cat==='gas'){
+    tryRise(x,y,cell);
+  }
+}
+
+function movementPass(){
+  moved.fill(0);
+  const flip = (frameCount % 2 === 0);
+  for(let y=ROWS-1; y>=0; y--){
+    if(flip){
+      for(let x=0;x<COLS;x++) processCellMove(x,y);
+    } else {
+      for(let x=COLS-1;x>=0;x--) processCellMove(x,y);
+    }
+  }
+}
+/* ============================= NỔ ============================= */
+let screenShake = 0;
+let explosionFlash = 0;
+const shockwaves = [];
+
+function explode(cx,cy,radius){
+  if(radius >= 11) {
+    screenShake = Math.max(screenShake, 35);
+    explosionFlash = 1.0;
+  } else {
+    screenShake = Math.max(screenShake, radius * 2);
+    explosionFlash = Math.max(explosionFlash, 0.4);
+  }
+  
+  // Add a visual shockwave ring
+  shockwaves.push({
+    x: cx * SIZE + SIZE/2,
+    y: cy * SIZE + SIZE/2,
+    radius: 0,
+    maxRadius: radius * SIZE * 1.5,
+    strength: radius >= 11 ? 16 : 8,
+    color: radius >= 11 ? 'rgba(255, 235, 180, 0.8)' : 'rgba(255, 120, 50, 0.8)',
+    life: 1.0,
+    decay: 0.04
+  });
+
+  for(let y=cy-radius;y<=cy+radius;y++){
+    for(let x=cx-radius;x<=cx+radius;x++){
+      if(!inBounds(x,y)) continue;
+      const dist = Math.hypot(x-cx,y-cy);
+      if(dist>radius) continue;
+      const c = grid[idx(x,y)];
+      if(c){
+        const info = CATALOG[c.type];
+        if(info && info.indestructible) continue;
+        
+        if(c.type === 'uranium') {
+          grid[idx(x,y)] = null;
+          const tx = x, ty = y;
+          setTimeout(() => {
+            explode(tx, ty, 7);
+            unlockAchievement('chernobyl');
+          }, 80);
+          continue;
+        }
+        if(c.type === 'plutonium') {
+          grid[idx(x,y)] = null;
+          const tx = x, ty = y;
+          setTimeout(() => {
+            explode(tx, ty, 12);
+            unlockAchievement('thermonuclear');
+          }, 120);
+          continue;
+        }
+      }
+      
+      // Nuclear blast converts surrounding to radioactive dust (ash), steam, or fire
+      if(radius >= 11) {
+        if(Math.random()<0.4){
+          grid[idx(x,y)] = { type:'steam_hot', v:0, life: randInt(80,120) };
+        } else if(Math.random()<0.75){
+          grid[idx(x,y)] = { type:'smoke_dark', v:0, life: randInt(100,180) };
+        } else {
+          grid[idx(x,y)] = { type:'ash', v: randInt(0,1) };
+        }
+      } else {
+        if(Math.random()<0.65){
+          grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+        } else {
+          grid[idx(x,y)] = null;
+        }
+      }
+    }
+  }
+  logEvent('explosion','💥 Vụ nổ giải phóng nhiệt và áp suất lớn trong tích tắc, phá huỷ khu vực xung quanh.');
+}
+
+/* ============================= NHẬT KÝ PHẢN ỨNG ============================= */
+const logCooldown = {};
+const logListEl = document.getElementById('log-list');
+let logMessages = ['🧪 Chào mừng! Chọn nguyên liệu bên trái rồi vẽ lên khung mô phỏng để bắt đầu thí nghiệm.'];
+
+function logEvent(key,msg){
+  const now = frameCount;
+  if(logCooldown[key] !== undefined && now - logCooldown[key] < 34) return;
+  logCooldown[key] = now;
+  logMessages.unshift(msg);
+  if(logMessages.length>8) logMessages.length=8;
+  renderLog();
+}
+
+function renderLog(){
+  let html='';
+  for(let i=0;i<logMessages.length;i++){
+    if(i===0) html += '<li>'+logMessages[i]+' <span class="cursor">▌</span></li>';
+    else html += '<li>'+logMessages[i]+'</li>';
+  }
+  logListEl.innerHTML = html;
+}
+renderLog();
+
+/* ============================= PHẢN ỨNG HOÁ HỌC ============================= */
+const DISSOLVABLE = ['sand','wood','stone','plant','glass','seed','ash','salt','rust'];
+
+function reactFire(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(!n.cell) continue;
+    if(n.cell.type==='water' || n.cell.type==='saltwater'){
+      grid[idx(x,y)] = Math.random()<0.5 ? { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) } : null;
+      logEvent('extinguish','💧 Nước dập tắt lửa và bốc thành hơi nước.');
+      return;
+    }
+    if(n.cell.type==='gas'){
+      explode(n.x,n.y,5);
+      return;
+    }
+    if(n.cell.type==='tnt'){
+      grid[n.idx]=null;
+      explode(n.x,n.y,6);
+      return;
+    }
+    const ninfo = CATALOG[n.cell.type];
+    if(ninfo && ninfo.flammable && Math.random()<0.06){
+      grid[n.idx] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+      logEvent('burn','🔥 '+ninfo.name+' bén lửa và bắt đầu cháy.');
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = Math.random()<0.4 ? { type:'smoke', v:0, life: randInt(SMOKE_LIFE[0],SMOKE_LIFE[1]) } : null;
+  }
+}
+
+function reactLava(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(!n.cell) continue;
+    if(n.cell.type==='water'){
+      grid[idx(x,y)] = { type:'stone', v: randInt(0,1) };
+      grid[n.idx] = Math.random()<0.6 ? { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) } : null;
+      logEvent('lava-water','🌋 Dung nham gặp nước, nguội cực nhanh và hoá rắn thành đá, toả ra hơi nước.');
+      return;
+    }
+    if(n.cell.type==='ice'){
+      grid[n.idx] = { type:'water', v: randInt(0,1) };
+      continue;
+    }
+    if(n.cell.type==='sand'){
+      n.cell.heat = (n.cell.heat||0)+2;
+      if(n.cell.heat>28){
+        grid[n.idx] = { type:'glass', v: randInt(0,1) };
+        logEvent('glass','🌋 Cát nóng chảy vì nhiệt độ cao và hoá thành thuỷ tinh.');
+      }
+      continue;
+    }
+    const ninfo = CATALOG[n.cell.type];
+    if(ninfo && ninfo.flammable && Math.random()<0.035){
+      grid[n.idx] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+    }
+    if(n.cell.type==='tnt'){
+      grid[n.idx]=null;
+      explode(n.x,n.y,6);
+    }
+  }
+}
+
+function reactIce(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='lava') && Math.random()<0.22){
+      grid[idx(x,y)] = { type:'water', v: randInt(0,1) };
+      return;
+    }
+    if(c && (c.type==='water' || c.type==='saltwater') && Math.random()<0.04){
+      grid[nb[k].idx] = { type:'ice', v: randInt(0,1) };
+      unlockAchievement('iceage');
+      logEvent('freeze','❄️ Băng lạnh làm đông đặc nước xung quanh thành băng đá.');
+    }
+  }
+}
+
+function reactSand(x,y,cell){
+  const nb = neighbors8(x,y);
+  let heated=false;
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && c.type==='fire'){ heated=true; break; }
+  }
+  if(heated){
+    cell.heat = (cell.heat||0)+1;
+    if(cell.heat>34){
+      grid[idx(x,y)] = { type:'glass', v: randInt(0,1) };
+      logEvent('glass2','🔥 Cát nóng chảy vì nhiệt độ cao và hoá thành thuỷ tinh.');
+    }
+  } else if(cell.heat>0){
+    cell.heat -= 0.3;
+  }
+}
+
+function reactSeed(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='water' || c.type==='saltwater')){
+      if(Math.random()<0.045){
+        grid[idx(x,y)] = { type:'plant', v: randInt(0,1) };
+        unlockAchievement('reforestation');
+        logEvent('grow','🌱 Hạt giống nảy mầm thành cây xanh.');
+      }
+      return;
+    }
+  }
+}
+
+function reactSalt(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && c.type==='water'){
+      if(Math.random()<0.05){
+        grid[idx(x,y)] = { type:'saltwater', v: randInt(0,1) };
+        logEvent('dissolve-salt','🧂 Muối tan trong nước, tạo thành dung dịch nước muối (NaCl hoà tan).');
+      }
+      return;
+    }
+  }
+}
+
+function reactSodium(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='water' || n.cell.type==='saltwater') && Math.random()<0.75){
+      grid[n.idx] = Math.random()<0.55
+        ? { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) }
+        : { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) };
+      grid[idx(x,y)] = null;
+      logEvent('sodium','⚡ Natri phản ứng dữ dội với nước: 2Na + 2H₂O → 2NaOH + H₂↑ — toả nhiệt mạnh và bốc cháy khí hydro.');
+      return;
+    }
+  }
+}
+
+function reactMetal(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='acid' && Math.random()<0.02){
+      grid[idx(x,y)] = null;
+      if(Math.random()<0.3) grid[n.idx]=null;
+      logEvent('corrode','⚗️ Axit ăn mòn kim loại: giải phóng khí hydro và tạo muối kim loại tan trong dung dịch.');
+      return;
+    }
+  }
+}
+
+function reactAcid(x,y,cell){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && DISSOLVABLE.indexOf(n.cell.type)!==-1 && Math.random()<0.02){
+      const name = CATALOG[n.cell.type].name;
+      grid[n.idx] = Math.random()<0.3 ? { type:'smoke', v:0, life: randInt(SMOKE_LIFE[0],SMOKE_LIFE[1]) } : null;
+      if(Math.random()<0.12) grid[idx(x,y)]=null;
+      logEvent('acid-dissolve','⚗️ Axit hoà tan '+name+', phá vỡ cấu trúc vật liệu.');
+      return;
+    }
+  }
+}
+
+function reactTnt(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='lava')){
+      grid[idx(x,y)] = null;
+      explode(x,y,6);
+      unlockAchievement('nobel');
+      return;
+    }
+  }
+}
+
+function reactGunpowder(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='lava')){
+      grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+      explode(x,y,3);
+      logEvent('gunpowder-burn','💥 Thuốc súng bén lửa kích nổ nhanh, giải phóng nhiệt lượng.');
+      return;
+    }
+  }
+}
+
+function reactBakingSoda(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='acid' || n.cell.type==='vinegar')){
+      grid[idx(x,y)] = { type:'saltwater', v: randInt(0,1) };
+      grid[n.idx] = { type:'co2', v:0, life: randInt(200,350) };
+      logEvent('neutralize','🫧 Phản ứng trung hoà sủi bọt khí CO₂: Axit tác dụng với muối Natri Hydrocacbonat NaHCO₃.');
+      return;
+    }
+  }
+}
+
+function reactPetrol(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='lava')){
+      grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+      explode(x,y,4);
+      logEvent('petrol-explode','🔥 Xăng bắt cháy cực nhanh, phát nổ và toả khói mù mịt.');
+      return;
+    }
+  }
+}
+
+function reactVinegar(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='metal' && Math.random()<0.005){
+      grid[n.idx] = { type:'rust', v: randInt(0,1) };
+      if(Math.random()<0.3) grid[idx(x,y)] = null;
+      logEvent('vinegar-rust','⚗️ Axit hữu cơ trong giấm ăn mòn kim loại chậm chạp, tạo ra gỉ sắt.');
+      return;
+    }
+  }
+}
+
+function reactOxygen(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='fire'){
+      n.cell.life += 15; // Tăng thời gian cháy của lửa
+      if(Math.random()<0.08){
+        grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+      }
+      return;
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactCo2(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='fire'){
+      grid[n.idx] = null;
+      unlockAchievement('extinguisher');
+      logEvent('co2-extinguish','💨 Khí carbon dioxide (CO₂) dập tắt ngọn lửa nhanh chóng.');
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactChlorine(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='water'){
+      grid[n.idx] = { type:'acid', v: randInt(0,1) };
+      logEvent('chlorine-water','🧪 Clo phản ứng với nước tạo ra dung dịch axit clohydric HCl.');
+    } else if(n.cell && n.cell.type==='metal' && Math.random()<0.08){
+      grid[n.idx] = { type:'rust', v: randInt(0,1) };
+      logEvent('chlorine-metal','🧪 Clo oxi hoá mạnh kim loại tạo rỉ sét.');
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactUranium(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='tnt' || n.cell.type==='gunpowder' || n.cell.type==='nitroglycerin')){
+      grid[idx(x,y)] = null;
+      grid[n.idx] = null;
+      explode(x,y,7);
+      unlockAchievement('chernobyl');
+      logEvent('nuclear-reaction','☢️ Nén ép Uranium đạt khối lượng tới hạn bằng thuốc nổ cao áp tạo phản ứng phân hạch!');
+      return;
+    }
+    // Pyrophoric oxidation by fire/lava (burns slowly without nuclear explosion)
+    if(n.cell && (n.cell.type==='fire' || n.cell.type==='whitefire' || n.cell.type==='bluefire' || n.cell.type==='lava')){
+      if(Math.random()<0.08){
+        grid[idx(x,y)] = { type:'ash', v: randInt(0,1) };
+        logEvent('uranium-oxidize','☢️ Uranium bị ôxi hóa chậm ở nhiệt độ cao thành Oxit Uran (tro).');
+      }
+      return;
+    }
+    if(n.cell && n.cell.type==='water' && Math.random()<0.01){
+      grid[n.idx] = { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) };
+      logEvent('nuclear-heat','☢️ Uranium phát nhiệt làm bốc hơi nguồn nước xung quanh.');
+    }
+  }
+}
+
+function reactPlutonium(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(!n.cell) continue;
+    if(n.cell.type==='water' || n.cell.type==='saltwater'){
+      grid[n.idx] = { type:'steam_hot', v:0, life: randInt(80,120) };
+    }
+    // High pressure implosion trigger (Explosives or secondary nuclear triggers)
+    if(n.cell.type==='tnt' || n.cell.type==='nitroglycerin' || n.cell.type==='gunpowder' || n.cell.type==='uranium'){
+      grid[idx(x,y)] = null;
+      grid[n.idx] = null;
+      explode(x,y,12); // Massive thermonuclear blast!
+      unlockAchievement('thermonuclear');
+      logEvent('nuclear-implosion','☢️ Sóng kích nổ hội tụ nén ép lõi Plutonium kích hoạt phản ứng nhiệt hạch giải phóng năng lượng kinh hoàng!');
+      return;
+    }
+    // Pyro-combustion (burns slowly to oxide/ash without going supercritical)
+    if(n.cell.type==='fire' || n.cell.type==='whitefire' || n.cell.type==='bluefire' || n.cell.type==='lava'){
+      if(Math.random()<0.08){
+        grid[idx(x,y)] = { type:'ash', v: randInt(0,1) };
+        logEvent('plutonium-burn','☢️ Plutonium tự cháy chậm dưới nhiệt độ cao tạo oxit phóng xạ dạng tro.');
+      }
+      return;
+    }
+  }
+}
+
+function reactTorch(x,y){
+  if(y > 0){
+    const upIdx = idx(x, y-1);
+    if(!grid[upIdx]){
+      grid[upIdx] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
+    }
+  }
+}
+
+function reactMagnesium(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='whitefire' || c.type==='bluefire' || c.type==='lava')){
+      grid[idx(x,y)] = { type:'whitefire', v:0, life: randInt(15,30) };
+      explode(x,y,3);
+      logEvent('magnesium-burn','✨ Magie bắt cháy tỏa nhiệt lượng cực lớn với ngọn lửa trắng chói sáng.');
+      return;
+    }
+  }
+}
+
+function reactWhiteFire(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(!n.cell) continue;
+    if(n.cell.type==='water' || n.cell.type==='saltwater'){
+      grid[idx(x,y)] = { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) };
+      logEvent('extinguish','💧 Nước dập tắt lửa trắng magie.');
+      return;
+    }
+    if(n.cell.type==='gas' || n.cell.type==='acetylene'){
+      explode(n.x,n.y,6);
+      return;
+    }
+    if(n.cell.type==='tnt' || n.cell.type==='nitroglycerin'){
+      grid[n.idx]=null;
+      explode(n.x,n.y,7);
+      return;
+    }
+    if(n.cell.type==='sand'){
+      n.cell.heat = (n.cell.heat||0)+4;
+      if(n.cell.heat>28){
+        grid[n.idx] = { type:'glass', v: randInt(0,1) };
+        logEvent('glass','🔥 Lửa trắng nhiệt độ siêu cao làm chảy cát thành thuỷ tinh trong nháy mắt.');
+      }
+    }
+    const ninfo = CATALOG[n.cell.type];
+    if(ninfo && ninfo.flammable && Math.random()<0.15){
+      grid[n.idx] = { type:'whitefire', v:0, life: randInt(15,30) };
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = { type:'magnesia', v:0 };
+  }
+}
+
+function reactSulfur(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='whitefire' || c.type==='bluefire' || c.type==='lava')){
+      grid[idx(x,y)] = { type:'bluefire', v:0, life: randInt(20,35) };
+      unlockAchievement('willowisp');
+      logEvent('sulfur-burn','🔥 Lưu huỳnh bắt lửa cháy với ngọn lửa xanh lam đậm đặc trưng.');
+      return;
+    }
+  }
+}
+
+function reactBlueFire(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(!n.cell) continue;
+    if(n.cell.type==='water' || n.cell.type==='saltwater'){
+      grid[idx(x,y)] = null;
+      logEvent('extinguish','💧 Nước dập tắt lửa lưu huỳnh.');
+      return;
+    }
+    const ninfo = CATALOG[n.cell.type];
+    if(ninfo && ninfo.flammable && Math.random()<0.08){
+      grid[n.idx] = { type:'bluefire', v:0, life: randInt(20,35) };
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = { type:'so2', v:0, life: randInt(250,400) };
+  }
+}
+
+function reactSo2(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell){
+      if(n.cell.type==='water' || n.cell.type==='saltwater'){
+        grid[n.idx] = { type:'acid', v: randInt(0,1) };
+        logEvent('so2-acid','🧪 Khí SO₂ phản ứng với nước tạo thành axit sunfurơ H₂SO₃.');
+      } else if(n.cell.type==='algae'){
+        grid[n.idx] = null;
+        logEvent('so2-algae','💀 Khí độc SO₂ diệt sạch các tế bào tảo xanh.');
+      }
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactCarbide(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='water' || n.cell.type==='saltwater' || n.cell.type==='peroxide') && Math.random()<0.2){
+      grid[n.idx] = { type:'acetylene', v:0, life: randInt(450,750) };
+      if(Math.random()<0.15) {
+        grid[idx(x,y)] = { type:'ash', v:0 };
+      }
+      logEvent('carbide-water','🫧 Đất đèn CaC₂ phản ứng sủi bọt khí axetilen C₂H₂ nhạy nổ.');
+      return;
+    }
+  }
+}
+
+function reactAcetylene(x,y,cell){
+  cell.life--;
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='fire' || n.cell.type==='whitefire' || n.cell.type==='bluefire')){
+      grid[idx(x,y)] = null;
+      explode(x,y,5);
+      logEvent('acetylene-explode','💥 Khí axetilen phát nổ cực mạnh khi tiếp xúc với tia lửa.');
+      return;
+    }
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactPeroxide(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='ash' || n.cell.type==='rust' || n.cell.type==='magnesia' || n.cell.type==='magnesium') && Math.random()<0.25){
+      grid[idx(x,y)] = { type:'water', v: randInt(0,1) };
+      if(y > 0 && !grid[idx(x, y-1)]){
+        grid[idx(x, y-1)] = { type:'oxygen', v:0, life: randInt(250,450) };
+      }
+      logEvent('peroxide-decompose','🫧 Nước oxy già H₂O₂ phân huỷ mạnh giải phóng O₂ dưới tác dụng của chất xúc tác.');
+      return;
+    }
+  }
+}
+
+function reactNitroglycerin(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const c = nb[k].cell;
+    if(c && (c.type==='fire' || c.type==='whitefire' || c.type==='bluefire' || c.type==='lava')){
+      grid[idx(x,y)] = null;
+      explode(x,y,6);
+      unlockAchievement('nobel');
+      logEvent('nitro-explode','💥 Nitroglycerin lỏng nhạy nổ kích nổ dữ dội.');
+      return;
+    }
+  }
+}
+
+function reactMercury(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='metal' && Math.random()<0.015){
+      grid[n.idx] = { type:'amalgam', v:0 };
+      unlockAchievement('alchemist');
+      logEvent('mercury-amalgam','🧪 Thuỷ ngân ăn mòn kim loại tạo hỗn hồng amalgam mục nát.');
+      return;
+    }
+  }
+}
+
+function reactAmalgam(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && n.cell.type==='acid' && Math.random()<0.08){
+      grid[idx(x,y)] = null;
+      logEvent('amalgam-dissolve','⚗️ Hợp kim amalgam bị axit hoà tan nhanh chóng.');
+      return;
+    }
+  }
+}
+
+function reactAlgae(x,y){
+  const nb = neighbors8(x,y);
+  for(let k=0;k<nb.length;k++){
+    const n = nb[k];
+    if(n.cell && (n.cell.type==='water' || n.cell.type==='saltwater')){
+      if(Math.random()<0.015){
+        grid[n.idx] = { type:'algae', v: randInt(0,1) };
+        logEvent('algae-grow','🌿 Tảo xanh phát triển sinh khối nhanh khi gặp nước.');
+      }
+    }
+  }
+}
+
+function reactGasLife(x,y,cell,extra){
+  cell.life--;
+  if(extra==='steam' && Math.random()<0.004){
+    grid[idx(x,y)] = { type:'water', v: randInt(0,1) };
+    return;
+  }
+  if(cell.life<=0){
+    grid[idx(x,y)] = null;
+  }
+}
+
+function reactionsPass(){
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      const i = idx(x,y);
+      const cell = grid[i];
+      if(!cell) continue;
+      if(reactGeneric(x,y,cell)) continue;
+      switch(cell.type){
+        case 'fire': reactFire(x,y,cell); break;
+        case 'lava': reactLava(x,y); break;
+        case 'ice': reactIce(x,y); break;
+        case 'sand': reactSand(x,y,cell); break;
+        case 'seed': reactSeed(x,y); break;
+        case 'salt': reactSalt(x,y); break;
+        case 'sodium': reactSodium(x,y); break;
+        case 'metal': reactMetal(x,y); break;
+        case 'acid': reactAcid(x,y,cell); break;
+        case 'tnt': reactTnt(x,y); break;
+        case 'gunpowder': reactGunpowder(x,y); break;
+        case 'bakingsoda': reactBakingSoda(x,y); break;
+        case 'petrol': reactPetrol(x,y); break;
+        case 'vinegar': reactVinegar(x,y); break;
+        case 'oxygen': reactOxygen(x,y,cell); break;
+        case 'co2': reactCo2(x,y,cell); break;
+        case 'chlorine': reactChlorine(x,y,cell); break;
+        case 'uranium': reactUranium(x,y); break;
+        case 'torch': reactTorch(x,y); break;
+        case 'algae': reactAlgae(x,y); break;
+        case 'steam': reactGasLife(x,y,cell,'steam'); break;
+        case 'smoke': reactGasLife(x,y,cell,'smoke'); break;
+        case 'gas': reactGasLife(x,y,cell,'gas'); break;
+        case 'magnesium': reactMagnesium(x,y); break;
+        case 'whitefire': reactWhiteFire(x,y,cell); break;
+        case 'sulfur': reactSulfur(x,y); break;
+        case 'bluefire': reactBlueFire(x,y,cell); break;
+        case 'so2': reactSo2(x,y,cell); break;
+        case 'acetylene': reactAcetylene(x,y,cell); break;
+        case 'carbide': reactCarbide(x,y); break;
+        case 'peroxide': reactPeroxide(x,y); break;
+        case 'nitroglycerin': reactNitroglycerin(x,y); break;
+        case 'mercury': reactMercury(x,y); break;
+        case 'amalgam': reactAmalgam(x,y); break;
+        case 'plutonium': reactPlutonium(x,y); break;
+      }
+    }
+  }
+}
+
+/* ============================= VÒNG LẶP MÔ PHỎNG ============================= */
+function simulate(){
+  reactionsPass();
+  movementPass();
+  frameCount++;
+}
+
+/* ============================= HIỂN THỊ ============================= */
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  
+  ctx.save();
+  if (screenShake > 0.5) {
+    const dx = (Math.random() - 0.5) * screenShake;
+    const dy = (Math.random() - 0.5) * screenShake;
+    ctx.translate(dx, dy);
+    screenShake *= 0.9;
+  }
+
+  let count=0;
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      const cell = grid[idx(x,y)];
+      if(!cell) continue;
+      count++;
+      const info = CATALOG[cell.type];
+      let color;
+      if(cell.type==='fire'){
+        color = info.colors[Math.floor(Math.random()*info.colors.length)];
+      } else {
+        color = info.colors[cell.v % info.colors.length];
+      }
+      ctx.fillStyle = color;
+      ctx.fillRect(x*SIZE, y*SIZE, SIZE, SIZE);
+    }
+  }
+
+  // Draw shockwaves
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    const sw = shockwaves[i];
+    sw.radius += sw.strength;
+    sw.life -= sw.decay;
+    if (sw.life <= 0 || sw.radius >= sw.maxRadius) {
+      shockwaves.splice(i, 1);
+      continue;
+    }
+    ctx.beginPath();
+    ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = sw.color;
+    ctx.lineWidth = sw.strength * sw.life;
+    ctx.stroke();
+  }
+
+  if(hover && currentTool!=='eraser'){
+    ctx.strokeStyle = 'rgba(111,224,138,0.65)';
+    ctx.lineWidth = 1.5;
+    const r = (currentTool==='seed') ? 0 : brushSize;
+    ctx.beginPath();
+    ctx.arc((hover.x+0.5)*SIZE, (hover.y+0.5)*SIZE, Math.max(r*SIZE,SIZE*0.6), 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  // Draw thermonuclear flash overlay
+  if (explosionFlash > 0.01) {
+    ctx.fillStyle = `rgba(255, 255, 230, ${explosionFlash * 0.85})`;
+    ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+    explosionFlash -= 0.05;
+  }
+
+  ctx.restore();
+
+  statCountEl.textContent = count;
+}
+
+/* ============================= VẼ / TƯƠNG TÁC ============================= */
+let currentTool = 'sand';
+let brushSize = 2;
+let running = true;
+let speed = 1;
+let isDown = false;
+let hover = null;
+
+function paintAt(gx,gy){
+  const r = (currentTool==='seed') ? 0 : brushSize;
+  const r2 = r*r + 0.6;
+  for(let dy=-r; dy<=r; dy++){
+    for(let dx=-r; dx<=r; dx++){
+      if(dx*dx+dy*dy > r2) continue;
+      const x=gx+dx, y=gy+dy;
+      if(!inBounds(x,y)) continue;
+      if(currentTool==='eraser'){
+        grid[idx(x,y)] = null;
+        continue;
+      }
+      const prob = (currentTool==='sand'||currentTool==='salt'||currentTool==='ash') ? 0.85 : 1;
+      if(Math.random()<prob){
+        grid[idx(x,y)] = createCell(currentTool);
+      }
+    }
+  }
+}
+
+function eventToGrid(e){
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
+  const lx = (cx-rect.left)*scaleX;
+  const ly = (cy-rect.top)*scaleY;
+  return { x: Math.floor(lx/SIZE), y: Math.floor(ly/SIZE) };
+}
+
+canvas.addEventListener('mousedown', function(e){ isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); });
+canvas.addEventListener('mousemove', function(e){ const p=eventToGrid(e); hover=p; if(isDown) paintAt(p.x,p.y); });
+canvas.addEventListener('mouseleave', function(){ hover=null; });
+window.addEventListener('mouseup', function(){ isDown=false; });
+
+canvas.addEventListener('touchstart', function(e){ e.preventDefault(); isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); }, {passive:false});
+canvas.addEventListener('touchmove', function(e){ e.preventDefault(); const p=eventToGrid(e); hover=p; if(isDown) paintAt(p.x,p.y); }, {passive:false});
+canvas.addEventListener('touchend', function(e){ e.preventDefault(); isDown=false; hover=null; }, {passive:false});
+/* ============================= HỆ THỐNG THÀNH TỰU ẨN ============================= */
+const ACHIEVEMENTS = {
+  nobel: { name: "Nhà phát minh Nobel", desc: "Kích nổ Nitroglycerin hoặc TNT bằng Lửa.", hint: "Đốt cháy thuốc nổ lỏng hoặc thuốc nổ rắn.", unlocked: false },
+  chernobyl: { name: "Thảm họa Chernobyl", desc: "Kích hoạt phản ứng hạt nhân của Uranium.", hint: "Nén ép Uranium bằng thuốc nổ áp suất cao hoặc sóng nổ hạt nhân.", unlocked: false },
+  thermonuclear: { name: "Vụ nổ siêu nhiệt", desc: "Kích hoạt phản ứng Plutonium nhiệt hạch cực lớn.", hint: "Kích nổ lõi Plutonium bằng sức ép từ thuốc nổ hoặc vụ nổ phân hạch Uranium.", unlocked: false },
+  alchemist: { name: "Giả kim thuật", desc: "Tạo ra hợp kim Amalgam bằng Thủy ngân.", hint: "Cho thủy ngân lỏng ăn mòn kim loại.", unlocked: false },
+  iceage: { name: "Kỷ băng hà", desc: "Làm đông đặc nước thành băng đá thành công.", hint: "Cho băng đá lây lan và đóng băng nước lân cận.", unlocked: false },
+  reforestation: { name: "Trồng cây gây rừng", desc: "Nảy mầm thành công hạt giống.", hint: "Thả hạt giống vào nước ẩm.", unlocked: false },
+  willowisp: { name: "Lửa ma trơi", desc: "Tạo ra ngọn lửa màu xanh lam.", hint: "Đốt cháy bột Lưu huỳnh màu vàng.", unlocked: false },
+  darksorcerer: { name: "Phù thủy bóng tối", desc: "Cacbon hóa đường bằng Axit Sunfuric đặc.", hint: "Cho axit sunfuric đặc ăn mòn đường.", unlocked: false },
+  cleanenergy: { name: "Năng lượng sạch", desc: "Sản sinh khí Hydro từ kim loại và axit.", hint: "Cho bột nhôm hoặc kẽm gặp axit mạnh.", unlocked: false },
+  extinguisher: { name: "Dập lửa cứu hỏa", desc: "Dập tắt ngọn lửa bằng khí CO₂ hoặc băng khô.", hint: "Thả khí CO₂ hoặc băng khô lên ngọn lửa đang cháy.", unlocked: false }
+};
+
+function loadAchievements() {
+  let count = 0;
+  for (let id in ACHIEVEMENTS) {
+    if (localStorage.getItem('chem_ach_' + id) === 'true') {
+      ACHIEVEMENTS[id].unlocked = true;
+      count++;
+      // Sync silently with parent on load
+      try {
+        window.parent.postMessage({
+          type: "UNLOCK_ACHIEVEMENT",
+          id: "chem_" + id,
+          name: ACHIEVEMENTS[id].name,
+          desc: ACHIEVEMENTS[id].desc,
+          icon: getChemIcon(id),
+          isSync: true
+        }, "*");
+      } catch(e) {}
+    }
+  }
+  const panelEl = document.getElementById('achievements-panel');
+  if (panelEl) {
+    panelEl.style.display = (count > 0) ? 'block' : 'none';
+  }
+}
+
+function getChemIcon(id) {
+  const icons = {
+    nobel: "💥",
+    chernobyl: "☢️",
+    thermonuclear: "🍄",
+    alchemist: "⚗️",
+    iceage: "❄️",
+    reforestation: "🌱",
+    willowisp: "👻",
+    darksorcerer: "🔮",
+    cleanenergy: "🔋",
+    extinguisher: "🧯"
+  };
+  return icons[id] || "🧪";
+}
+
+function unlockAchievement(id) {
+  if (!ACHIEVEMENTS[id] || ACHIEVEMENTS[id].unlocked) return;
+  ACHIEVEMENTS[id].unlocked = true;
+  localStorage.setItem('chem_ach_' + id, 'true');
+  
+  try {
+    window.parent.postMessage({
+      type: "UNLOCK_ACHIEVEMENT",
+      id: "chem_" + id,
+      name: ACHIEVEMENTS[id].name,
+      desc: ACHIEVEMENTS[id].desc,
+      icon: getChemIcon(id)
+    }, "*");
+  } catch(e) {}
+  
+  // Show panel immediately
+  const panelEl = document.getElementById('achievements-panel');
+  if (panelEl) {
+    panelEl.style.display = 'block';
+  }
+  
+  renderAchievements();
+  showToastAchievement(ACHIEVEMENTS[id].name);
+}
+
+function renderAchievements() {
+  const listEl = document.getElementById('ach-list');
+  const countEl = document.getElementById('ach-count');
+  if (!listEl || !countEl) return;
+  
+  let html = '';
+  let count = 0;
+  let total = 0;
+  for (let id in ACHIEVEMENTS) {
+    total++;
+    const ach = ACHIEVEMENTS[id];
+    if (ach.unlocked) {
+      count++;
+      html += '<div class="ach-item unlocked">' +
+              '<div class="ach-header">✔️ ' + ach.name + '</div>' +
+              '<div class="ach-desc">' + ach.desc + '</div>' +
+              '</div>';
+    } else {
+      html += '<div class="ach-item locked">' +
+              '<div class="ach-header">🔒 ???</div>' +
+              '</div>';
+    }
+  }
+  countEl.textContent = count + '/' + total;
+  listEl.innerHTML = html;
+}
+
+function showToastAchievement(name) {
+  let toast = document.createElement('div');
+  toast.className = 'toast-ach';
+  toast.innerHTML = '<span class="icon">🏆</span><div><div class="title">Thành tựu ẩn đã mở khoá!</div><div class="desc">' + name + '</div></div>';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 100);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 4000);
+}
+
+/* ============================= BẢNG ĐIỀU KHIỂN ============================= */
+const paletteEl = document.getElementById('palette');
+const infoNameText = document.getElementById('info-name-text');
+const infoDesc = document.getElementById('info-desc');
+const infoDot = document.getElementById('info-dot');
+const statCountEl = document.getElementById('stat-count');
+const statFpsEl = document.getElementById('stat-fps');
+
+function buildPalette(){
+  let html='';
+  for(let g=0; g<GROUPS.length; g++){
+    const grp = GROUPS[g];
+    html += '<div class="group-block"><div class="group-label">'+grp.label+'</div><div class="swatch-grid">';
+    for(let i=0;i<grp.items.length;i++){
+      const key = grp.items[i];
+      const info = lookup(key);
+      const bg = (key==='eraser') ? 'repeating-linear-gradient(45deg,#2a2a2a,#2a2a2a 3px,#1a1a1a 3px,#1a1a1a 6px)'
+                : (info.colors.length>1 ? 'linear-gradient(135deg,'+info.colors.join(',')+')' : info.colors[0]);
+      html += '<button class="swatch" data-key="'+key+'" title="'+info.name+'">'+
+              '<span class="chip" style="background:'+bg+'"></span><span>'+info.name+'</span></button>';
+    }
+    html += '</div></div>';
+  }
+  paletteEl.innerHTML = html;
+  paletteEl.querySelectorAll('.swatch').forEach(function(btn){
+    btn.addEventListener('click', function(){ selectTool(btn.getAttribute('data-key')); });
+  });
+}
+
+function selectTool(key){
+  currentTool = key;
+  paletteEl.querySelectorAll('.swatch').forEach(function(btn){
+    btn.classList.toggle('selected', btn.getAttribute('data-key')===key);
+  });
+  const info = lookup(key);
+  infoNameText.textContent = info.name;
+  infoDesc.textContent = info.desc;
+  infoDot.style.background = (key==='eraser')
+    ? 'repeating-linear-gradient(45deg,#2a2a2a,#2a2a2a 3px,#1a1a1a 3px,#1a1a1a 6px)'
+    : (info.colors.length>1 ? 'linear-gradient(135deg,'+info.colors.join(',')+')' : info.colors[0]);
+}
+
+loadAchievements();
+renderAchievements();
+buildPalette();
+selectTool('sand');
+
+document.getElementById('brush').addEventListener('input', function(e){
+  brushSize = parseInt(e.target.value,10);
+  document.getElementById('brush-val').textContent = brushSize;
+});
+document.getElementById('speed').addEventListener('input', function(e){
+  speed = parseInt(e.target.value,10);
+  document.getElementById('speed-val').textContent = speed+'×';
+});
+document.getElementById('btn-pause').addEventListener('click', function(e){
+  running = !running;
+  e.target.textContent = running ? '⏸ Tạm dừng' : '▶ Tiếp tục';
+});
+document.getElementById('btn-clear').addEventListener('click', function(){
+  grid = new Array(COLS*ROWS).fill(null);
+  logMessages = ['🗑 Đã xoá toàn bộ khung mô phỏng.'];
+  renderLog();
+});
+
+/* ============================= ĐỔI KÍCH THƯỚC KHUNG (KÉO CHUỘT) ============================= */
+const resizeHandle = document.getElementById('resize-handle');
+const canvasWrap = document.querySelector('.canvas-wrap');
+const MIN_W = 320, MIN_H = 200;
+const MAX_W = COLS*SIZE*2.2, MAX_H = ROWS*SIZE*2.2;
+let hasManuallyResized = false;
+let resizing = false;
+let rzStartX=0, rzStartY=0, rzStartW=0, rzStartH=0;
+
+function setCanvasSize(w,h){
+  w = Math.min(MAX_W, Math.max(MIN_W, w));
+  h = Math.min(MAX_H, Math.max(MIN_H, h));
+  canvas.style.width = w+'px';
+  canvas.style.height = h+'px';
+}
+
+function initialCanvasSize(){
+  const available = Math.max(MIN_W, canvasWrap.clientWidth - 24);
+  const w = Math.min(available, COLS*SIZE);
+  const h = Math.round(w*ROWS/COLS);
+  setCanvasSize(w,h);
+}
+initialCanvasSize();
+window.addEventListener('resize', function(){
+  if(!hasManuallyResized) initialCanvasSize();
+});
+
+function pointFromEvent(e){
+  return e.touches ? e.touches[0] : e;
+}
+function beginResize(e){
+  resizing = true;
+  hasManuallyResized = true;
+  const p = pointFromEvent(e);
+  rzStartX = p.clientX; rzStartY = p.clientY;
+  const rect = canvas.getBoundingClientRect();
+  rzStartW = rect.width; rzStartH = rect.height;
+  e.preventDefault();
+}
+function doResize(e){
+  if(!resizing) return;
+  const p = pointFromEvent(e);
+  const dx = p.clientX - rzStartX;
+  const dy = p.clientY - rzStartY;
+  setCanvasSize(rzStartW+dx, rzStartH+dy);
+  e.preventDefault();
+}
+function endResize(){ resizing = false; }
+
+resizeHandle.addEventListener('mousedown', beginResize);
+window.addEventListener('mousemove', doResize);
+window.addEventListener('mouseup', endResize);
+resizeHandle.addEventListener('touchstart', beginResize, {passive:false});
+window.addEventListener('touchmove', doResize, {passive:false});
+window.addEventListener('touchend', endResize);
+
+/* ============================= VÒNG LẶP CHÍNH ============================= */
+let lastFpsTime = performance.now();
+let fpsFrames = 0;
+
+function frame(){
+  if(running){
+    for(let s=0;s<speed;s++) simulate();
+  }
+  render();
+  fpsFrames++;
+  const now = performance.now();
+  if(now-lastFpsTime>500){
+    statFpsEl.textContent = Math.round(fpsFrames*1000/(now-lastFpsTime));
+    fpsFrames=0;
+    lastFpsTime=now;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>

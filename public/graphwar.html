@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Graphwar - Math Battle</title>
+  <style>
+    :root {
+      --bg-color: #070b18;
+      --grid-color: rgba(255, 255, 255, 0.08);
+      --axis-color: rgba(255, 255, 255, 0.45);
+      --text-color: #f1f5f9;
+      --text-dim: #94a3b8;
+      --player-color: #3b82f6;
+      --player-glow: #60a5fa;
+      --enemy-color: #ef4444;
+      --enemy-glow: #f87171;
+      --obstacle-color: #475569;
+      --path-color: #10b981;
+      --path-glow: #34d399;
+      --panel-bg: rgba(15, 23, 42, 0.88);
+      --panel-border: #334155;
+      --accent: #8b5cf6;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: radial-gradient(ellipse at top, #111a34 0%, var(--bg-color) 60%);
+      color: var(--text-color);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      background: linear-gradient(180deg, #1e293b 0%, #172033 100%);
+      padding: 10px clamp(10px, 2vw, 22px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--panel-border);
+      flex-wrap: wrap;
+      gap: 10px;
+      z-index: 5;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .level-info { font-size: clamp(0.95rem, 2.2vw, 1.2rem); font-weight: 700; }
+    .subtitle { color: var(--text-dim); font-size: 0.9rem; }
+    .level-dots { display: flex; gap: 6px; }
+    .level-dots span {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #334155; display: inline-block;
+      transition: background .2s, transform .2s;
+    }
+    .level-dots span.done { background: var(--path-color); }
+    .level-dots span.active {
+      background: var(--player-color); transform: scale(1.4);
+      box-shadow: 0 0 8px var(--player-glow);
+    }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .icon-btn, .icon-select {
+      background: #0f172a; color: var(--text-color); border: 1px solid var(--panel-border);
+      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 1rem; cursor: pointer;
+      transition: all .15s; font-family: inherit;
+    }
+    .icon-btn:hover, .icon-select:hover { border-color: var(--player-color); transform: translateY(-1px); }
+
+    main { flex: 1; min-height: 0; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    canvas {
+      background: #0b1120;
+      box-shadow: 0 0 30px rgba(0,0,0,0.6), inset 0 0 60px rgba(59,130,246,0.03);
+      cursor: crosshair;
+      border-radius: var(--radius-md);
+      touch-action: none;
+      display: block;
+    }
+    #ui-layer {
+      position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center;
+      pointer-events: none; z-index: 4; text-align: center; padding: 0 12px;
+    }
+    .message {
+      font-size: clamp(1.5rem, 5vw, 4rem); font-weight: 800;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.85);
+      margin-bottom: 20px; opacity: 0; transition: opacity .3s, transform .3s;
+      transform: scale(0.8); max-width: 92vw; word-break: break-word; text-align: center;
+    }
+    .message.visible { opacity: 1; transform: scale(1); }
+    .hit { color: var(--path-glow); }
+    .miss { color: var(--enemy-glow); }
+
+    footer {
+      background: linear-gradient(0deg, #1e293b 0%, #172033 100%);
+      padding: 10px clamp(8px, 2vw, 18px) 12px;
+      border-top: 2px solid var(--panel-border);
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 5;
+    }
+    .toolbar-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+    .toolbar-row::-webkit-scrollbar { height: 4px; }
+    .toolbar-row::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .tb-btn {
+      flex: 0 0 auto;
+      background: #0f172a; color: var(--path-glow); border: 1px solid var(--panel-border);
+      padding: 7px 14px; border-radius: var(--radius-sm); font-family: 'Courier New', monospace;
+      font-size: 1rem; cursor: pointer; white-space: nowrap; transition: all .15s;
+    }
+    .tb-btn:hover { border-color: var(--path-color); background: #132030; }
+    .tb-btn.danger { color: var(--enemy-glow); }
+
+    .fire-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .input-group {
+      flex: 1; min-width: 160px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: clamp(1rem, 2.4vw, 1.6rem);
+      font-family: 'Courier New', Courier, monospace;
+      background: #0f172a; padding: 6px 10px 6px 16px; border-radius: var(--radius-md);
+      border: 2px solid var(--panel-border);
+    }
+    .fx-label { color: var(--text-dim); flex-shrink: 0; }
+    .input-group input {
+      background: transparent; border: none; color: var(--path-glow);
+      font-size: inherit; font-family: inherit; flex: 1; min-width: 0; outline: none;
+    }
+    .clear-btn {
+      background: transparent; border: none; color: var(--text-dim); cursor: pointer;
+      font-size: 1.1rem; padding: 2px 8px; border-radius: 6px; flex-shrink: 0;
+    }
+    .clear-btn:hover { color: var(--enemy-glow); background: rgba(239,68,68,0.1); }
+
+    button#fireBtn {
+      background: linear-gradient(135deg, var(--player-color), #2563eb);
+      color: white; border: none; padding: clamp(10px,2vw,15px) clamp(20px,4vw,40px);
+      font-size: clamp(1.05rem, 2.4vw, 1.4rem); font-weight: 700; border-radius: var(--radius-md);
+      cursor: pointer; transition: all .2s; box-shadow: 0 4px 14px rgba(59,130,246,0.35);
+      flex-shrink: 0;
+    }
+    button#fireBtn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59,130,246,0.5); }
+    button#fireBtn:disabled { background: #475569; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .btn-next {
+      background: linear-gradient(135deg, var(--path-color), #059669);
+      color: white; border: none; display: none; font-size: clamp(1rem,2.2vw,1.2rem);
+      padding: 12px 30px; border-radius: var(--radius-md); cursor: pointer; pointer-events: auto;
+      box-shadow: 0 4px 16px rgba(16,185,129,0.4); font-weight: 700;
+    }
+    .btn-next.visible { display: block; animation: popIn .3s ease; }
+    .btn-next:hover { background: #059669; transform: translateY(-2px); }
+    @keyframes popIn { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    .hint {
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      background: var(--panel-bg); padding: 9px 20px; border-radius: 20px;
+      border: 1px solid var(--panel-border); font-size: clamp(0.72rem, 1.8vw, 1.05rem);
+      backdrop-filter: blur(6px); display: flex; align-items: center; gap: 14px;
+      max-width: min(90vw, 640px); z-index: 4;
+    }
+    .preview-toggle { font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+
+    .pvp-row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    .turn-indicator {
+      font-size: clamp(0.9rem,2vw,1.3rem); font-weight: 700; background: var(--panel-bg);
+      padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--panel-border);
+    }
+    .player-chip input.name-input {
+      background: #0f172a; border: 1px solid var(--panel-border); color: var(--text-color);
+      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9rem; width: 120px; text-align: center;
+    }
+    #chip0 input { border-color: var(--player-color); }
+    #chip1 input { border-color: var(--enemy-color); }
+    .direction-toggle {
+      display: flex; gap: 12px; background: #0f172a; padding: 8px 16px; border-radius: var(--radius-md);
+      border: 2px solid var(--panel-border);
+    }
+    .direction-toggle label { font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+
+    .history-panel {
+      position: absolute; top: 0; right: -320px; width: 300px; height: 100%;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      border-left: 1px solid var(--panel-border); transition: right .25s ease;
+      display: flex; flex-direction: column; z-index: 6;
+    }
+    .history-panel.open { right: 0; }
+    .history-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px; border-bottom: 1px solid var(--panel-border); font-weight: 700;
+    }
+    .history-header button { background: none; border: none; color: var(--text-dim); font-size: 1.1rem; cursor: pointer; }
+    .history-list { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .history-item {
+      background: rgba(15,23,42,0.6); border: 1px solid var(--panel-border); border-radius: 8px;
+      padding: 8px 10px; font-size: 0.82rem; font-family: 'Courier New', monospace;
+    }
+    .history-item .h-who { color: var(--text-dim); font-family: inherit; font-size: 0.72rem; margin-bottom: 2px; }
+    .history-item.hit { border-color: var(--path-color); }
+    .history-item.miss { border-color: rgba(239,68,68,0.4); }
+    .history-empty { color: var(--text-dim); font-size: 0.85rem; text-align: center; margin-top: 20px; }
+
+    @media (max-width: 640px) {
+      .subtitle { display: none; }
+      header { padding: 8px 10px; }
+      .header-right { gap: 5px; }
+      .icon-btn, .icon-select { padding: 5px 7px; font-size: 0.85rem; }
+      .hint { top: 8px; padding: 6px 12px; gap: 8px; flex-wrap: wrap; justify-content: center; }
+      footer { padding: 8px 8px 10px; gap: 6px; }
+      .input-group { padding: 5px 8px 5px 12px; min-width: 110px; }
+      .player-chip input.name-input { width: 84px; font-size: 0.78rem; padding: 5px 6px; }
+      .history-panel { width: 84vw; right: -84vw; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <div class="level-info" id="levelName">Màn 1: Làm quen</div>
+      <div class="level-dots" id="levelDots"></div>
+    </div>
+    <div class="subtitle">Graphwar: Toán học Đạn đạo</div>
+    <div class="header-right">
+      <select class="icon-select" id="speedSelect" title="Tốc độ đạn" aria-label="Tốc độ đạn">
+        <option value="0.18">🐢 Chậm</option>
+        <option value="0.3" selected>🚀 Vừa</option>
+        <option value="0.5">⚡ Nhanh</option>
+      </select>
+      <button class="icon-btn" id="historyBtn" title="Lịch sử bắn" aria-label="Lịch sử bắn">📜</button>
+      <button class="icon-btn" id="muteBtn" title="Bật/tắt âm thanh" aria-label="Bật/tắt âm thanh">🔊</button>
+      <button class="icon-btn" id="restartBtn" title="Chơi lại màn này" aria-label="Chơi lại màn này">🔄</button>
+    </div>
+  </header>
+
+  <main id="gameMain">
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="hint" id="hintBox">
+      <span id="hintText">Gợi ý: Nhập hàm số đường thẳng để bắn trúng Bot (VD: x hoặc 0.5*x)</span>
+      <label class="preview-toggle"><input type="checkbox" id="previewToggle" checked> Xem trước</label>
+    </div>
+
+    <div id="ui-layer">
+      <div class="message" id="msgText">HIT!</div>
+      <button class="btn-next" id="nextBtn">Màn Tiếp Theo ➔</button>
+    </div>
+
+    <aside class="history-panel" id="historyPanel">
+      <div class="history-header">Lịch sử bắn <button id="closeHistoryBtn" aria-label="Đóng">✕</button></div>
+      <div class="history-list" id="historyList"></div>
+    </aside>
+  </main>
+
+  <footer>
+    <div class="pvp-row" id="pvpControls" style="display:none;">
+      <div class="player-chip" id="chip0"><input class="name-input" id="nameInput0" value="Người chơi 1" maxlength="14"></div>
+      <div class="turn-indicator" id="turnIndicator">Lượt của: <span id="currentPlayerName" style="color:#3b82f6;">Người chơi 1</span></div>
+      <div class="player-chip" id="chip1"><input class="name-input" id="nameInput1" value="Người chơi 2" maxlength="14"></div>
+      <div class="direction-toggle" id="dirToggle">
+        <label><input type="radio" name="direction" value="-1"> ⬅️ Trái</label>
+        <label><input type="radio" name="direction" value="1" checked> Phải ➡️</label>
+      </div>
+    </div>
+
+    <div class="toolbar-row" id="mathToolbar"></div>
+
+    <div class="fire-row">
+      <div class="input-group">
+        <span class="fx-label">f(x) =</span>
+        <input type="text" id="funcInput" placeholder="VD: sin(x) * 2" autocomplete="off" spellcheck="false" />
+        <button class="clear-btn" id="clearBtn" title="Xóa nội dung" aria-label="Xóa nội dung">✕</button>
+      </div>
+      <button id="fireBtn">🔥 Bắn!</button>
+    </div>
+  </footer>
+
+  <script>
+    // ============================================================
+    // DOM references
+    // ============================================================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const funcInput = document.getElementById('funcInput');
+    const fireBtn = document.getElementById('fireBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const msgText = document.getElementById('msgText');
+    const levelName = document.getElementById('levelName');
+    const hintText = document.getElementById('hintText');
+    const previewToggle = document.getElementById('previewToggle');
+
+    const pvpControls = document.getElementById('pvpControls');
+    const currentPlayerName = document.getElementById('currentPlayerName');
+    const dirRadios = document.getElementsByName('direction');
+    const nameInput0 = document.getElementById('nameInput0');
+    const nameInput1 = document.getElementById('nameInput1');
+
+    const speedSelect = document.getElementById('speedSelect');
+    const muteBtn = document.getElementById('muteBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const historyBtn = document.getElementById('historyBtn');
+    const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+    const historyPanel = document.getElementById('historyPanel');
+    const historyListEl = document.getElementById('historyList');
+    const clearBtn = document.getElementById('clearBtn');
+    const levelDotsEl = document.getElementById('levelDots');
+    const mathToolbarEl = document.getElementById('mathToolbar');
+
+    // ============================================================
+    // Core game state
+    // ============================================================
+    let SCALE = 25;
+    let ORIGIN = { x: 150, y: 0 };
+    let viewW = 0, viewH = 0;
+
+    const levels = [
+      {
+        name: "Màn 1: Tập bắn Bot",
+        hint: "Nhập x để đạn bay chéo lên, hoặc 0 để bay ngang.",
+        bot: { x: 10, y: 10 },
+        obstacles: []
+      },
+      {
+        name: "Màn 2: Rào cản",
+        hint: "Dùng đường cong Parabol (VD: -0.1*(x-10)^2 + 8) để vượt tường.",
+        bot: { x: 16, y: 0 },
+        obstacles: [ { x: 8, y: 0, r: 4 } ]
+      },
+      {
+        name: "Màn 3: Lượn sóng",
+        hint: "Dùng hàm lượng giác (VD: 5*sin(x/2)) để luồn lách.",
+        bot: { x: 20, y: 0 },
+        obstacles: [ { x: 6, y: 4, r: 2 }, { x: 14, y: -4, r: 2 } ]
+      },
+      {
+        name: "Màn 4: Trùm Cuối",
+        hint: "Đánh bại Bot ẩn nấp sau nhiều lớp rào cản! (Thử dùng hàm bậc 3: 0.05*x*(x-12)*(x-24) )",
+        isRandom: true,
+        bot: { x: 24, y: 0 },
+        obstacles: []
+      },
+      {
+        name: "Màn 5: Đấu Trường Đối Kháng",
+        hint: "Đấu 1-1: chọn hướng bắn và nhập hàm số để hạ gục đối thủ trước khi bị bắn trúng!",
+        isPvP: true,
+        players: [
+          { id: 0, name: "Người chơi 1", color: "#3b82f6", x: -10, y: 0, active: true },
+          { id: 1, name: "Người chơi 2", color: "#ef4444", x: 10, y: 0, active: true }
+        ]
+      }
+    ];
+
+    let currentLevel = 0;
+    let state = 'IDLE'; // IDLE, FIRING, BOT_THINKING, DONE
+    let currentFunc = null;
+    let t = 0;
+    let pathHistory = [];
+    let isPlayerTurn = true;
+    let hasWon = false;
+
+    let playerPos = { x: 0, y: 0 };
+    let botPos = { x: 10, y: 10 };
+    let currentObstacles = [];
+    let botAttemptCount = 0;
+    let playerAttemptCount = 0;
+    let lastUsedExpr = "";
+    let lastBotExpr = "";
+
+    let currentPlayerIdx = 0;
+    let fireDirection = 1;
+    let yOffset = 0;
+    let fireStep = 0.3;
+
+    let previewFunc = null;
+    let previewValid = false;
+    let livePreviewEnabled = true;
+
+    let shotHistory = [];
+    let isMuted = localStorage.getItem('graphwar_muted') === '1';
+
+    // Visual effect state
+    let particles = [];
+    let confetti = [];
+    let stars = [];
+    let shakeTime = 0, shakeMag = 0;
+    let pulseT = 0;
+    let lastFrameTime = 0;
+
+    // ============================================================
+    // Sound effects (WebAudio, synthesized — no external assets)
+    // ============================================================
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch (e) { audioCtx = null; }
+      }
+      return audioCtx;
+    }
+    function playTone(freq, dur, type, vol) {
+      if (isMuted) return;
+      const ac = getAudioCtx();
+      if (!ac) return;
+      try {
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol || 0.15, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start();
+        osc.stop(ac.currentTime + dur);
+      } catch (e) {}
+    }
+    function sfxFire() { playTone(220, 0.15, 'sawtooth', 0.1); }
+    function sfxHit() {
+      playTone(880, 0.2, 'square', 0.15);
+      setTimeout(function () { playTone(1200, 0.15, 'square', 0.1); }, 80);
+    }
+    function sfxMiss() { playTone(120, 0.3, 'sawtooth', 0.12); }
+    function sfxClick() { playTone(600, 0.05, 'sine', 0.08); }
+    function sfxWin() {
+      [523, 659, 784, 1046].forEach(function (f, i) {
+        setTimeout(function () { playTone(f, 0.2, 'triangle', 0.12); }, i * 120);
+      });
+    }
+    function updateMuteBtn() { muteBtn.textContent = isMuted ? '🔇' : '🔊'; }
+
+    // ============================================================
+    // Canvas / coordinate setup (HiDPI aware)
+    // ============================================================
+    function generateStars() {
+      const count = Math.floor((viewW * viewH) / 9000);
+      stars = [];
+      for (let i = 0; i < count; i++) {
+        stars.push({ x: Math.random() * viewW, y: Math.random() * viewH, r: Math.random() * 1.3 + 0.3, phase: Math.random() * Math.PI * 2 });
+      }
+    }
+
+    function resizeCanvas() {
+      const main = document.getElementById('gameMain');
+      const dpr = window.devicePixelRatio || 1;
+      const rect = main.getBoundingClientRect();
+      viewW = Math.max(1, Math.floor(rect.width));
+      viewH = Math.max(1, Math.floor(rect.height));
+      canvas.width = Math.floor(viewW * dpr);
+      canvas.height = Math.floor(viewH * dpr);
+      canvas.style.width = viewW + 'px';
+      canvas.style.height = viewH + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const lvl = levels[currentLevel];
+      if (lvl && (lvl.isRandom || lvl.isPvP)) {
+        ORIGIN.x = viewW / 2;
+      } else {
+        ORIGIN.x = Math.min(150, viewW * 0.22);
+      }
+      ORIGIN.y = viewH / 2 + Math.min(50, viewH * 0.08);
+      generateStars();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function toScreen(x, y) {
+      return { x: ORIGIN.x + x * SCALE, y: ORIGIN.y - y * SCALE };
+    }
+
+    // ============================================================
+    // Drawing
+    // ============================================================
+    function drawStars() {
+      for (const s of stars) {
+        const alpha = 0.25 + 0.5 * (0.5 + 0.5 * Math.sin(pulseT / 900 + s.phase));
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawGrid() {
+      drawStars();
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
+      const subScale = SCALE / 5;
+      ctx.beginPath();
+      for (let x = ORIGIN.x % subScale; x < viewW; x += subScale) { ctx.moveTo(x, 0); ctx.lineTo(x, viewH); }
+      for (let y = ORIGIN.y % subScale; y < viewH; y += subScale) { ctx.moveTo(0, y); ctx.lineTo(viewW, y); }
+      ctx.stroke();
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.beginPath();
+      for (let x = ORIGIN.x % SCALE; x < viewW; x += SCALE) { ctx.moveTo(x, 0); ctx.lineTo(x, viewH); }
+      for (let y = ORIGIN.y % SCALE; y < viewH; y += SCALE) { ctx.moveTo(0, y); ctx.lineTo(viewW, y); }
+      ctx.stroke();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath(); ctx.moveTo(0, ORIGIN.y); ctx.lineTo(viewW, ORIGIN.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ORIGIN.x, 0); ctx.lineTo(ORIGIN.x, viewH); ctx.stroke();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '12px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+
+      const minMathX = -Math.floor(ORIGIN.x / SCALE);
+      const maxMathX = Math.ceil((viewW - ORIGIN.x) / SCALE);
+      for (let i = minMathX; i <= maxMathX; i++) {
+        if (i === 0 || i % 2 !== 0) continue;
+        const p = toScreen(i, 0);
+        ctx.fillText(i, p.x, p.y + 15);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y - 4); ctx.lineTo(p.x, p.y + 4); ctx.stroke();
+      }
+
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      const minMathY = -Math.ceil((viewH - ORIGIN.y) / SCALE);
+      const maxMathY = Math.floor(ORIGIN.y / SCALE);
+      for (let i = minMathY; i <= maxMathY; i++) {
+        if (i === 0 || i % 2 !== 0) continue;
+        const p = toScreen(0, i);
+        ctx.fillText(i, p.x - 8, p.y);
+        ctx.beginPath(); ctx.moveTo(p.x - 4, p.y); ctx.lineTo(p.x + 4, p.y); ctx.stroke();
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    function drawObstacle(obs) {
+      const p = toScreen(obs.x, obs.y);
+      const rad = obs.r * SCALE;
+      const grad = ctx.createRadialGradient(p.x - rad * 0.3, p.y - rad * 0.3, rad * 0.1, p.x, p.y, rad);
+      grad.addColorStop(0, '#64748b');
+      grad.addColorStop(1, '#334155');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function drawCharacter(x, y, color, radius, label, ringed) {
+      const p = toScreen(x, y);
+      const bob = Math.sin(pulseT / 450) * 2;
+      if (ringed) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.arc(p.x, p.y + bob, radius + 8, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(p.x, p.y + bob, radius, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(p.x - radius * 0.3, p.y + bob - radius * 0.3, radius * 0.28, 0, Math.PI * 2); ctx.fill();
+      if (label) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(label, p.x, p.y + bob - radius - 8);
+      }
+    }
+
+    function drawEntities() {
+      const level = levels[currentLevel];
+
+      for (const obs of currentObstacles) drawObstacle(obs);
+
+      if (level.isPvP) {
+        for (const p of level.players) {
+          if (p.active) {
+            drawCharacter(p.x, p.y, p.color, 12, p.name, p.id === currentPlayerIdx);
+          } else {
+            const pt = toScreen(p.x, p.y);
+            ctx.fillStyle = '#475569';
+            ctx.beginPath(); ctx.arc(pt.x, pt.y, 12, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText('RIP', pt.x, pt.y + 4);
+          }
+        }
+      } else {
+        drawCharacter(botPos.x, botPos.y, '#ef4444', 15, null, false);
+        drawCharacter(playerPos.x, playerPos.y, '#3b82f6', 15, null, false);
+      }
+
+      if (pathHistory.length > 1) {
+        for (let i = 1; i < pathHistory.length; i++) {
+          const p0 = toScreen(pathHistory[i - 1].x, pathHistory[i - 1].y);
+          const p1 = toScreen(pathHistory[i].x, pathHistory[i].y);
+          const frac = i / pathHistory.length;
+          ctx.strokeStyle = 'rgba(16,185,129,' + (0.15 + 0.75 * frac).toFixed(3) + ')';
+          ctx.lineWidth = 1.5 + 2.5 * frac;
+          ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+        }
+      }
+
+      if (state === 'FIRING' || state === 'DONE') {
+        let y = 0;
+        try { y = Number(currentFunc.evaluate({ x: t })) + yOffset; } catch (e) {}
+        const pt = toScreen(t, y);
+        ctx.shadowColor = '#10b981';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      if (state === 'IDLE' && previewValid && livePreviewEnabled) {
+        drawPreviewCurve();
+      }
+
+      drawParticles();
+      drawConfetti();
+    }
+
+    function getFireOrigin() {
+      const lvl = levels[currentLevel];
+      if (lvl.isPvP) {
+        const cp = lvl.players[currentPlayerIdx];
+        return { x: cp.x, y: cp.y };
+      }
+      return { x: playerPos.x, y: playerPos.y };
+    }
+
+    function getFireDirection() {
+      const lvl = levels[currentLevel];
+      if (lvl.isPvP) {
+        let dir = 1;
+        for (const r of dirRadios) { if (r.checked) dir = parseFloat(r.value); }
+        return dir;
+      }
+      return botPos.x > playerPos.x ? 1 : -1;
+    }
+
+    function drawPreviewCurve() {
+      const origin = getFireOrigin();
+      const dir = getFireDirection();
+      let off = 0;
+      try { off = origin.y - Number(previewFunc.evaluate({ x: origin.x })); }
+      catch (e) { return; }
+
+      const mMaxX = (viewW - ORIGIN.x) / SCALE + 2;
+      const mMinX = -ORIGIN.x / SCALE - 2;
+      const xEnd = dir > 0 ? mMaxX : mMinX;
+
+      const stepPx = 3;
+      const totalPx = Math.abs(toScreen(xEnd, 0).x - toScreen(origin.x, 0).x);
+      const steps = Math.max(1, Math.floor(totalPx / stepPx));
+      const dx = (xEnd - origin.x) / steps;
+
+      ctx.save();
+      ctx.setLineDash([6, 5]);
+      ctx.strokeStyle = 'rgba(139,92,246,0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i <= steps; i++) {
+        const x = origin.x + dx * i;
+        let y;
+        try { y = Number(previewFunc.evaluate({ x: x })) + off; }
+        catch (e) { started = false; continue; }
+        if (!isFinite(y)) { started = false; continue; }
+        const p = toScreen(x, y);
+        if (p.y < -50 || p.y > viewH + 50) { started = false; continue; }
+        if (!started) { ctx.moveTo(p.x, p.y); started = true; }
+        else { ctx.lineTo(p.x, p.y); }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // ============================================================
+    // Particles / confetti / screen shake
+    // ============================================================
+    function spawnBurst(x, y, color, count, spread) {
+      count = count || 24; spread = spread || 1;
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = (1 + Math.random() * 3) * spread;
+        particles.push({
+          x: x, y: y,
+          vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 1,
+          life: 500 + Math.random() * 400, maxLife: 900,
+          color: color, size: 2 + Math.random() * 3
+        });
+      }
+    }
+    function updateParticles(dt) {
+      const k = dt / 16;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life -= dt;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        p.x += p.vx * k;
+        p.y += p.vy * k;
+        p.vy += 0.08 * k;
+      }
+    }
+    function drawParticles() {
+      for (const p of particles) {
+        const alpha = Math.max(0, p.life / p.maxLife);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function triggerConfetti() {
+      const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+      for (let i = 0; i < 70; i++) {
+        confetti.push({
+          x: Math.random() * viewW, y: -20 - Math.random() * viewH * 0.5,
+          vx: (Math.random() * 2 - 1) * 1.2, vy: 1.5 + Math.random() * 2,
+          size: 4 + Math.random() * 4, color: colors[Math.floor(Math.random() * colors.length)],
+          rot: Math.random() * Math.PI * 2, vrot: (Math.random() * 2 - 1) * 0.2,
+          life: 2200 + Math.random() * 800
+        });
+      }
+    }
+    function updateConfetti(dt) {
+      const k = dt / 16;
+      for (let i = confetti.length - 1; i >= 0; i--) {
+        const c = confetti[i];
+        c.life -= dt;
+        if (c.life <= 0) { confetti.splice(i, 1); continue; }
+        c.x += c.vx * k; c.y += c.vy * k; c.rot += c.vrot * k;
+      }
+    }
+    function drawConfetti() {
+      for (const c of confetti) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 0.6);
+        ctx.restore();
+      }
+    }
+
+    function triggerShake(mag, time) { shakeMag = mag || 6; shakeTime = time || 250; }
+
+    // ============================================================
+    // Main render loop (always running — decoupled from game state)
+    // ============================================================
+    function update(dt) {
+      pulseT += dt;
+      updateParticles(dt);
+      updateConfetti(dt);
+      if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
+      if (state === 'FIRING') advanceProjectile();
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, viewW, viewH);
+      ctx.save();
+      if (shakeTime > 0) {
+        const f = shakeTime / 340;
+        const dx = (Math.random() * 2 - 1) * shakeMag * f;
+        const dy = (Math.random() * 2 - 1) * shakeMag * f;
+        ctx.translate(dx, dy);
+      }
+      drawGrid();
+      drawEntities();
+      ctx.restore();
+    }
+
+    function frameTick(now) {
+      const dt = Math.min(now - (lastFrameTime || now), 50);
+      lastFrameTime = now;
+      update(dt);
+      render();
+      requestAnimationFrame(frameTick);
+    }
+
+    // ============================================================
+    // Level setup
+    // ============================================================
+    function generateRandomObstacles(levelIdx) {
+      const numObstacles = levelIdx + 1;
+      const obstacles = [];
+      const minX = Math.min(playerPos.x, botPos.x) + 3;
+      const maxX = Math.max(playerPos.x, botPos.x) - 3;
+      for (let i = 0; i < numObstacles; i++) {
+        let x = minX + (i + 0.2 + Math.random() * 0.6) * ((maxX - minX) / numObstacles);
+        let y = -3.5 + Math.random() * 7;
+        let r = 1.2 + Math.random() * 1.0;
+        obstacles.push({ x: x, y: y, r: r });
+      }
+      return obstacles;
+    }
+
+    function renderLevelDots() {
+      levelDotsEl.innerHTML = '';
+      levels.forEach(function (lvl, i) {
+        const dot = document.createElement('span');
+        if (i < currentLevel) dot.className = 'done';
+        else if (i === currentLevel) dot.className = 'active';
+        levelDotsEl.appendChild(dot);
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function renderHistory() {
+      if (shotHistory.length === 0) {
+        historyListEl.innerHTML = '<div class="history-empty">Chưa có lượt bắn nào.</div>';
+        return;
+      }
+      historyListEl.innerHTML = shotHistory.map(function (h) {
+        const icon = h.outcome === 'hit' ? '🎯' : (h.outcome === 'obstacle' ? '🧱' : (h.outcome === 'error' ? '⚠️' : '💨'));
+        const cls = h.outcome === 'hit' ? 'hit' : 'miss';
+        return '<div class="history-item ' + cls + '"><div class="h-who">' + icon + ' ' + escapeHtml(h.who) + '</div>f(x) = ' + escapeHtml(h.expr) + '</div>';
+      }).join('');
+    }
+
+    function recordShot(who, expr, outcome) {
+      shotHistory.unshift({ who: who, expr: expr, outcome: outcome });
+      if (shotHistory.length > 50) shotHistory.pop();
+      renderHistory();
+    }
+
+    function loadLevel(idx) {
+      if (idx >= levels.length) {
+        triggerConfetti();
+        sfxWin();
+        setTimeout(function () { alert("Chúc mừng! Bạn đã hoàn thành tất cả các màn!"); }, 50);
+        idx = 0;
+      }
+      currentLevel = idx;
+      localStorage.setItem('graphwar_level', currentLevel);
+
+      const lvl = levels[currentLevel];
+      levelName.textContent = lvl.name;
+      hintText.textContent = "Gợi ý: " + lvl.hint;
+      renderLevelDots();
+
+      particles = [];
+      confetti = [];
+      shakeTime = 0;
+
+      if (lvl.isRandom) {
+        SCALE = 15;
+        playerPos.x = -22 + Math.random() * 10;
+        playerPos.y = -8 + Math.random() * 16;
+        botPos.x = 12 + Math.random() * 10;
+        botPos.y = -8 + Math.random() * 16;
+        currentObstacles = generateRandomObstacles(currentLevel);
+      } else if (lvl.isPvP) {
+        SCALE = 22;
+        lvl.players[0].x = -14 + Math.random() * 6;
+        lvl.players[0].y = -6 + Math.random() * 12;
+        lvl.players[1].x = 8 + Math.random() * 6;
+        lvl.players[1].y = -6 + Math.random() * 12;
+        currentObstacles = [
+          { x: -4 + Math.random() * 4, y: -4 + Math.random() * 8, r: 1.3 + Math.random() * 1.2 },
+          { x: 0 + Math.random() * 4, y: -4 + Math.random() * 8, r: 1.3 + Math.random() * 1.2 }
+        ];
+      } else {
+        SCALE = 25;
+        playerPos.x = 0; playerPos.y = 0;
+        botPos.x = lvl.bot.x; botPos.y = lvl.bot.y;
+        currentObstacles = JSON.parse(JSON.stringify(lvl.obstacles || []));
+      }
+
+      if (lvl.isPvP) {
+        lvl.players.forEach(function (p) { p.active = true; });
+        currentPlayerIdx = 0;
+        pvpControls.style.display = 'flex';
+        nameInput0.value = lvl.players[0].name;
+        nameInput1.value = lvl.players[1].name;
+        currentPlayerName.textContent = lvl.players[0].name;
+        currentPlayerName.style.color = lvl.players[0].color;
+      } else {
+        pvpControls.style.display = 'none';
+      }
+
+      state = 'IDLE';
+      t = 0;
+      pathHistory = [];
+      funcInput.value = '';
+      fireBtn.disabled = false;
+      funcInput.disabled = false;
+      isPlayerTurn = true;
+      hasWon = false;
+      botAttemptCount = 0;
+      playerAttemptCount = 0;
+      previewValid = false;
+
+      shotHistory = [];
+      renderHistory();
+
+      msgText.classList.remove('visible');
+      nextBtn.classList.remove('visible');
+
+      resizeCanvas();
+    }
+
+    // ============================================================
+    // Turn management
+    // ============================================================
+    function resetForNewShot() {
+      state = 'IDLE';
+      t = 0;
+      pathHistory = [];
+      fireBtn.disabled = false;
+      funcInput.disabled = false;
+      funcInput.value = '';
+      msgText.classList.remove('visible');
+      previewValid = false;
+    }
+
+    function nextTurn() {
+      const lvl = levels[currentLevel];
+      if (!lvl.isPvP) {
+        if (isPlayerTurn) {
+          isPlayerTurn = false;
+          botThinkAndFire();
+        } else {
+          isPlayerTurn = true;
+          resetForNewShot();
+        }
+        return;
+      }
+
+      const alive = lvl.players.filter(function (p) { return p.active; });
+      if (alive.length <= 1) {
+        if (alive.length === 1) { showMessage(alive[0].name + " CHIẾN THẮNG! 🏆", true, true); }
+        return;
+      }
+
+      do {
+        currentPlayerIdx = (currentPlayerIdx + 1) % lvl.players.length;
+      } while (!lvl.players[currentPlayerIdx].active);
+
+      const cp = lvl.players[currentPlayerIdx];
+      currentPlayerName.textContent = cp.name;
+      currentPlayerName.style.color = cp.color;
+
+      resetForNewShot();
+    }
+
+    function currentShooterInfo() {
+      const lvl = levels[currentLevel];
+      if (lvl.isPvP) return { who: lvl.players[currentPlayerIdx].name, expr: lastUsedExpr };
+      return { who: isPlayerTurn ? 'Bạn' : 'Bot', expr: isPlayerTurn ? lastUsedExpr : lastBotExpr };
+    }
+
+    function notifyAchievement(id, name, desc, icon) {
+      try {
+        window.parent.postMessage({ type: "UNLOCK_ACHIEVEMENT", id: id, name: name, desc: desc, icon: icon }, "*");
+      } catch (e) {}
+    }
+
+    function showMessage(text, isHit, pvpOver) {
+      msgText.textContent = text;
+      msgText.className = 'message visible ' + (isHit ? 'hit' : 'miss');
+      if (isHit) {
+        if (!levels[currentLevel].isPvP || pvpOver) {
+          nextBtn.classList.add('visible');
+        }
+      }
+    }
+
+    // ============================================================
+    // Collision helper
+    // ============================================================
+    function segmentIntersectsCircle(x1, y1, x2, y2, cx, cy, r) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const fx = x1 - cx;
+      const fy = y1 - cy;
+      const a = dx * dx + dy * dy;
+      if (a === 0) return Math.hypot(fx, fy) <= r;
+      const b = 2 * (fx * dx + fy * dy);
+      const c = (fx * fx + fy * fy) - r * r;
+      let discriminant = b * b - 4 * a * c;
+      if (discriminant < 0) return false;
+      discriminant = Math.sqrt(discriminant);
+      const t1 = (-b - discriminant) / (2 * a);
+      const t2 = (-b + discriminant) / (2 * a);
+      return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1) || (c <= 0);
+    }
+
+    // ============================================================
+    // Projectile physics (called once per frame while state === FIRING)
+    // ============================================================
+    function advanceProjectile() {
+      const lvl = levels[currentLevel];
+      const step = fireStep * fireDirection;
+      const prev_t = t;
+      const prev_y = pathHistory.length > 0 ? pathHistory[pathHistory.length - 1].y : 0;
+      t += step;
+
+      let y;
+      try {
+        y = Number(currentFunc.evaluate({ x: t })) + yOffset;
+      } catch (e) {
+        showMessage("Lỗi toán học!", false);
+        state = 'DONE';
+        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        return;
+      }
+
+      if (!isFinite(y)) {
+        showMessage("Ra ngoài vô cực!", false);
+        state = 'DONE';
+        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        return;
+      }
+
+      pathHistory.push({ x: t, y: y });
+      const r_proj = 8 / SCALE;
+
+      if (lvl.isPvP) {
+        for (const p of lvl.players) {
+          if (!p.active || p.id === currentPlayerIdx) continue;
+          const r_target = 12 / SCALE;
+          if (segmentIntersectsCircle(prev_t, prev_y, t, y, p.x, p.y, r_target + r_proj)) {
+            p.active = false;
+            const hitPt = toScreen(p.x, p.y);
+            spawnBurst(hitPt.x, hitPt.y, p.color, 34, 1.4);
+            triggerShake(9, 320);
+            sfxHit();
+            recordShot(lvl.players[currentPlayerIdx].name, lastUsedExpr, 'hit');
+
+            const alive = lvl.players.filter(function (pl) { return pl.active; });
+            state = 'DONE';
+            if (alive.length <= 1) {
+              if (alive.length === 1) {
+                hasWon = true;
+                nextBtn.textContent = "Hoàn Thành! 🎉";
+                showMessage(alive[0].name + " CHIẾN THẮNG! 🏆", true, true);
+                sfxWin();
+                triggerConfetti();
+                notifyAchievement("graphwar_arena", "⚔️ Vô Địch Đấu Trường", "Chiến thắng một trận Đấu Trường Đối Kháng 1-1!", "⚔️");
+              } else {
+                hasWon = false;
+                nextBtn.textContent = "Chơi lại 🔄";
+                showMessage("HÒA!", true, true);
+              }
+            } else {
+              showMessage("Đã loại " + p.name + "!", true);
+              setTimeout(nextTurn, 2000);
+            }
+            return;
+          }
+        }
+      } else if (isPlayerTurn) {
+        const r_bot = 15 / SCALE;
+        if (segmentIntersectsCircle(prev_t, prev_y, t, y, botPos.x, botPos.y, r_bot + r_proj)) {
+          hasWon = true;
+          nextBtn.textContent = "Màn Tiếp Theo ➔";
+          const bp = toScreen(botPos.x, botPos.y);
+          spawnBurst(bp.x, bp.y, '#ef4444', 36, 1.5);
+          triggerShake(10, 340);
+          sfxHit();
+          recordShot('Bạn', lastUsedExpr, 'hit');
+          showMessage("TRÚNG MỤC TIÊU! 🎉", true);
+          state = 'DONE';
+
+          if (currentLevel === 3 && playerAttemptCount === 1) {
+            notifyAchievement("graphwar_epic", "🎯 Thiện Xạ Không Gian", "Hạ gục Bot ở Màn 4 Trùm Cuối ngay trong lượt bắn đầu tiên!", "🏆");
+          }
+          if (currentLevel === 3) {
+            notifyAchievement("graphwar_boss", "👑 Kẻ Diệt Trùm", "Chinh phục thành công Màn 4 - Thử thách tối thượng!", "🏆");
+            triggerConfetti();
+          }
+          if (lastUsedExpr.toLowerCase().includes("sin") || lastUsedExpr.toLowerCase().includes("cos")) {
+            notifyAchievement("graphwar_sine", "🌊 Nhịp Sóng Lượng Giác", "Tiêu diệt mục tiêu bằng cách sử dụng hàm lượng giác sin(x) hoặc cos(x)!", "〰️");
+          }
+          return;
+        }
+      } else {
+        const r_player = 15 / SCALE;
+        if (segmentIntersectsCircle(prev_t, prev_y, t, y, playerPos.x, playerPos.y, r_player + r_proj)) {
+          hasWon = false;
+          nextBtn.textContent = "Chơi lại 🔄";
+          const pp = toScreen(playerPos.x, playerPos.y);
+          spawnBurst(pp.x, pp.y, '#3b82f6', 34, 1.4);
+          triggerShake(10, 340);
+          sfxMiss();
+          recordShot('Bot', lastBotExpr, 'hit');
+          showMessage("BẠN ĐÃ BỊ TIÊU DIỆT! 💥", true, true);
+          state = 'DONE';
+          return;
+        }
+      }
+
+      for (const obs of currentObstacles) {
+        if (segmentIntersectsCircle(prev_t, prev_y, t, y, obs.x, obs.y, obs.r + r_proj)) {
+          const op = toScreen(t, y);
+          spawnBurst(op.x, op.y, '#94a3b8', 16, 0.9);
+          sfxMiss();
+          const info = currentShooterInfo();
+          recordShot(info.who, info.expr, 'obstacle');
+          showMessage("Va chạm rào cản!", false);
+          state = 'DONE';
+          setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+          return;
+        }
+      }
+
+      const mMaxX = (viewW - ORIGIN.x) / SCALE + 2;
+      const mMinX = -ORIGIN.x / SCALE - 2;
+      const mMinY = (ORIGIN.y - viewH) / SCALE - 2;
+      const mMaxY = ORIGIN.y / SCALE + 2;
+
+      if (t > mMaxX || t < mMinX || y > mMaxY || y < mMinY) {
+        const info = currentShooterInfo();
+        recordShot(info.who, info.expr, 'miss');
+        showMessage("Trượt rồi!", false);
+        state = 'DONE';
+        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        return;
+      }
+    }
+
+    // ============================================================
+    // Bot AI
+    // ============================================================
+    function botThinkAndFire() {
+      state = 'BOT_THINKING';
+      showMessage("Bot đang suy nghĩ...", false);
+
+      setTimeout(function () {
+        const xb = botPos.x, yb = botPos.y;
+        const xp = playerPos.x, yp = playerPos.y;
+
+        let baseErr = 3.5 - currentLevel * 0.8;
+        if (baseErr < 0.5) baseErr = 0.5;
+        let err = baseErr * Math.pow(0.55, botAttemptCount);
+        if (err < 0.1) err = 0.1;
+        botAttemptCount++;
+
+        let xt = xp + (Math.random() * 2 - 1) * err;
+        const yt = yp + (Math.random() * 2 - 1) * err;
+        if (Math.abs(xt - xb) < 0.5) {
+          xt = xb + (xt >= xb ? 0.5 : -0.5);
+        }
+
+        const m = (yt - yb) / (xt - xb);
+
+        let obstacle = null;
+        for (const obs of currentObstacles) {
+          if (obs.x > Math.min(xt, xb) && obs.x < Math.max(xt, xb)) { obstacle = obs; break; }
+        }
+
+        let a = 0;
+        if (obstacle) {
+          const targetYAtObs = obstacle.y + obstacle.r + 1.5 + Math.random() * 1.5;
+          const denom = (obstacle.x - xb) * (obstacle.x - xt);
+          if (denom !== 0) a = (targetYAtObs - m * (obstacle.x - xb) - yb) / denom;
+        } else {
+          a = (Math.random() * 2 - 1) * 0.12;
+        }
+
+        const expr = a + ' * (x - ' + xb + ') * (x - ' + xt + ') + ' + m + ' * (x - ' + xb + ') + ' + yb;
+        try { currentFunc = math.compile(expr); }
+        catch (e) { currentFunc = math.compile('0 * x + ' + yb); }
+        lastBotExpr = expr;
+
+        fireDirection = xp > xb ? 1 : -1;
+        t = xb;
+
+        try {
+          const initialVal = Number(currentFunc.evaluate({ x: xb }));
+          yOffset = yb - initialVal;
+        } catch (e) { yOffset = 0; }
+
+        pathHistory = [{ x: xb, y: yb }];
+
+        const cleanExpr = 'f(x) = ' + a.toFixed(2) + '*(x - ' + xb + ')*(x - ' + xt.toFixed(1) + ') + ' + m.toFixed(2) + '*(x - ' + xb + ') + ' + yb;
+        showMessage("Bot BẮN: " + cleanExpr.replace(/\*/g, ''), false);
+
+        setTimeout(function () {
+          msgText.classList.remove('visible');
+          state = 'FIRING';
+          sfxFire();
+        }, 1200);
+
+      }, 1500);
+    }
+
+    // ============================================================
+    // Firing (player)
+    // ============================================================
+    fireBtn.addEventListener('click', function () {
+      const expr = funcInput.value.trim();
+      if (!expr) return;
+
+      let fn;
+      try {
+        fn = math.compile(expr);
+        fn.evaluate({ x: 0 });
+      } catch (e) {
+        alert("Hàm số không hợp lệ. Vui lòng kiểm tra lại! VD: x^2 hoặc sin(x)");
+        return;
+      }
+      currentFunc = fn;
+
+      state = 'FIRING';
+      playerAttemptCount++;
+      lastUsedExpr = expr;
+      sfxFire();
+
+      const lvl = levels[currentLevel];
+      const origin = getFireOrigin();
+      if (lvl.isPvP) {
+        for (const r of dirRadios) { if (r.checked) fireDirection = parseFloat(r.value); }
+      } else {
+        fireDirection = botPos.x > playerPos.x ? 1 : -1;
+      }
+      const startX = origin.x, startY = origin.y;
+      t = startX;
+
+      try {
+        const initialVal = Number(currentFunc.evaluate({ x: startX }));
+        yOffset = startY - initialVal;
+      } catch (e) { yOffset = 0; }
+
+      pathHistory = [{ x: startX, y: startY }];
+      fireBtn.disabled = true;
+      funcInput.disabled = true;
+      previewValid = false;
+    });
+
+    funcInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && state === 'IDLE') fireBtn.click();
+    });
+
+    nextBtn.addEventListener('click', function () {
+      sfxClick();
+      if (hasWon) loadLevel(currentLevel + 1);
+      else loadLevel(currentLevel);
+    });
+
+    // ============================================================
+    // Live function preview while typing
+    // ============================================================
+    function updatePreview() {
+      const expr = funcInput.value.trim();
+      if (!expr) { previewValid = false; return; }
+      try {
+        const fn = math.compile(expr);
+        fn.evaluate({ x: 0 });
+        previewFunc = fn;
+        previewValid = true;
+      } catch (e) {
+        previewValid = false;
+      }
+    }
+    funcInput.addEventListener('input', updatePreview);
+    previewToggle.addEventListener('change', function () { livePreviewEnabled = previewToggle.checked; });
+    livePreviewEnabled = previewToggle.checked;
+
+    // ============================================================
+    // Quick math insert toolbar
+    // ============================================================
+    const TOOLBAR_ITEMS = [
+      { label: 'x²', insert: 'x^2' },
+      { label: 'x³', insert: 'x^3' },
+      { label: '√', insert: 'sqrt()', back: 1 },
+      { label: 'sin', insert: 'sin()', back: 1 },
+      { label: 'cos', insert: 'cos()', back: 1 },
+      { label: 'tan', insert: 'tan()', back: 1 },
+      { label: 'π', insert: 'pi' },
+      { label: '|x|', insert: 'abs()', back: 1 },
+      { label: '^', insert: '^' },
+      { label: '( )', insert: '()', back: 1 },
+      { label: '⌫', action: 'back' }
+    ];
+
+    function insertAtCursor(text, back) {
+      if (funcInput.disabled) return;
+      const start = funcInput.selectionStart != null ? funcInput.selectionStart : funcInput.value.length;
+      const end = funcInput.selectionEnd != null ? funcInput.selectionEnd : funcInput.value.length;
+      funcInput.value = funcInput.value.slice(0, start) + text + funcInput.value.slice(end);
+      const pos = start + text.length - (back || 0);
+      funcInput.focus();
+      funcInput.setSelectionRange(pos, pos);
+      updatePreview();
+    }
+    function backspaceInput() {
+      if (funcInput.disabled) return;
+      const start = funcInput.selectionStart != null ? funcInput.selectionStart : funcInput.value.length;
+      const end = funcInput.selectionEnd != null ? funcInput.selectionEnd : funcInput.value.length;
+      if (start === end && start > 0) {
+        funcInput.value = funcInput.value.slice(0, start - 1) + funcInput.value.slice(end);
+        funcInput.setSelectionRange(start - 1, start - 1);
+      } else if (start !== end) {
+        funcInput.value = funcInput.value.slice(0, start) + funcInput.value.slice(end);
+        funcInput.setSelectionRange(start, start);
+      }
+      funcInput.focus();
+      updatePreview();
+    }
+
+    TOOLBAR_ITEMS.forEach(function (item) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tb-btn' + (item.action === 'back' ? ' danger' : '');
+      btn.textContent = item.label;
+      btn.addEventListener('click', function () {
+        sfxClick();
+        if (item.action === 'back') backspaceInput();
+        else insertAtCursor(item.insert, item.back);
+      });
+      mathToolbarEl.appendChild(btn);
+    });
+
+    clearBtn.addEventListener('click', function () {
+      if (funcInput.disabled) return;
+      funcInput.value = '';
+      funcInput.focus();
+      updatePreview();
+    });
+
+    // ============================================================
+    // Header controls: speed, mute, restart, history panel
+    // ============================================================
+    const savedSpeed = localStorage.getItem('graphwar_speed');
+    if (savedSpeed) { speedSelect.value = savedSpeed; }
+    fireStep = parseFloat(speedSelect.value);
+    speedSelect.addEventListener('change', function () {
+      fireStep = parseFloat(speedSelect.value);
+      localStorage.setItem('graphwar_speed', speedSelect.value);
+    });
+
+    updateMuteBtn();
+    muteBtn.addEventListener('click', function () {
+      isMuted = !isMuted;
+      localStorage.setItem('graphwar_muted', isMuted ? '1' : '0');
+      updateMuteBtn();
+    });
+
+    restartBtn.addEventListener('click', function () {
+      sfxClick();
+      loadLevel(currentLevel);
+    });
+
+    historyBtn.addEventListener('click', function () { historyPanel.classList.toggle('open'); });
+    closeHistoryBtn.addEventListener('click', function () { historyPanel.classList.remove('open'); });
+
+    // ============================================================
+    // PvP player name inputs
+    // ============================================================
+    nameInput0.addEventListener('input', function () {
+      const lvl = levels[currentLevel];
+      if (!lvl.isPvP) return;
+      lvl.players[0].name = nameInput0.value.trim() || 'Người chơi 1';
+      if (currentPlayerIdx === 0) currentPlayerName.textContent = lvl.players[0].name;
+    });
+    nameInput1.addEventListener('input', function () {
+      const lvl = levels[currentLevel];
+      if (!lvl.isPvP) return;
+      lvl.players[1].name = nameInput1.value.trim() || 'Người chơi 2';
+      if (currentPlayerIdx === 1) currentPlayerName.textContent = lvl.players[1].name;
+    });
+
+    // ============================================================
+    // Bootstrap
+    // ============================================================
+    resizeCanvas();
+    requestAnimationFrame(frameTick);
+
+    const savedLevel = localStorage.getItem('graphwar_level');
+    let startLevel = 0;
+    if (savedLevel !== null) {
+      startLevel = parseInt(savedLevel, 10);
+      if (isNaN(startLevel) || startLevel < 0 || startLevel >= levels.length) startLevel = 0;
+    }
+    loadLevel(startLevel);
+  </script>
+</body>
+</html>
