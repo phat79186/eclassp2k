@@ -1578,6 +1578,9 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
         onLogin({ role: "proctor", data: res.user });
       } else {
         if (!sClass || !sCode.trim()) { setErr("Nhập đầy đủ thông tin"); shake(); return; }
+        // Client-side password check
+        if (selectedStudentNeedsPass && !sPass.trim()) { setErr("Vui lòng nhập mật khẩu"); shake(); return; }
+        if (selectedStudentNeedsPass && !checkStudentPassword(sCode, sClass, sPass)) { setErr("Mật khẩu không đúng"); shake(); return; }
         const res = await api.login({ role: "student", classId: sClass, code: sCode.trim() });
         if (!res || res.error) { setErr(res?.error || "Mã học sinh không đúng hoặc không thuộc lớp này"); shake(); return; }
         setToken(res.token);
@@ -1589,6 +1592,30 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
       setErr(e.message || "Lỗi kết nối server"); shake();
     }
   };
+
+  // For student: check password against local students list
+  const checkStudentPassword = (code, classId, enteredPass) => {
+    const found = state.students.find(
+      s => s.classId === classId && s.code.toUpperCase() === code.trim().toUpperCase()
+    );
+    if (!found) return true; // server will handle "not found"
+    if (!found.password?.trim()) return true; // no password set → skip
+    return found.password.trim() === enteredPass.trim();
+  };
+
+  // Check if chosen student needs password (looked up from state.students local list)
+  const selectedStudentNeedsPass = useMemo(() => {
+    if (role !== "student" || !sClass || !sCode.trim()) return false;
+    const found = state.students.find(
+      s => s.classId === sClass &&
+           s.code.toUpperCase() === sCode.trim().toUpperCase() &&
+           s.password?.trim()
+    );
+    return !!found;
+  }, [role, sClass, sCode, state.students]);
+
+  const [sPass, setSPass] = useState("");
+  const [showSPass, setShowSPass] = useState(false);
 
   if (registerMode) return (
     <div className={`ecp${darkMode ? '' : ' light'}`} style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
@@ -1660,7 +1687,29 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
                     {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-                <Inp label="MÃ HỌC SINH" value={sCode} onChange={setSCode} placeholder="Ví dụ: HS001" required note="Mã được giáo viên cấp sau khi duyệt đăng ký" />
+                <Inp label="MÃ HỌC SINH" value={sCode} onChange={v => { setSCode(v); setSPass(""); }} placeholder="Ví dụ: HS001" required note="Mã được giáo viên cấp sau khi duyệt đăng ký" />
+                {selectedStudentNeedsPass && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU <span style={{ color: "#EF4444" }}>*</span></div>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        className="inp"
+                        type={showSPass ? "text" : "password"}
+                        value={sPass}
+                        onChange={e => setSPass(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && doLogin()}
+                        placeholder="Nhập mật khẩu"
+                        style={{ display: "block", paddingRight: 42 }}
+                      />
+                      <button onClick={() => setShowSPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text3)" }}>
+                        {showSPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#F59E0B", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                      🔐 Tài khoản này được bảo vệ bằng mật khẩu
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -1677,7 +1726,7 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
               </>
             )}
             <ErrBox msg={err} />
-            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 4, justifyContent: "center" }} disabled={role === "student" ? (!sClass || !sCode) : (!uname || !pass)}>
+            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 4, justifyContent: "center" }} disabled={role === "student" ? (!sClass || !sCode || (selectedStudentNeedsPass && !sPass)) : (!uname || !pass)}>
               {role === "student" ? "Vào lớp học →" : "Đăng nhập →"}
             </Btn>
             
@@ -2036,7 +2085,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
   };
 
   const openAdd = () => {
-    setNewSt({ name: "", code: "", photo: null, phone: "", dob: "", isProctor: false });
+    setNewSt({ name: "", code: "", photo: null, phone: "", dob: "", isProctor: false, password: "" });
     setErrSt(""); setEditStudent(null); setShowAddModal(true);
   };
 
@@ -2045,7 +2094,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
     if (!newSt.code.trim()) { setErrSt("Vui lòng nhập mã học sinh"); return; }
     const dup = state.students.find(s => s.code.toUpperCase() === newSt.code.trim().toUpperCase() && s.classId === selClass && s.id !== editStudent?.id);
     if (dup) { setErrSt("Mã học sinh đã tồn tại trong lớp này"); return; }
-    const payload = { name: newSt.name.trim(), code: newSt.code.trim().toUpperCase(), photo: newSt.photo || null, phone: newSt.phone || "", dob: newSt.dob || "", isProctor: false };
+    const payload = { name: newSt.name.trim(), code: newSt.code.trim().toUpperCase(), photo: newSt.photo || null, phone: newSt.phone || "", dob: newSt.dob || "", isProctor: false, password: newSt.password?.trim() || "" };
     if (editStudent) {
       state.setStudents(p => p.map(s => s.id === editStudent.id ? { ...s, ...payload } : s));
     } else {
@@ -2174,7 +2223,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
                     <div style={{ fontSize: 12, color: "var(--text2)", fontFamily: "monospace" }}>{s.code}</div>
                     <div>{present ? <Badge c="green">✓ Có mặt</Badge> : <Badge c="gray">Chưa ĐD</Badge>}</div>
                     <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => { setEditStudent(s); setNewSt({ name: s.name, code: s.code, photo: s.photo || null, phone: s.phone || "", dob: s.dob || "", isProctor: false }); setErrSt(""); setShowAddModal(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "var(--accent)", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
+                      <button onClick={() => { setEditStudent(s); setNewSt({ name: s.name, code: s.code, photo: s.photo || null, phone: s.phone || "", dob: s.dob || "", isProctor: false, password: s.password || "" }); setErrSt(""); setShowAddModal(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "var(--accent)", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
                       <button onClick={() => deleteStudent(s.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>
                     </div>
                   </div>
@@ -2272,7 +2321,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn variant="ghost" onClick={() => setViewStudent(null)} style={{ flex: 1 }}>Đóng</Btn>
-              <Btn onClick={() => { setEditStudent(viewStudent); setNewSt({ name: viewStudent.name, code: viewStudent.code, photo: viewStudent.photo || null, phone: viewStudent.phone || "", dob: viewStudent.dob || "", isProctor: false }); setErrSt(""); setShowAddModal(true); setViewStudent(null); }} style={{ flex: 1 }}><Edit2 size={12} />Chỉnh sửa</Btn>
+              <Btn onClick={() => { setEditStudent(viewStudent); setNewSt({ name: viewStudent.name, code: viewStudent.code, photo: viewStudent.photo || null, phone: viewStudent.phone || "", dob: viewStudent.dob || "", isProctor: false, password: viewStudent.password || "" }); setErrSt(""); setShowAddModal(true); setViewStudent(null); }} style={{ flex: 1 }}><Edit2 size={12} />Chỉnh sửa</Btn>
             </div>
           </div>
         </div>
@@ -2306,6 +2355,43 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <DatePickerInp label="NGÀY SINH" value={newSt.dob} onChange={v => setNewSt(p => ({ ...p, dob: v }))} />
               <Inp label="SỐ ĐIỆN THOẠI" value={newSt.phone} onChange={v => setNewSt(p => ({ ...p, phone: v }))} placeholder="0912345678" />
+            </div>
+            {/* ── Password block ── */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5, letterSpacing: ".05em", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>MẬT KHẨU <span style={{ fontSize: 10, fontWeight: 400, color: "var(--text3)" }}>(tuỳ chọn)</span></span>
+                <button
+                  onClick={() => {
+                    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+                    const pw = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+                    setNewSt(p => ({ ...p, password: pw }));
+                  }}
+                  style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <RotateCcw size={10} /> Tạo ngẫu nhiên
+                </button>
+              </div>
+              <div style={{ position: "relative" }}>
+                <input
+                  className="inp"
+                  type={newSt._showPw ? "text" : "password"}
+                  value={newSt.password || ""}
+                  onChange={e => setNewSt(p => ({ ...p, password: e.target.value }))}
+                  placeholder="Để trống = không cần mật khẩu"
+                  style={{ display: "block", paddingRight: 40 }}
+                />
+                <button
+                  onClick={() => setNewSt(p => ({ ...p, _showPw: !p._showPw }))}
+                  style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text3)" }}
+                >
+                  {newSt._showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              {newSt.password && (
+                <div style={{ marginTop: 5, fontSize: 10.5, color: "#F59E0B", display: "flex", alignItems: "center", gap: 4 }}>
+                  🔐 Cấp mật khẩu này cho học sinh: <strong style={{ fontFamily: "monospace", letterSpacing: 1 }}>{newSt._showPw ? newSt.password : "••••••••"}</strong>
+                </div>
+              )}
             </div>
             <ErrBox msg={errSt} />
             <div style={{ display: "flex", gap: 9 }}>

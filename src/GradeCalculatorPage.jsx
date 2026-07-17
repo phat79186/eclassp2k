@@ -6,6 +6,16 @@ const SUBJECTS = {
   passfail: ['Thể dục', 'Giáo dục địa phương']
 };
 
+// Các cột điểm hiển thị cùng lúc trên bảng "Nhập nhanh cả lớp" (thay vì phải đổi dropdown từng cột một)
+const BULK_FIELDS = [
+  { key: 'm1',  label: 'M1',        full: 'Điểm miệng M1' },
+  { key: 'm2',  label: 'M2',        full: 'Điểm 15 phút M2' },
+  { key: 'm3',  label: 'M3',        full: 'Điểm 15 phút M3' },
+  { key: 'm4',  label: 'M4',        full: 'Điểm 15 phút M4' },
+  { key: 'mid', label: 'Giữa kỳ',   full: 'Điểm giữa kỳ' },
+  { key: 'fin', label: 'Cuối kỳ',   full: 'Điểm cuối kỳ' },
+];
+
 // Điểm trung bình môn học kỳ theo hệ số (M1-M4: hs1, Giữa kỳ: hs2, Cuối kỳ: hs3)
 function calcAvg(subScores) {
   if (!subScores) return null;
@@ -87,7 +97,12 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
   const isParent = user?.role === 'parent';
   const isSelfStudent = user?.role === 'student'; // học sinh tự xem/sửa điểm của chính mình
   const myClassIds = isTeacher ? (myClasses || []).map(c => c.id) : [];
-  const myStudents = isTeacher ? state?.students?.filter(s => s.classId === selClass) || [] : [];
+  // Ghi nhớ (memo) danh sách học sinh theo lớp: nếu để mảng mới ở mỗi lần render, các useEffect
+  // phụ thuộc myStudents phía dưới sẽ chạy lại liên tục và xóa điểm giáo viên vừa gõ (chưa kịp lưu).
+  const myStudents = useMemo(
+    () => (isTeacher ? state?.students?.filter(s => s.classId === selClass) || [] : []),
+    [isTeacher, state?.students, selClass]
+  );
   const myChildren = isParent ? state?.students?.filter(s => (user?.data?.childIds || []).includes(s.id)) || [] : [];
 
   const [selectedStudentId, setSelectedStudentId] = useState(myStudents.length > 0 ? myStudents[0].id : '');
@@ -104,8 +119,11 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
   const [activeTab, setActiveTab] = useState('bulk');
   const [bulkSub, setBulkSub] = useState(() => (isTeacher && user.data?.subject ? user.data.subject : SUBJECTS.graded[0]));
   const [bulkTerm, setBulkTerm] = useState('hk1');
-  const [bulkField, setBulkField] = useState('m1');
-  const [bulkScores, setBulkScores] = useState({});
+  const [bulkScores, setBulkScores] = useState({}); // { [studentId]: { m1,m2,m3,m4,mid,fin } } - cả 6 cột cùng lúc
+  const [bulkDirty, setBulkDirty] = useState(() => new Set());  // "studentId:field" đã sửa nhưng chưa lưu
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [bulkJustSaved, setBulkJustSaved] = useState(false);
+  const [fillColVal, setFillColVal] = useState({}); // giá trị nháp của ô "điền nhanh cả cột", theo field
 
   // Tự động đồng bộ activeTab dựa trên quyền chủ nhiệm
   useEffect(() => {
@@ -133,11 +151,22 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
     if (!isTeacher || activeTab !== 'bulk') return;
     const init = {};
     myStudents.forEach(s => {
-      const sScores = state.grades[s.id]?.scores || {};
-      init[s.id] = sScores[bulkSub]?.[bulkTerm]?.[bulkField] || '';
+      const row = state.grades[s.id]?.scores?.[bulkSub]?.[bulkTerm] || {};
+      init[s.id] = { m1: row.m1 || '', m2: row.m2 || '', m3: row.m3 || '', m4: row.m4 || '', mid: row.mid || '', fin: row.fin || '' };
     });
     setBulkScores(init);
-  }, [bulkSub, bulkTerm, bulkField, activeTab, myStudents, state.grades, isTeacher]);
+    setBulkDirty(new Set());
+  }, [bulkSub, bulkTerm, activeTab, myStudents, state.grades, isTeacher]);
+
+  const isBulkPassFail = SUBJECTS.passfail.includes(bulkSub);
+
+  // Danh sách học sinh sau khi lọc theo ô tìm kiếm (chỉ ảnh hưởng hiển thị + "điền nhanh cả cột",
+  // nút Lưu vẫn lưu đủ toàn bộ lớp bên dưới)
+  const filteredBulkStudents = useMemo(() => {
+    const q = bulkSearch.trim().toLowerCase();
+    if (!q) return myStudents;
+    return myStudents.filter(s => (s.name || '').toLowerCase().includes(q) || (s.code || '').toLowerCase().includes(q));
+  }, [myStudents, bulkSearch]);
 
   const saveBulkScores = () => {
     state.setGrades(prev => {
@@ -146,16 +175,93 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
         const rec = next[s.id] || { scores: {}, conduct: '', teacherLocked: {} };
         const sScores = { ...(rec.scores || {}) };
         sScores[bulkSub] = { hk1: { ...(sScores[bulkSub]?.hk1 || {}) }, hk2: { ...(sScores[bulkSub]?.hk2 || {}) } };
-        const scoreVal = bulkScores[s.id] || '';
-        sScores[bulkSub][bulkTerm][bulkField] = scoreVal;
+        const row = bulkScores[s.id] || {};
+        sScores[bulkSub][bulkTerm] = { ...sScores[bulkSub][bulkTerm], ...row };
+
         const tl = { ...(rec.teacherLocked || {}) };
         tl[bulkSub] = { hk1: { ...(tl[bulkSub]?.hk1 || {}) }, hk2: { ...(tl[bulkSub]?.hk2 || {}) } };
-        tl[bulkSub][bulkTerm][bulkField] = scoreVal !== '';
+        const lockedTerm = { ...tl[bulkSub][bulkTerm] };
+        BULK_FIELDS.forEach(({ key }) => { if (row[key] !== undefined) lockedTerm[key] = row[key] !== ''; });
+        tl[bulkSub][bulkTerm] = lockedTerm;
+
         next[s.id] = { ...rec, scores: sScores, teacherLocked: tl };
       });
       return next;
     });
-    alert("Đã lưu điểm thành công cho cả lớp!");
+    setBulkDirty(new Set());
+    setBulkJustSaved(true);
+    setTimeout(() => setBulkJustSaved(false), 2200);
+  };
+
+  // Sửa 1 ô trong bảng nhập nhanh (đã sửa lỗi regex cũ [^d] từng xóa sạch mọi số vừa gõ)
+  const handleBulkCellChange = (studentId, field, rawVal) => {
+    let v = rawVal;
+    if (isBulkPassFail) {
+      v = v.toUpperCase();
+      if (v !== 'D' && v !== 'C' && v !== '') return;
+    } else {
+      v = v.replace(/[^\d.]/g, '');
+      if (v.length >= 2 && !v.includes('.')) v = v.slice(0, -1) + '.' + v.slice(-1);
+    }
+    setBulkScores(p => ({ ...p, [studentId]: { ...(p[studentId] || {}), [field]: v } }));
+    setBulkDirty(p => { const n = new Set(p); n.add(`${studentId}:${field}`); return n; });
+  };
+
+  // Điền nhanh 1 giá trị cho cả cột (áp dụng cho các học sinh đang hiển thị theo bộ lọc)
+  const handleFillColumn = (field) => {
+    const raw = (fillColVal[field] || '').trim();
+    if (raw === '') return;
+    let v = raw;
+    if (isBulkPassFail) {
+      v = v.toUpperCase();
+      if (v !== 'D' && v !== 'C') return;
+    } else {
+      v = v.replace(/[^\d.]/g, '');
+    }
+    setBulkScores(p => {
+      const next = { ...p };
+      filteredBulkStudents.forEach(s => { next[s.id] = { ...(next[s.id] || {}), [field]: v }; });
+      return next;
+    });
+    setBulkDirty(p => {
+      const n = new Set(p);
+      filteredBulkStudents.forEach(s => n.add(`${s.id}:${field}`));
+      return n;
+    });
+    setFillColVal(p => ({ ...p, [field]: '' }));
+  };
+
+  // Dán (Ctrl+V) trực tiếp từ Excel: hỗ trợ dán 1 ô, 1 cột, 1 hàng hoặc cả khối nhiều hàng x nhiều cột
+  const handleBulkPaste = (e, studentIdx, fieldIdx) => {
+    const paste = e.clipboardData.getData('text');
+    if (!paste || (!paste.includes('\t') && !paste.includes('\n'))) return; // dán 1 giá trị -> để trình duyệt xử lý bình thường
+    e.preventDefault();
+    const rows = paste.split(/\r?\n/).filter(r => r.length > 0).map(r => r.split('\t'));
+    const touched = new Set();
+    setBulkScores(p => {
+      const next = { ...p };
+      rows.forEach((cells, rOff) => {
+        const student = filteredBulkStudents[studentIdx + rOff];
+        if (!student) return;
+        const row = { ...(next[student.id] || {}) };
+        cells.forEach((cell, cOff) => {
+          const field = BULK_FIELDS[fieldIdx + cOff]?.key;
+          if (!field) return;
+          let v = cell.trim();
+          if (isBulkPassFail) {
+            v = v.toUpperCase();
+            if (v !== 'D' && v !== 'C') v = '';
+          } else {
+            v = v.replace(/[^\d.]/g, '');
+          }
+          row[field] = v;
+          touched.add(`${student.id}:${field}`);
+        });
+        next[student.id] = row;
+      });
+      return next;
+    });
+    setBulkDirty(prevDirty => { const n = new Set(prevDirty); touched.forEach(t => n.add(t)); return n; });
   };
   const [selectedChildId, setSelectedChildId] = useState(myChildren.length > 0 ? myChildren[0].id : '');
 
@@ -495,7 +601,7 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
 
       {isTeacher && activeTab === 'bulk' && (
         <div className="scard" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)' }}>MÔN HỌC</span>
               {user.data?.subject ? (
@@ -517,88 +623,122 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
               </select>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)' }}>CỘT ĐIỂM</span>
-              <select value={bulkField} onChange={e => setBulkField(e.target.value)} className="inp" style={{ width: 140 }}>
-                <option value="m1">Điểm miệng M1</option>
-                <option value="m2">Điểm 15p M2</option>
-                <option value="m3">Điểm 15p M3</option>
-                <option value="m4">Điểm 15p M4</option>
-                <option value="mid">Điểm Giữa kỳ</option>
-                <option value="fin">Điểm Cuối kỳ</option>
-              </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)' }}>TÌM HỌC SINH</span>
+              <input type="text" className="inp" placeholder="Tên hoặc mã HS..." value={bulkSearch} onChange={e => setBulkSearch(e.target.value)} style={{ width: 180 }} />
             </div>
 
             <div style={{ flex: 1 }} />
-            
-            <button onClick={saveBulkScores} style={{ padding: '10px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', alignSelf: 'flex-end' }} className="gc-btn">
+
+            {bulkDirty.size > 0 && (
+              <span style={{ fontSize: 12, color: '#F59E0B', fontWeight: 700, marginBottom: 10 }}>● {bulkDirty.size} ô chưa lưu</span>
+            )}
+            {bulkJustSaved && (
+              <span style={{ fontSize: 12, color: '#34D399', fontWeight: 700, marginBottom: 10 }}>✓ Đã lưu</span>
+            )}
+
+            <button
+              onClick={saveBulkScores}
+              disabled={bulkDirty.size === 0}
+              style={{ padding: '10px 20px', background: bulkDirty.size === 0 ? 'var(--wa04)' : 'var(--accent)', color: bulkDirty.size === 0 ? 'var(--text3)' : '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: bulkDirty.size === 0 ? 'default' : 'pointer' }}
+              className="gc-btn"
+            >
               💾 Lưu điểm cả lớp
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto', marginTop: 10 }}>
-            <table className="gc-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse' }}>
+          <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+            💡 Nhập xong 1 ô, bấm mũi tên / Enter để nhảy sang ô kế tiếp. Có thể copy cả bảng điểm từ Excel rồi dán (Ctrl+V) thẳng vào bảng bên dưới, hoặc dùng hàng "Điền nhanh cả cột" để gán 1 điểm cho tất cả học sinh rồi sửa lại từng trường hợp ngoại lệ.
+          </div>
+
+          <div style={{ overflowX: 'auto', marginTop: 4 }}>
+            <table className="gc-table gcb-table" style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ width: 60 }}>STT</th>
-                  <th style={{ width: 120 }}>Mã HS</th>
-                  <th style={{ textAlign: 'left', paddingLeft: 16 }}>Họ và tên học sinh</th>
-                  <th style={{ width: 150 }}>Điểm số</th>
+                  <th style={{ width: 50 }}>STT</th>
+                  <th style={{ width: 100 }}>Mã HS</th>
+                  <th style={{ minWidth: 160, textAlign: 'left', paddingLeft: 16 }}>Họ và tên học sinh</th>
+                  {BULK_FIELDS.map(f => (
+                    <th key={f.key} title={f.full} style={{ minWidth: 78 }}>{f.label}</th>
+                  ))}
+                  <th style={{ minWidth: 74, color: isBulkPassFail ? 'var(--text3)' : '#34D399' }}>{isBulkPassFail ? 'KQ' : 'TB'}</th>
+                </tr>
+                <tr className="gcb-fillrow">
+                  <td colSpan={3} style={{ fontSize: 10, color: 'var(--text3)', textAlign: 'right', paddingRight: 10, border: '1px solid var(--wa025)' }}>Điền nhanh cả cột →</td>
+                  {BULK_FIELDS.map(f => (
+                    <td key={f.key} style={{ border: '1px solid var(--wa025)' }}>
+                      <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                        <input
+                          type="text"
+                          maxLength={isBulkPassFail ? 1 : 4}
+                          placeholder={isBulkPassFail ? 'D/C' : '—'}
+                          value={fillColVal[f.key] || ''}
+                          onChange={e => setFillColVal(p => ({ ...p, [f.key]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') handleFillColumn(f.key); }}
+                          className="gc-input"
+                          style={{ width: 38, padding: '4px 2px', fontSize: 11 }}
+                        />
+                        <button onClick={() => handleFillColumn(f.key)} title={`Áp dụng cho ${filteredBulkStudents.length} học sinh đang hiển thị`} style={{ border: 'none', background: 'var(--wa04)', color: 'var(--accent)', borderRadius: 5, fontSize: 11, padding: '0 6px', cursor: 'pointer' }}>↓</button>
+                      </div>
+                    </td>
+                  ))}
+                  <td style={{ border: '1px solid var(--wa025)' }} />
                 </tr>
               </thead>
               <tbody>
-                {myStudents.map((s, idx) => {
-                  const val = bulkScores[s.id] || '';
-                  const isPassFail = SUBJECTS.passfail.includes(bulkSub);
-                  const isWarn = !isPassFail ? (val !== '' && parseFloat(val) < 5.0) : (val === 'C');
+                {filteredBulkStudents.map((s, idx) => {
+                  const row = bulkScores[s.id] || {};
+                  const preview = isBulkPassFail ? calcPassFail(row) : calcAvg(row);
                   return (
                     <tr key={s.id}>
                       <td>{idx + 1}</td>
                       <td style={{ fontFamily: 'monospace' }}>{s.code}</td>
                       <td style={{ textAlign: 'left', paddingLeft: 16, fontWeight: 600 }}>{s.name}</td>
-                      <td>
-                        <input 
-                          type="text" 
-                          className="gc-input"
-                          style={{ width: 100, borderColor: isWarn ? '#EF4444' : undefined, background: isWarn ? 'rgba(239,68,68,0.1)' : undefined }}
-                          value={val}
-                          placeholder={isPassFail ? 'D hoặc C' : '-'}
-                          maxLength={isPassFail ? 1 : 4}
-                          onChange={e => {
-                            let v = e.target.value;
-                            if (isPassFail) {
-                              v = v.toUpperCase();
-                              if (v !== 'D' && v !== 'C') v = '';
-                            } else {
-                              v = v.replace(/[^d]/g, '');
-                              if (v.length >= 2 && !v.includes('.')) {
-                                v = v.slice(0, -1) + '.' + v.slice(-1);
-                              }
-                            }
-                            setBulkScores(p => ({ ...p, [s.id]: v }));
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              const inputs = Array.from(document.querySelectorAll('.gc-input'));
-                              const myIdx = inputs.indexOf(e.target);
-                              if (myIdx >= 0 && myIdx < inputs.length - 1) {
-                                inputs[myIdx + 1].focus();
-                              }
-                            } else if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              const inputs = Array.from(document.querySelectorAll('.gc-input'));
-                              const myIdx = inputs.indexOf(e.target);
-                              if (myIdx > 0) {
-                                inputs[myIdx - 1].focus();
-                              }
-                            }
-                          }}
-                        />
+                      {BULK_FIELDS.map((f, colIdx) => {
+                        const val = row[f.key] || '';
+                        const isDirty = bulkDirty.has(`${s.id}:${f.key}`);
+                        const isWarn = isBulkPassFail ? val === 'C' : (val !== '' && parseFloat(val) < 5.0);
+                        return (
+                          <td key={f.key}>
+                            <input
+                              type="text"
+                              className={`gc-input gcb-input ${isWarn ? 'gc-warn' : ''} ${isDirty ? 'gcb-dirty' : ''}`}
+                              value={val}
+                              placeholder={isBulkPassFail ? 'D/C' : '-'}
+                              maxLength={isBulkPassFail ? 1 : 4}
+                              title={f.full}
+                              onChange={e => handleBulkCellChange(s.id, f.key, e.target.value)}
+                              onPaste={e => handleBulkPaste(e, idx, colIdx)}
+                              onKeyDown={e => {
+                                const cells = Array.from(e.currentTarget.closest('table').querySelectorAll('.gcb-input'));
+                                const cols = BULK_FIELDS.length;
+                                const myIdx = cells.indexOf(e.currentTarget);
+                                if (myIdx === -1) return;
+                                const col0 = myIdx % cols;
+                                let target = -1;
+                                if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); target = myIdx + cols; }
+                                else if (e.key === 'ArrowUp') { e.preventDefault(); target = myIdx - cols; }
+                                else if (e.key === 'ArrowRight' && col0 < cols - 1) { e.preventDefault(); target = myIdx + 1; }
+                                else if (e.key === 'ArrowLeft' && col0 > 0) { e.preventDefault(); target = myIdx - 1; }
+                                if (target >= 0 && target < cells.length) cells[target].focus();
+                              }}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td style={{ fontWeight: 'bold', color: preview === null ? 'var(--text4)' : isBulkPassFail ? (preview === 'C' ? '#EF4444' : '#34D399') : (preview < 5 ? '#EF4444' : '#34D399') }}>
+                        {preview === null ? '-' : isBulkPassFail ? (preview === 'C' ? 'Chưa đạt' : 'Đạt') : (Math.round(preview * 10) / 10).toFixed(1)}
                       </td>
                     </tr>
                   );
                 })}
+                {filteredBulkStudents.length === 0 && (
+                  <tr>
+                    <td colSpan={4 + BULK_FIELDS.length} style={{ padding: 20, color: 'var(--text3)' }}>
+                      {bulkSearch ? 'Không tìm thấy học sinh phù hợp.' : 'Lớp chưa có học sinh nào.'}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -617,6 +757,9 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
         .gc-table th { background: var(--surface); padding: 10px; border: 1px solid var(--wa025); font-size: 12px; font-weight: 600; color: var(--text3); }
         .gc-table td { border: 1px solid var(--wa025); padding: 8px 4px; text-align: center; }
         .gc-table tr:hover { background: rgba(255,255,255,0.02); }
+        .gcb-dirty { box-shadow: inset 0 -2px 0 0 #F59E0B; }
+        .gcb-fillrow td { padding: 4px; background: var(--surface2); }
+        .gcb-table thead th { position: sticky; top: 0; z-index: 2; }
       `}</style>
 
       {isTeacher && activeTab === 'detail' && (
