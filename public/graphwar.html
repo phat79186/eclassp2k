@@ -51,17 +51,24 @@
     .header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
     .level-info { font-size: clamp(0.95rem, 2.2vw, 1.2rem); font-weight: 700; }
     .subtitle { color: var(--text-dim); font-size: 0.9rem; }
-    .level-dots { display: flex; gap: 6px; }
-    .level-dots span {
-      width: 9px; height: 9px; border-radius: 50%;
-      background: #334155; display: inline-block;
-      transition: background .2s, transform .2s;
+    .level-dots { display: flex; gap: 2px; align-items: center; }
+    .level-dots .level-dot {
+      width: 20px; height: 20px; padding: 0; margin: 0; border: none; background: transparent;
+      display: flex; align-items: center; justify-content: center; cursor: default; -webkit-tap-highlight-color: transparent;
     }
-    .level-dots span.done { background: var(--path-color); }
-    .level-dots span.active {
+    .level-dots .level-dot::before {
+      content: ''; width: 9px; height: 9px; border-radius: 50%;
+      background: #334155; display: block; transition: background .2s, transform .2s;
+    }
+    .level-dots .level-dot.done::before { background: var(--path-color); }
+    .level-dots .level-dot.active::before {
       background: var(--player-color); transform: scale(1.4);
       box-shadow: 0 0 8px var(--player-glow);
     }
+    .level-dots .level-dot.clickable { cursor: pointer; }
+    .level-dots .level-dot.clickable:hover::before { transform: scale(1.5); }
+    .level-dots .level-dot:disabled { cursor: not-allowed; }
+    .level-dots .level-dot:disabled::before { opacity: 0.55; }
     .header-right { display: flex; align-items: center; gap: 8px; }
     .icon-btn, .icon-select {
       background: #0f172a; color: var(--text-color); border: 1px solid var(--panel-border);
@@ -162,23 +169,6 @@
     }
     .preview-toggle { font-size: 0.8rem; color: var(--text-dim); display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 
-    .pvp-row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
-    .turn-indicator {
-      font-size: clamp(0.9rem,2vw,1.3rem); font-weight: 700; background: var(--panel-bg);
-      padding: 8px 16px; border-radius: var(--radius-sm); border: 1px solid var(--panel-border);
-    }
-    .player-chip input.name-input {
-      background: #0f172a; border: 1px solid var(--panel-border); color: var(--text-color);
-      border-radius: var(--radius-sm); padding: 6px 10px; font-size: 0.9rem; width: 120px; text-align: center;
-    }
-    #chip0 input { border-color: var(--player-color); }
-    #chip1 input { border-color: var(--enemy-color); }
-    .direction-toggle {
-      display: flex; gap: 12px; background: #0f172a; padding: 8px 16px; border-radius: var(--radius-md);
-      border: 2px solid var(--panel-border);
-    }
-    .direction-toggle label { font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
-
     .history-panel {
       position: absolute; top: 0; right: -320px; width: 300px; height: 100%;
       background: var(--panel-bg); backdrop-filter: blur(8px);
@@ -209,7 +199,6 @@
       .hint { top: 8px; padding: 6px 12px; gap: 8px; flex-wrap: wrap; justify-content: center; }
       footer { padding: 8px 8px 10px; gap: 6px; }
       .input-group { padding: 5px 8px 5px 12px; min-width: 110px; }
-      .player-chip input.name-input { width: 84px; font-size: 0.78rem; padding: 5px 6px; }
       .history-panel { width: 84vw; right: -84vw; }
     }
   </style>
@@ -254,16 +243,6 @@
   </main>
 
   <footer>
-    <div class="pvp-row" id="pvpControls" style="display:none;">
-      <div class="player-chip" id="chip0"><input class="name-input" id="nameInput0" value="Người chơi 1" maxlength="14"></div>
-      <div class="turn-indicator" id="turnIndicator">Lượt của: <span id="currentPlayerName" style="color:#3b82f6;">Người chơi 1</span></div>
-      <div class="player-chip" id="chip1"><input class="name-input" id="nameInput1" value="Người chơi 2" maxlength="14"></div>
-      <div class="direction-toggle" id="dirToggle">
-        <label><input type="radio" name="direction" value="-1"> ⬅️ Trái</label>
-        <label><input type="radio" name="direction" value="1" checked> Phải ➡️</label>
-      </div>
-    </div>
-
     <div class="toolbar-row" id="mathToolbar"></div>
 
     <div class="fire-row">
@@ -289,12 +268,6 @@
     const levelName = document.getElementById('levelName');
     const hintText = document.getElementById('hintText');
     const previewToggle = document.getElementById('previewToggle');
-
-    const pvpControls = document.getElementById('pvpControls');
-    const currentPlayerName = document.getElementById('currentPlayerName');
-    const dirRadios = document.getElementsByName('direction');
-    const nameInput0 = document.getElementById('nameInput0');
-    const nameInput1 = document.getElementById('nameInput1');
 
     const speedSelect = document.getElementById('speedSelect');
     const muteBtn = document.getElementById('muteBtn');
@@ -339,15 +312,6 @@
         isRandom: true,
         bot: { x: 24, y: 0 },
         obstacles: []
-      },
-      {
-        name: "Màn 5: Đấu Trường Đối Kháng",
-        hint: "Đấu 1-1: chọn hướng bắn và nhập hàm số để hạ gục đối thủ trước khi bị bắn trúng!",
-        isPvP: true,
-        players: [
-          { id: 0, name: "Người chơi 1", color: "#3b82f6", x: -10, y: 0, active: true },
-          { id: 1, name: "Người chơi 2", color: "#ef4444", x: 10, y: 0, active: true }
-        ]
       }
     ];
 
@@ -358,6 +322,8 @@
     let pathHistory = [];
     let isPlayerTurn = true;
     let hasWon = false;
+    let bossRound = 1;
+    let unlockedLevel = 0;
 
     let playerPos = { x: 0, y: 0 };
     let botPos = { x: 10, y: 10 };
@@ -367,7 +333,6 @@
     let lastUsedExpr = "";
     let lastBotExpr = "";
 
-    let currentPlayerIdx = 0;
     let fireDirection = 1;
     let yOffset = 0;
     let fireStep = 0.3;
@@ -453,7 +418,7 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const lvl = levels[currentLevel];
-      if (lvl && (lvl.isRandom || lvl.isPvP)) {
+      if (lvl && lvl.isRandom) {
         ORIGIN.x = viewW / 2;
       } else {
         ORIGIN.x = Math.min(150, viewW * 0.22);
@@ -574,29 +539,10 @@
     }
 
     function drawEntities() {
-      const level = levels[currentLevel];
-
       for (const obs of currentObstacles) drawObstacle(obs);
 
-      if (level.isPvP) {
-        for (const p of level.players) {
-          if (p.active) {
-            drawCharacter(p.x, p.y, p.color, 12, p.name, p.id === currentPlayerIdx);
-          } else {
-            const pt = toScreen(p.x, p.y);
-            ctx.fillStyle = '#475569';
-            ctx.beginPath(); ctx.arc(pt.x, pt.y, 12, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'alphabetic';
-            ctx.fillText('RIP', pt.x, pt.y + 4);
-          }
-        }
-      } else {
-        drawCharacter(botPos.x, botPos.y, '#ef4444', 15, null, false);
-        drawCharacter(playerPos.x, playerPos.y, '#3b82f6', 15, null, false);
-      }
+      drawCharacter(botPos.x, botPos.y, '#ef4444', 15, null, false);
+      drawCharacter(playerPos.x, playerPos.y, '#3b82f6', 15, null, false);
 
       if (pathHistory.length > 1) {
         for (let i = 1; i < pathHistory.length; i++) {
@@ -629,21 +575,10 @@
     }
 
     function getFireOrigin() {
-      const lvl = levels[currentLevel];
-      if (lvl.isPvP) {
-        const cp = lvl.players[currentPlayerIdx];
-        return { x: cp.x, y: cp.y };
-      }
       return { x: playerPos.x, y: playerPos.y };
     }
 
     function getFireDirection() {
-      const lvl = levels[currentLevel];
-      if (lvl.isPvP) {
-        let dir = 1;
-        for (const r of dirRadios) { if (r.checked) dir = parseFloat(r.value); }
-        return dir;
-      }
       return botPos.x > playerPos.x ? 1 : -1;
     }
 
@@ -792,8 +727,7 @@
     // ============================================================
     // Level setup
     // ============================================================
-    function generateRandomObstacles(levelIdx) {
-      const numObstacles = levelIdx + 1;
+    function generateRandomObstacles(numObstacles) {
       const obstacles = [];
       const minX = Math.min(playerPos.x, botPos.x) + 3;
       const maxX = Math.max(playerPos.x, botPos.x) - 3;
@@ -809,9 +743,24 @@
     function renderLevelDots() {
       levelDotsEl.innerHTML = '';
       levels.forEach(function (lvl, i) {
-        const dot = document.createElement('span');
-        if (i < currentLevel) dot.className = 'done';
-        else if (i === currentLevel) dot.className = 'active';
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'level-dot';
+        if (i === currentLevel) dot.classList.add('active');
+        else if (i <= unlockedLevel) dot.classList.add('done');
+
+        if (i <= unlockedLevel) {
+          dot.classList.add('clickable');
+          dot.title = lvl.name;
+          dot.setAttribute('aria-label', 'Chuyển đến ' + lvl.name);
+          dot.addEventListener('click', function () {
+            if (i !== currentLevel) { sfxClick(); loadLevel(i); }
+          });
+        } else {
+          dot.disabled = true;
+          dot.title = 'Chưa mở khóa';
+          dot.setAttribute('aria-label', 'Màn chưa mở khóa');
+        }
         levelDotsEl.appendChild(dot);
       });
     }
@@ -841,17 +790,17 @@
     }
 
     function loadLevel(idx) {
-      if (idx >= levels.length) {
-        triggerConfetti();
-        sfxWin();
-        setTimeout(function () { alert("Chúc mừng! Bạn đã hoàn thành tất cả các màn!"); }, 50);
-        idx = 0;
-      }
+      if (idx >= levels.length) idx = levels.length - 1;
+      if (idx !== currentLevel) bossRound = 1;
       currentLevel = idx;
       localStorage.setItem('graphwar_level', currentLevel);
+      if (currentLevel > unlockedLevel) {
+        unlockedLevel = currentLevel;
+        localStorage.setItem('graphwar_unlocked', unlockedLevel);
+      }
 
       const lvl = levels[currentLevel];
-      levelName.textContent = lvl.name;
+      levelName.textContent = lvl.name + (lvl.isRandom && bossRound > 1 ? ' — Vòng ' + bossRound : '');
       hintText.textContent = "Gợi ý: " + lvl.hint;
       renderLevelDots();
 
@@ -865,34 +814,13 @@
         playerPos.y = -8 + Math.random() * 16;
         botPos.x = 12 + Math.random() * 10;
         botPos.y = -8 + Math.random() * 16;
-        currentObstacles = generateRandomObstacles(currentLevel);
-      } else if (lvl.isPvP) {
-        SCALE = 22;
-        lvl.players[0].x = -14 + Math.random() * 6;
-        lvl.players[0].y = -6 + Math.random() * 12;
-        lvl.players[1].x = 8 + Math.random() * 6;
-        lvl.players[1].y = -6 + Math.random() * 12;
-        currentObstacles = [
-          { x: -4 + Math.random() * 4, y: -4 + Math.random() * 8, r: 1.3 + Math.random() * 1.2 },
-          { x: 0 + Math.random() * 4, y: -4 + Math.random() * 8, r: 1.3 + Math.random() * 1.2 }
-        ];
+        const numObstacles = Math.min(3 + bossRound, 8);
+        currentObstacles = generateRandomObstacles(numObstacles);
       } else {
         SCALE = 25;
         playerPos.x = 0; playerPos.y = 0;
         botPos.x = lvl.bot.x; botPos.y = lvl.bot.y;
         currentObstacles = JSON.parse(JSON.stringify(lvl.obstacles || []));
-      }
-
-      if (lvl.isPvP) {
-        lvl.players.forEach(function (p) { p.active = true; });
-        currentPlayerIdx = 0;
-        pvpControls.style.display = 'flex';
-        nameInput0.value = lvl.players[0].name;
-        nameInput1.value = lvl.players[1].name;
-        currentPlayerName.textContent = lvl.players[0].name;
-        currentPlayerName.style.color = lvl.players[0].color;
-      } else {
-        pvpControls.style.display = 'none';
       }
 
       state = 'IDLE';
@@ -931,38 +859,16 @@
     }
 
     function nextTurn() {
-      const lvl = levels[currentLevel];
-      if (!lvl.isPvP) {
-        if (isPlayerTurn) {
-          isPlayerTurn = false;
-          botThinkAndFire();
-        } else {
-          isPlayerTurn = true;
-          resetForNewShot();
-        }
-        return;
+      if (isPlayerTurn) {
+        isPlayerTurn = false;
+        botThinkAndFire();
+      } else {
+        isPlayerTurn = true;
+        resetForNewShot();
       }
-
-      const alive = lvl.players.filter(function (p) { return p.active; });
-      if (alive.length <= 1) {
-        if (alive.length === 1) { showMessage(alive[0].name + " CHIẾN THẮNG! 🏆", true, true); }
-        return;
-      }
-
-      do {
-        currentPlayerIdx = (currentPlayerIdx + 1) % lvl.players.length;
-      } while (!lvl.players[currentPlayerIdx].active);
-
-      const cp = lvl.players[currentPlayerIdx];
-      currentPlayerName.textContent = cp.name;
-      currentPlayerName.style.color = cp.color;
-
-      resetForNewShot();
     }
 
     function currentShooterInfo() {
-      const lvl = levels[currentLevel];
-      if (lvl.isPvP) return { who: lvl.players[currentPlayerIdx].name, expr: lastUsedExpr };
       return { who: isPlayerTurn ? 'Bạn' : 'Bot', expr: isPlayerTurn ? lastUsedExpr : lastBotExpr };
     }
 
@@ -972,13 +878,11 @@
       } catch (e) {}
     }
 
-    function showMessage(text, isHit, pvpOver) {
+    function showMessage(text, isHit) {
       msgText.textContent = text;
       msgText.className = 'message visible ' + (isHit ? 'hit' : 'miss');
       if (isHit) {
-        if (!levels[currentLevel].isPvP || pvpOver) {
-          nextBtn.classList.add('visible');
-        }
+        nextBtn.classList.add('visible');
       }
     }
 
@@ -1006,7 +910,6 @@
     // Projectile physics (called once per frame while state === FIRING)
     // ============================================================
     function advanceProjectile() {
-      const lvl = levels[currentLevel];
       const step = fireStep * fireDirection;
       const prev_t = t;
       const prev_y = pathHistory.length > 0 ? pathHistory[pathHistory.length - 1].y : 0;
@@ -1018,65 +921,32 @@
       } catch (e) {
         showMessage("Lỗi toán học!", false);
         state = 'DONE';
-        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        setTimeout(nextTurn, 1500);
         return;
       }
 
       if (!isFinite(y)) {
         showMessage("Ra ngoài vô cực!", false);
         state = 'DONE';
-        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        setTimeout(nextTurn, 1500);
         return;
       }
 
       pathHistory.push({ x: t, y: y });
       const r_proj = 8 / SCALE;
 
-      if (lvl.isPvP) {
-        for (const p of lvl.players) {
-          if (!p.active || p.id === currentPlayerIdx) continue;
-          const r_target = 12 / SCALE;
-          if (segmentIntersectsCircle(prev_t, prev_y, t, y, p.x, p.y, r_target + r_proj)) {
-            p.active = false;
-            const hitPt = toScreen(p.x, p.y);
-            spawnBurst(hitPt.x, hitPt.y, p.color, 34, 1.4);
-            triggerShake(9, 320);
-            sfxHit();
-            recordShot(lvl.players[currentPlayerIdx].name, lastUsedExpr, 'hit');
-
-            const alive = lvl.players.filter(function (pl) { return pl.active; });
-            state = 'DONE';
-            if (alive.length <= 1) {
-              if (alive.length === 1) {
-                hasWon = true;
-                nextBtn.textContent = "Hoàn Thành! 🎉";
-                showMessage(alive[0].name + " CHIẾN THẮNG! 🏆", true, true);
-                sfxWin();
-                triggerConfetti();
-                notifyAchievement("graphwar_arena", "⚔️ Vô Địch Đấu Trường", "Chiến thắng một trận Đấu Trường Đối Kháng 1-1!", "⚔️");
-              } else {
-                hasWon = false;
-                nextBtn.textContent = "Chơi lại 🔄";
-                showMessage("HÒA!", true, true);
-              }
-            } else {
-              showMessage("Đã loại " + p.name + "!", true);
-              setTimeout(nextTurn, 2000);
-            }
-            return;
-          }
-        }
-      } else if (isPlayerTurn) {
+      if (isPlayerTurn) {
         const r_bot = 15 / SCALE;
         if (segmentIntersectsCircle(prev_t, prev_y, t, y, botPos.x, botPos.y, r_bot + r_proj)) {
           hasWon = true;
-          nextBtn.textContent = "Màn Tiếp Theo ➔";
+          const isLastBoss = currentLevel === levels.length - 1 && levels[currentLevel].isRandom;
+          nextBtn.textContent = isLastBoss ? "Bản Đồ Mới ➔" : "Màn Tiếp Theo ➔";
           const bp = toScreen(botPos.x, botPos.y);
           spawnBurst(bp.x, bp.y, '#ef4444', 36, 1.5);
           triggerShake(10, 340);
           sfxHit();
           recordShot('Bạn', lastUsedExpr, 'hit');
-          showMessage("TRÚNG MỤC TIÊU! 🎉", true);
+          showMessage(isLastBoss ? ("HẠ GỤC TRÙM! 🎉 Vòng " + bossRound + " hoàn thành!") : "TRÚNG MỤC TIÊU! 🎉", true);
           state = 'DONE';
 
           if (currentLevel === 3 && playerAttemptCount === 1) {
@@ -1101,7 +971,7 @@
           triggerShake(10, 340);
           sfxMiss();
           recordShot('Bot', lastBotExpr, 'hit');
-          showMessage("BẠN ĐÃ BỊ TIÊU DIỆT! 💥", true, true);
+          showMessage("BẠN ĐÃ BỊ TIÊU DIỆT! 💥", true);
           state = 'DONE';
           return;
         }
@@ -1116,7 +986,7 @@
           recordShot(info.who, info.expr, 'obstacle');
           showMessage("Va chạm rào cản!", false);
           state = 'DONE';
-          setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+          setTimeout(nextTurn, 1500);
           return;
         }
       }
@@ -1131,7 +1001,7 @@
         recordShot(info.who, info.expr, 'miss');
         showMessage("Trượt rồi!", false);
         state = 'DONE';
-        setTimeout(nextTurn, lvl.isPvP ? 2000 : 1500);
+        setTimeout(nextTurn, 1500);
         return;
       }
     }
@@ -1224,13 +1094,8 @@
       lastUsedExpr = expr;
       sfxFire();
 
-      const lvl = levels[currentLevel];
       const origin = getFireOrigin();
-      if (lvl.isPvP) {
-        for (const r of dirRadios) { if (r.checked) fireDirection = parseFloat(r.value); }
-      } else {
-        fireDirection = botPos.x > playerPos.x ? 1 : -1;
-      }
+      fireDirection = botPos.x > playerPos.x ? 1 : -1;
       const startX = origin.x, startY = origin.y;
       t = startX;
 
@@ -1251,8 +1116,17 @@
 
     nextBtn.addEventListener('click', function () {
       sfxClick();
-      if (hasWon) loadLevel(currentLevel + 1);
-      else loadLevel(currentLevel);
+      if (hasWon) {
+        const isLastBoss = currentLevel === levels.length - 1 && levels[currentLevel].isRandom;
+        if (isLastBoss) {
+          bossRound++;
+          loadLevel(currentLevel);
+        } else {
+          loadLevel(currentLevel + 1);
+        }
+      } else {
+        loadLevel(currentLevel);
+      }
     });
 
     // ============================================================
@@ -1363,26 +1237,18 @@
     closeHistoryBtn.addEventListener('click', function () { historyPanel.classList.remove('open'); });
 
     // ============================================================
-    // PvP player name inputs
-    // ============================================================
-    nameInput0.addEventListener('input', function () {
-      const lvl = levels[currentLevel];
-      if (!lvl.isPvP) return;
-      lvl.players[0].name = nameInput0.value.trim() || 'Người chơi 1';
-      if (currentPlayerIdx === 0) currentPlayerName.textContent = lvl.players[0].name;
-    });
-    nameInput1.addEventListener('input', function () {
-      const lvl = levels[currentLevel];
-      if (!lvl.isPvP) return;
-      lvl.players[1].name = nameInput1.value.trim() || 'Người chơi 2';
-      if (currentPlayerIdx === 1) currentPlayerName.textContent = lvl.players[1].name;
-    });
-
-    // ============================================================
     // Bootstrap
     // ============================================================
     resizeCanvas();
     requestAnimationFrame(frameTick);
+
+    const savedUnlocked = localStorage.getItem('graphwar_unlocked');
+    if (savedUnlocked !== null) {
+      const parsedUnlocked = parseInt(savedUnlocked, 10);
+      if (!isNaN(parsedUnlocked) && parsedUnlocked >= 0 && parsedUnlocked < levels.length) {
+        unlockedLevel = parsedUnlocked;
+      }
+    }
 
     const savedLevel = localStorage.getItem('graphwar_level');
     let startLevel = 0;
