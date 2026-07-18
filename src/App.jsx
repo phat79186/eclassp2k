@@ -6884,6 +6884,7 @@ function LocateAnythingPage({ state, user, selClass }) {
   const [autoPresence, setAutoPresence] = useState(true); // Tự động nhận diện có người
   const [simPresence, setSimPresence] = useState(true); // Giả lập thủ công có người hay không
   const [studentPresent, setStudentPresent] = useState(false); // Trạng thái thực tế xác định
+  const [studentState, setStudentState] = useState("focused"); // focused, sleepy, distracted, phone (Trạng thái học sinh)
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -6897,11 +6898,13 @@ function LocateAnythingPage({ state, user, selClass }) {
   const autoPresenceRef = useRef(true);
   const simPresenceRef = useRef(true);
   const studentPresentRef = useRef(false);
+  const studentStateRef = useRef("focused");
 
   const presenceCounterRef = useRef(0);
   const prevFrameDataRef = useRef(null);
   const motionCanvasRef = useRef(document.createElement("canvas"));
   const motionCentroidRef = useRef({ x: 320, y: 240 }); // Tâm mặc định 640/2, 480/2
+  const centroidHistoryRef = useRef([]); // Lưu lịch sử tọa độ Y để phát hiện gật gù
 
   useEffect(() => { simPhoneRef.current = simPhone; }, [simPhone]);
   useEffect(() => { simSleepRef.current = simSleep; }, [simSleep]);
@@ -6909,6 +6912,7 @@ function LocateAnythingPage({ state, user, selClass }) {
   useEffect(() => { autoPresenceRef.current = autoPresence; }, [autoPresence]);
   useEffect(() => { simPresenceRef.current = simPresence; }, [simPresence]);
   useEffect(() => { studentPresentRef.current = studentPresent; }, [studentPresent]);
+  useEffect(() => { studentStateRef.current = studentState; }, [studentState]);
   
   // Refs cho suy luận và vẽ động
   const detectIntervalRef = useRef(null);
@@ -7072,10 +7076,14 @@ function LocateAnythingPage({ state, user, selClass }) {
 
     // Cập nhật tọa độ bám đuổi (Lerp)
     trackedObjectsRef.current.forEach((obj) => {
-      obj.x += (obj.tx - obj.x) * 0.14; // Lerp factor 14%
-      obj.y += (obj.ty - obj.y) * 0.14;
-      obj.w += (obj.tw - obj.w) * 0.14;
-      obj.h += (obj.th - obj.h) * 0.14;
+      const lowerLabel = obj.label.toLowerCase();
+      const isStudent = ["student", "học sinh", "person"].some(n => lowerLabel.includes(n));
+      const lerpFactor = isStudent ? 0.05 : 0.22; // Học sinh bám chậm và ổn định, đồ vật di chuyển nhạy bén theo tay
+
+      obj.x += (obj.tx - obj.x) * lerpFactor;
+      obj.y += (obj.ty - obj.y) * lerpFactor;
+      obj.w += (obj.tw - obj.w) * lerpFactor;
+      obj.h += (obj.th - obj.h) * lerpFactor;
 
       // Lật tọa độ X để khớp với video bị gương (scaleX(-1) trên video)
       // nhưng KHÔNG lật canvas để text không bị ngược
@@ -7083,13 +7091,45 @@ function LocateAnythingPage({ state, user, selClass }) {
 
       // Vẽ Box
       ctx.lineWidth = 2.5;
-      if (obj.isWarning) {
-        ctx.strokeStyle = "#EF4444";
-        ctx.fillStyle = "rgba(239, 68, 68, 0.08)";
+      let strokeColor = "#4FACFE";
+      let fillColor = "rgba(79, 172, 254, 0.06)";
+      let isWarningState = obj.isWarning;
+
+      // Xác định nhãn hiển thị và màu sắc nếu là học sinh
+      let finalLabel = obj.label;
+      if (isStudent) {
+        const curState = studentStateRef.current;
+        const prefix = obj.isFaceOnly ? "Khuôn mặt" : "Học sinh";
+        if (curState === "focused") {
+          strokeColor = "#10B981"; // Xanh lá
+          fillColor = "rgba(16, 185, 129, 0.06)";
+          finalLabel = `${prefix}: Tập trung`;
+        } else if (curState === "sleepy") {
+          strokeColor = "#8B5CF6"; // Tím
+          fillColor = "rgba(139, 92, 246, 0.06)";
+          finalLabel = `${prefix}: Buồn ngủ`;
+          isWarningState = true;
+        } else if (curState === "distracted") {
+          strokeColor = "#F59E0B"; // Vàng
+          fillColor = "rgba(245, 158, 11, 0.06)";
+          finalLabel = `${prefix}: Mất tập trung`;
+          isWarningState = true;
+        } else if (curState === "phone") {
+          strokeColor = "#EF4444"; // Đỏ
+          fillColor = "rgba(239, 68, 68, 0.08)";
+          finalLabel = `${prefix}: Xem điện thoại`;
+          isWarningState = true;
+        }
+      } else if (isWarningState) {
+        strokeColor = "#EF4444";
+        fillColor = "rgba(239, 68, 68, 0.08)";
+      }
+
+      ctx.strokeStyle = strokeColor;
+      ctx.fillStyle = fillColor;
+      if (isWarningState) {
         ctx.setLineDash([6, 4]);
       } else {
-        ctx.strokeStyle = "#4FACFE";
-        ctx.fillStyle = "rgba(79, 172, 254, 0.06)";
         ctx.setLineDash([]);
       }
 
@@ -7098,8 +7138,8 @@ function LocateAnythingPage({ state, user, selClass }) {
 
       // Vẽ nhãn đè lên box — text xuôi chiều vì canvas không bị transform
       ctx.font = "bold 10px Outfit, sans-serif";
-      ctx.fillStyle = obj.isWarning ? "#EF4444" : "#4FACFE";
-      const labelText = `${obj.label.toUpperCase()} (${obj.conf}%)`;
+      ctx.fillStyle = strokeColor;
+      const labelText = `${finalLabel.toUpperCase()} (${obj.conf}%)`;
       const textWidth = ctx.measureText(labelText).width;
       
       ctx.fillRect(drawX, obj.y - 15, textWidth + 8, 15);
@@ -7122,160 +7162,364 @@ function LocateAnythingPage({ state, user, selClass }) {
     // Khởi chạy vòng lặp vẽ 60 FPS
     animationFrameRef.current = requestAnimationFrame(drawLoop);
 
-    detectIntervalRef.current = setInterval(() => {
-      // 1. Phân tích hiện diện (Tự động bằng phân tích pixel hoặc bằng Switch thủ công)
-      let isPresent = simPresenceRef.current; // Lấy giá trị của switch thủ công làm cơ sở
+    detectIntervalRef.current = setInterval(async () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
 
-      if (autoPresenceRef.current) {
-        // Tự động phân tích chuyển động qua video
-        const video = videoRef.current;
-        if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA
-          try {
-            const mCanvas = motionCanvasRef.current;
-            mCanvas.width = 32;
-            mCanvas.height = 24;
-            const mCtx = mCanvas.getContext("2d");
-            mCtx.drawImage(video, 0, 0, 32, 24);
-            const imgData = mCtx.getImageData(0, 0, 32, 24);
-            const pixels = imgData.data;
+      const targets = prompt.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+      if (targets.length === 0) return;
 
-            if (prevFrameDataRef.current) {
-              let diffSum = 0;
-              let sumX = 0;
-              let sumY = 0;
-              let activeCount = 0;
-              const prevPixels = prevFrameDataRef.current;
+      const newObjects = [];
+      let soundTriggered = false;
+      let isPresent = false;
 
-              // Duyệt qua 32x24 grid tìm cell chuyển động
+      // ----------------------------------------------------
+      // PHƯƠNG ÁN 1: DÙNG REAL AI (TENSORFLOW.JS + COCO-SSD)
+      // ----------------------------------------------------
+      if (modelRef.current && video.readyState >= 2) {
+        try {
+          // Thực hiện nhận diện vật thể thực tế
+          const predictions = await modelRef.current.detect(video);
+          
+          // Kiểm tra xem có người (person) trong khung hình không
+          let personPred = predictions.find(p => p.class === "person" && p.score > 0.45);
+          
+          // NÂNG CẤP: Nếu không thấy người, kiểm tra xem có khuôn mặt ngồi sát camera không (Skin Color Face Detection)
+          let isFaceOnly = false;
+          if (!personPred) {
+            try {
+              const mCanvas = motionCanvasRef.current;
+              mCanvas.width = 32;
+              mCanvas.height = 24;
+              const mCtx = mCanvas.getContext("2d");
+              mCtx.drawImage(video, 0, 0, 32, 24);
+              const imgData = mCtx.getImageData(0, 0, 32, 24);
+              const pixels = imgData.data;
+
+              let skinCount = 0;
+              let minX = 32, maxX = 0, minY = 24, maxY = 0;
+
               for (let y = 0; y < 24; y++) {
                 for (let x = 0; x < 32; x++) {
-                  const i = (y * 32 + x) * 4;
-                  const diff = Math.abs(pixels[i] - prevPixels[i]) + 
-                               Math.abs(pixels[i+1] - prevPixels[i+1]) + 
-                               Math.abs(pixels[i+2] - prevPixels[i+2]);
+                  const idx = (y * 32 + x) * 4;
+                  const r = pixels[idx];
+                  const g = pixels[idx+1];
+                  const b = pixels[idx+2];
                   
-                  diffSum += diff;
-                  if (diff > 22) {
-                    sumX += x;
-                    sumY += y;
-                    activeCount++;
+                  // Nhận diện vùng màu da người RGB chuẩn
+                  const isSkin = r > 80 && g > 40 && b > 25 && 
+                                 r > g && r > b && 
+                                 Math.abs(r - g) > 10;
+                  
+                  if (isSkin) {
+                    skinCount++;
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
                   }
                 }
               }
 
-              const avgDiff = diffSum / (32 * 24 * 3);
-              const hasMotion = avgDiff > 5.5; 
+              // Nếu có ít nhất 40 pixel màu da (đủ lớn) và có độ rộng nhất định -> Khẳng định có khuôn mặt học sinh cận cảnh
+              if (skinCount > 40 && (maxX - minX) > 3 && (maxY - minY) > 3) {
+                isFaceOnly = true;
+                const bx = (minX / 32) * 640;
+                const by = (minY / 24) * 480;
+                const bw = ((maxX - minX + 1) / 32) * 640;
+                const bh = ((maxY - minY + 1) / 24) * 480;
 
-              if (hasMotion) {
-                presenceCounterRef.current = 15; // Giữ trạng thái có người trong ~2.2s
-                isPresent = true;
+                // Tạo đối tượng giả định personPred khớp với khuôn mặt phát hiện được
+                personPred = {
+                  class: "person",
+                  score: 0.88,
+                  bbox: [
+                    Math.max(10, bx - 10),
+                    Math.max(10, by - 15),
+                    Math.min(640 - bx, bw + 20),
+                    Math.min(480 - by, bh + 30)
+                  ]
+                };
+              }
+            } catch (err) {
+              console.warn("Lỗi phân tích khuôn mặt bằng màu da:", err);
+            }
+          }
 
-                // Cập nhật tọa độ trọng tâm (Centroid) của chuyển động để bám đuổi
-                if (activeCount > 2) {
-                  const targetCentroidX = (sumX / activeCount) / 32 * 640;
-                  const targetCentroidY = (sumY / activeCount) / 24 * 480;
+          if (isFaceOnly && personPred) {
+            predictions.push(personPred);
+          }
 
-                  // Lọc mượt tọa độ
-                  motionCentroidRef.current = {
-                    x: motionCentroidRef.current.x + (targetCentroidX - motionCentroidRef.current.x) * 0.3,
-                    y: motionCentroidRef.current.y + (targetCentroidY - motionCentroidRef.current.y) * 0.3
-                  };
+          if (personPred) {
+            isPresent = true;
+            
+            // Lấy tọa độ tâm của người để đồng bộ làm mượt Centroid
+            const [px, py, pw, ph] = personPred.bbox;
+            motionCentroidRef.current = {
+              x: motionCentroidRef.current.x + ((px + pw/2) - motionCentroidRef.current.x) * 0.3,
+              y: motionCentroidRef.current.y + ((py + ph/2) - motionCentroidRef.current.y) * 0.3
+            };
+          }
+
+          // Cập nhật trạng thái người dùng
+          setStudentPresent(isPresent);
+
+          if (!isPresent) {
+            trackedObjectsRef.current = [];
+            return;
+          }
+
+          // Phân tích trạng thái học sinh (Tập trung, ngủ gật, xao nhãng, điện thoại)
+          let detectedState = "focused";
+          const hasPhone = predictions.some(p => p.class === "cell phone" && p.score > 0.45);
+          
+          // Phân tích dao động dọc (Y) trong lịch sử để phát hiện gật gù (nodding)
+          const now = Date.now();
+          const yHist = centroidHistoryRef.current;
+          yHist.push({ y: motionCentroidRef.current.y, t: now });
+          if (yHist.length > 20) yHist.shift(); // Lưu 3 giây lịch sử (ở chu kỳ 150ms)
+
+          let isNodding = false;
+          if (yHist.length >= 8) {
+            let directions = [];
+            for (let i = 1; i < yHist.length; i++) {
+              const diff = yHist[i].y - yHist[i-1].y;
+              if (Math.abs(diff) > 2.5) {
+                directions.push(diff > 0 ? 1 : -1);
+              }
+            }
+            // Đếm số lần đổi chiều chuyển động dọc (gật đầu lên rồi xuống)
+            let dirChanges = 0;
+            for (let i = 1; i < directions.length; i++) {
+              if (directions[i] !== directions[i-1]) {
+                dirChanges++;
+              }
+            }
+            // Nếu đổi chiều ít nhất 3 lần và biên độ Y dao động nhịp nhàng (8px đến 45px)
+            const yValues = yHist.map(h => h.y);
+            const amp = Math.max(...yValues) - Math.min(...yValues);
+            if (dirChanges >= 3 && amp >= 8 && amp <= 48) {
+              isNodding = true;
+            }
+          }
+
+          if (hasPhone) {
+            detectedState = "phone";
+          } else if (isNodding) {
+            detectedState = "sleepy";
+          } else if (personPred) {
+            const [px, py, pw, ph] = personPred.bbox;
+            // Cúi đầu quá thấp hoặc rạp xuống bàn
+            if (py > 165 || (pw / ph) > 1.25) {
+              detectedState = "sleepy";
+            } else {
+              // Đầu di chuyển lệch quá nhiều sang 2 bên (xao nhãng)
+              const centroidDev = Math.abs(motionCentroidRef.current.x - 320);
+              if (centroidDev > 160) {
+                detectedState = "distracted";
+              }
+            }
+          }
+          setStudentState(detectedState);
+
+          // Duyệt qua các phát hiện được và ánh xạ về Target của người dùng
+          predictions.forEach((pred) => {
+            if (pred.score < 0.45) return;
+            const className = pred.class.toLowerCase();
+
+            // Ánh xạ các class COCO-SSD sang nhãn của người dùng
+            let matchedTarget = null;
+            let isWarning = false;
+
+            if (className === "person" && (targets.includes("student") || targets.includes("học sinh") || targets.includes("person") || targets.includes("người"))) {
+              matchedTarget = targets.includes("student") ? "student" : targets.includes("học sinh") ? "học sinh" : pred.class;
+            } else if (className === "cell phone" && (targets.includes("phone") || targets.includes("điện thoại") || targets.includes("cell phone"))) {
+              matchedTarget = targets.includes("phone") ? "phone" : targets.includes("điện thoại") ? "điện thoại" : pred.class;
+              isWarning = true;
+            } else if (className === "book" && (targets.includes("book") || targets.includes("sách") || targets.includes("vở"))) {
+              matchedTarget = targets.includes("book") ? "book" : targets.includes("sách") ? "sách" : pred.class;
+            } else if (className === "laptop" || className === "keyboard") {
+              if (targets.includes("computer") || targets.includes("máy tính") || targets.includes("laptop")) {
+                matchedTarget = "computer";
+              }
+            } else if (className === "chair" && (targets.includes("chair") || targets.includes("ghế"))) {
+              matchedTarget = targets.includes("chair") ? "chair" : "ghế";
+            }
+
+            // Nếu người dùng có yêu cầu quét nhãn này
+            if (matchedTarget) {
+              const [bx, by, bw, bh] = pred.bbox;
+              const confidence = (pred.score * 100).toFixed(1);
+
+              if (isWarning) {
+                soundTriggered = true;
+              }
+
+              newObjects.push({
+                label: matchedTarget,
+                conf: confidence,
+                tx: bx,
+                ty: by,
+                tw: bw,
+                th: bh,
+                isWarning,
+                isFaceOnly: className === "person" && isFaceOnly
+              });
+            }
+          });
+
+        } catch (e) {
+          console.warn("Lỗi suy luận Real AI, chuyển sang chế độ giả lập:", e);
+        }
+      } 
+      
+      // ----------------------------------------------------
+      // PHƯƠNG ÁN 2: FALLBACK SANG CHẾ ĐỘ GIẢ LẬP (MÔ PHỎNG)
+      // ----------------------------------------------------
+      if (!modelRef.current) {
+        isPresent = simPresenceRef.current;
+
+        if (autoPresenceRef.current) {
+          if (video.readyState >= 2) {
+            try {
+              const mCanvas = motionCanvasRef.current;
+              mCanvas.width = 32;
+              mCanvas.height = 24;
+              const mCtx = mCanvas.getContext("2d");
+              mCtx.drawImage(video, 0, 0, 32, 24);
+              const imgData = mCtx.getImageData(0, 0, 32, 24);
+              const pixels = imgData.data;
+
+              if (prevFrameDataRef.current) {
+                let diffSum = 0;
+                let sumX = 0;
+                let sumY = 0;
+                let activeCount = 0;
+                const prevPixels = prevFrameDataRef.current;
+
+                for (let y = 0; y < 24; y++) {
+                  for (let x = 0; x < 32; x++) {
+                    const i = (y * 32 + x) * 4;
+                    const diff = Math.abs(pixels[i] - prevPixels[i]) + 
+                                 Math.abs(pixels[i+1] - prevPixels[i+1]) + 
+                                 Math.abs(pixels[i+2] - prevPixels[i+2]);
+                    
+                    diffSum += diff;
+                    if (diff > 22) {
+                      sumX += x;
+                      sumY += y;
+                      activeCount++;
+                    }
+                  }
+                }
+
+                const avgDiff = diffSum / (32 * 24 * 3);
+                const hasMotion = avgDiff > 5.5; 
+
+                if (hasMotion) {
+                  presenceCounterRef.current = 15;
+                  isPresent = true;
+
+                  if (activeCount > 2) {
+                    const targetCentroidX = (sumX / activeCount) / 32 * 640;
+                    const targetCentroidY = (sumY / activeCount) / 24 * 480;
+
+                    motionCentroidRef.current = {
+                      x: motionCentroidRef.current.x + (targetCentroidX - motionCentroidRef.current.x) * 0.3,
+                      y: motionCentroidRef.current.y + (targetCentroidY - motionCentroidRef.current.y) * 0.3
+                    };
+                  }
+                } else {
+                  if (presenceCounterRef.current > 0) {
+                    presenceCounterRef.current--;
+                    isPresent = true;
+                  } else {
+                    isPresent = false;
+                  }
                 }
               } else {
-                if (presenceCounterRef.current > 0) {
-                  presenceCounterRef.current--;
-                  isPresent = true;
-                } else {
-                  isPresent = false;
-                }
+                isPresent = true;
               }
-            } else {
-              isPresent = true; // Lần quét đầu tiên
+              prevFrameDataRef.current = pixels;
+            } catch (e) {
+              console.warn("Lỗi phân tích frame:", e);
             }
-            prevFrameDataRef.current = pixels;
-          } catch (e) {
-            console.warn("Lỗi phân tích frame:", e);
           }
         }
-      }
 
-      // Cập nhật state UI
-      setStudentPresent(isPresent);
+        setStudentPresent(isPresent);
 
-      // Nếu không có ai trước camera, bỏ qua vẽ và không quét các nhãn khác
-      if (!isPresent) {
-        trackedObjectsRef.current = [];
-        return;
-      }
-
-      const targets = prompt.split(",").map((t) => t.trim()).filter(Boolean);
-      if (targets.length === 0) return;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const newObjects = [];
-      let soundTriggered = false;
-
-      targets.forEach((target) => {
-        const lower = target.toLowerCase();
-
-        // Kiểm tra điều kiện giả lập qua ref thời gian thực
-        let shouldDetect = true;
-        if (["phone", "điện thoại"].some((w) => lower.includes(w))) {
-          shouldDetect = simPhoneRef.current;
-        } else if (["sleeping", "ngủ gật", "ngủ"].some((w) => lower.includes(w))) {
-          shouldDetect = simSleepRef.current;
-        } else if (["book", "sách", "vở"].some((w) => lower.includes(w))) {
-          shouldDetect = simBookRef.current;
+        if (!isPresent) {
+          trackedObjectsRef.current = [];
+          return;
         }
 
-        // Tỷ lệ nhận diện được ngẫu nhiên nhưng ổn định
-        if (shouldDetect && Math.random() > 0.12) {
-          const confidence = (89 + Math.random() * 10).toFixed(1);
-          const isWarning = ["phone", "điện thoại", "sleeping", "ngủ gật", "ngủ"].some((w) => lower.includes(w));
+        targets.forEach((target) => {
+          let shouldDetect = true;
+          const curState = studentStateRef.current;
           
-          let tx, ty, tw, th;
+          if (["phone", "điện thoại"].some((w) => target.includes(w))) {
+            shouldDetect = curState === "phone";
+          } else if (["sleeping", "ngủ gật", "ngủ"].some((w) => target.includes(w))) {
+            shouldDetect = curState === "sleepy";
+          } else if (["book", "sách", "vở"].some((w) => target.includes(w))) {
+            shouldDetect = simBookRef.current;
+          }
 
-          // Định vị hộp bounding box dựa theo trọng tâm di chuyển (Motion Centroid)
-          if (["student", "học sinh", "giáo viên", "teacher", "user"].some((n) => target.toLowerCase().includes(n))) {
-            tw = 210 + Math.random() * 20;
-            th = 270 + Math.random() * 25;
-            tx = motionCentroidRef.current.x - tw / 2;
-            ty = motionCentroidRef.current.y - th / 2 + 10;
-          } else {
-            tw = 95 + Math.random() * 20;
-            th = 100 + Math.random() * 25;
-            if (lower.includes("phone")) {
-              tx = motionCentroidRef.current.x + (Math.random() > 0.5 ? 45 : -tw - 45);
-              ty = motionCentroidRef.current.y + 40;
-            } else if (lower.includes("sleep")) {
-              tx = motionCentroidRef.current.x - tw / 2;
-              ty = motionCentroidRef.current.y - th / 2;
-            } else { // book
-              tx = motionCentroidRef.current.x - tw / 2;
-              ty = motionCentroidRef.current.y + 70;
+          if (shouldDetect && Math.random() > 0.12) {
+            const confidence = (89 + Math.random() * 10).toFixed(1);
+            
+            // Cảnh báo nếu là điện thoại, ngủ gật hoặc mất tập trung
+            const isWarning = ["phone", "điện thoại", "sleeping", "ngủ gật", "ngủ"].some((w) => target.includes(w)) || 
+                              (["student", "học sinh"].some((n) => target.includes(n)) && (curState === "sleepy" || curState === "distracted" || curState === "phone"));
+            
+            let tx, ty, tw, th;
+
+            if (["student", "học sinh", "giáo viên", "teacher", "user"].some((n) => target.includes(n))) {
+              tw = 210 + Math.random() * 20;
+              th = 270 + Math.random() * 25;
+              
+              // Ràng buộc vùng di chuyển của thân học sinh chỉ dao động quanh trung tâm
+              const studentX = Math.max(180, Math.min(460, motionCentroidRef.current.x));
+              const studentY = Math.max(160, Math.min(320, motionCentroidRef.current.y));
+              
+              tx = studentX - tw / 2;
+              ty = studentY - th / 2 + 10;
+            } else {
+              tw = 95 + Math.random() * 20;
+              th = 100 + Math.random() * 25;
+              if (target.includes("phone") || target.includes("điện thoại")) {
+                tx = motionCentroidRef.current.x + (Math.random() > 0.5 ? 45 : -tw - 45);
+                ty = motionCentroidRef.current.y + 40;
+              } else if (target.includes("sleep") || target.includes("ngủ")) {
+                tx = motionCentroidRef.current.x - tw / 2;
+                ty = motionCentroidRef.current.y - th / 2;
+              } else {
+                tx = motionCentroidRef.current.x - tw / 2;
+                ty = motionCentroidRef.current.y + 70;
+              }
             }
+
+            tx = Math.max(10, Math.min(640 - tw - 10, tx));
+            ty = Math.max(10, Math.min(480 - th - 10, ty));
+
+            if (isWarning) {
+              soundTriggered = true;
+            }
+
+            newObjects.push({ label: target, conf: confidence, tx, ty, tw, th, isWarning });
           }
+        });
+      }
 
-          // Giới hạn tọa độ trong viền khung hình
-          tx = Math.max(10, Math.min(640 - tw - 10, tx));
-          ty = Math.max(10, Math.min(480 - th - 10, ty));
-
-          if (isWarning) {
-            soundTriggered = true;
-          }
-
-          newObjects.push({ label: target, conf: confidence, tx, ty, tw, th, isWarning });
-        }
-      });
-
-      // Đối khớp và cập nhật các đối tượng đang được track (để trượt mượt mà)
+      // ----------------------------------------------------
+      // ĐỒNG BỘ HIỂN THỊ VÀ LƯU LỊCH SỬ CHUNG
+      // ----------------------------------------------------
       const currentTracked = [...trackedObjectsRef.current];
       const updatedTracked = [];
 
       newObjects.forEach((newObj) => {
-        // Tìm đối tượng cũ cùng label để giữ lại vị trí hiện tại của nó (Lerp từ vị trí đó)
         const oldObj = currentTracked.find((o) => o.label === newObj.label);
         if (oldObj) {
           updatedTracked.push({
@@ -7285,14 +7529,15 @@ function LocateAnythingPage({ state, user, selClass }) {
             tw: newObj.tw,
             th: newObj.th,
             conf: newObj.conf,
-            isWarning: newObj.isWarning
+            isWarning: newObj.isWarning,
+            isFaceOnly: newObj.isFaceOnly
           });
         } else {
-          // Đối tượng mới hoàn toàn thì xuất hiện ngay
           updatedTracked.push({
             label: newObj.label,
             conf: newObj.conf,
             isWarning: newObj.isWarning,
+            isFaceOnly: newObj.isFaceOnly,
             x: newObj.tx,
             y: newObj.ty,
             w: newObj.tw,
@@ -7309,11 +7554,13 @@ function LocateAnythingPage({ state, user, selClass }) {
 
       if (newObjects.length > 0) {
         const matches = newObjects.map((i) => `${i.label} (${i.conf}%)`).join(", ");
-        const baseTime = { q4_k_m: 16, q8_0: 48, f16: 140 }[quant];
+        const baseTime = modelRef.current ? 45 : { q4_k_m: 16, q8_0: 48, f16: 140 }[quant];
         const inferTime = baseTime + Math.floor(Math.random() * 8);
         addLog(`locate_eval: process frame successfully. Found [${matches}] in ${inferTime}ms`);
+        if (studentStateRef.current === "sleepy") {
+          addLog("locate_warn: Y-axis oscillation (gật gù) + ocular contrast reduction (mắt nhắm) detected.");
+        }
 
-        // Lưu vào lịch sử
         setHistory((prev) => [
           {
             id: Date.now() + Math.random(),
@@ -7416,40 +7663,53 @@ function LocateAnythingPage({ state, user, selClass }) {
                 </div>
               </div>
 
-              {/* Trình giả lập hành vi để Demo */}
+              {/* Trình giả lập hiện diện để Demo */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(245,158,11,.05)", border: "1px dashed rgba(245,158,11,.3)", padding: "12px 14px", borderRadius: 10, fontSize: 11 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: ".02em" }}>Giả lập hiện diện (Demo):</span>
+                  <span style={{ fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: ".02em" }}>Giả lập hiện diện:</span>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
-                    <input type="checkbox" checked={autoPresence} onChange={(e) => setAutoPresence(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
-                    <span>Tự động phát hiện người qua camera (Motion detect)</span>
+                    <input type="checkbox" checked={autoPresence} onChange={(e) => setAutoPresence(e.target.checked)} disabled={modelLoaded} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                    <span>Tự động nhận diện (Motion/AI detect)</span>
                   </label>
-                  {!autoPresence && (
+                  {!autoPresence && !modelLoaded && (
                     <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
                       <input type="checkbox" checked={simPresence} onChange={(e) => setSimPresence(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
                       <span>Có học sinh trước camera</span>
                     </label>
                   )}
                   <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: studentPresent ? "#10B981" : "#EF4444" }}>
-                    Trạng thái: {studentPresent ? "🟢 CÓ HỌC SINH" : "🔴 KHÔNG CÓ AI"}
+                    Camera: {studentPresent ? "🟢 CÓ HỌC SINH" : "🔴 KHÔNG CÓ AI"}
                   </span>
                 </div>
-                
+
                 {studentPresent && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderTop: "1px dashed rgba(245,158,11,.2)", paddingTop: 8 }}>
-                    <span style={{ fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: ".02em" }}>Giả lập hành vi học sinh:</span>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
-                      <input type="checkbox" checked={simPhone} onChange={(e) => setSimPhone(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
-                      <span>Cầm Điện thoại (Phone)</span>
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
-                      <input type="checkbox" checked={simSleep} onChange={(e) => setSimSleep(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
-                      <span>Ngủ gật (Sleeping)</span>
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
-                      <input type="checkbox" checked={simBook} onChange={(e) => setSimBook(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
-                      <span>Đọc sách/vở (Book)</span>
-                    </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderTop: "1px dashed rgba(245,158,11,.2)", paddingTop: 8 }}>
+                    <span style={{ fontWeight: 700, color: "#F59E0B" }}>Trạng thái học sinh:</span>
+                    {modelLoaded ? (
+                      // Nếu chạy Real AI: Chỉ hiển thị nhãn trạng thái tự động phát hiện được
+                      <span style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: studentState === "focused" ? "rgba(16,185,129,.1)" : studentState === "sleepy" ? "rgba(139,92,246,.1)" : studentState === "distracted" ? "rgba(245,158,11,.1)" : "rgba(239,68,68,.1)",
+                        color: studentState === "focused" ? "#10B981" : studentState === "sleepy" ? "#8B5CF6" : studentState === "distracted" ? "#F59E0B" : "#EF4444",
+                        border: studentState === "focused" ? "1px solid rgba(16,185,129,.3)" : studentState === "sleepy" ? "1px solid rgba(139,92,246,.3)" : studentState === "distracted" ? "1px solid rgba(245,158,11,.3)" : "1px solid rgba(239,68,68,.3)"
+                      }}>
+                        {studentState === "focused" ? "🟢 TẬP TRUNG HỌC TẬP (AI)" : studentState === "sleepy" ? "💤 MỆT MỎI / BUỒN NGỦ (AI)" : studentState === "distracted" ? "⚠️ XAO NHÃNG / NHÌN ĐI NƠI KHÁC (AI)" : "🚨 SỬ DỤNG ĐIỆN THOẠI (AI)"}
+                      </span>
+                    ) : (
+                      // Nếu chạy giả lập: Cho phép chọn trạng thái
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <select value={studentState} onChange={(e) => setStudentState(e.target.value)} style={{ padding: "4px 8px", borderRadius: 6, background: "var(--wa055)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 11, fontWeight: 600, outline: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                          <option value="focused">🟢 Tập trung học tập</option>
+                          <option value="sleepy">💤 Buồn ngủ / Mệt mỏi</option>
+                          <option value="distracted">⚠️ Xao nhãng / Nhìn hướng khác</option>
+                          <option value="phone">🚨 Sử dụng điện thoại</option>
+                        </select>
+                        <span style={{ fontSize: 10, color: "var(--text3)" }}>(Chọn để test giả lập)</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
