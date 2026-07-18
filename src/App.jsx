@@ -1872,11 +1872,7 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
               <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => { setErr("Đăng nhập Google thất bại"); shake(); }} theme={darkMode ? "filled_black" : "outline"} shape="pill" text="continue_with" />
             </div>
           </div>
-          {role === "student" && (
-            <button onClick={() => setRegisterMode("student")} style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 10, border: "1px dashed rgba(79,172,254,.3)", background: "transparent", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <UserPlus size={13} />Đăng ký tài khoản mới
-            </button>
-          )}
+
           {role === "parent" && (
             <button onClick={() => setRegisterMode("parent")} style={{ width: "100%", marginTop: 12, padding: "9px", borderRadius: 10, border: "1px dashed rgba(79,172,254,.3)", background: "transparent", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <UserPlus size={13} />Đăng ký tài khoản phụ huynh

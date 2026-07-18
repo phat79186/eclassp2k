@@ -1350,6 +1350,7 @@ function reactSodium(x,y){
         : { type:'steam', v:0, life: randInt(STEAM_LIFE[0],STEAM_LIFE[1]) };
       grid[idx(x,y)] = null;
       logEvent('sodium','⚡ Natri phản ứng dữ dội với nước: 2Na + 2H₂O → 2NaOH + H₂↑ — toả nhiệt mạnh và bốc cháy khí hydro.');
+      unlockAchievement('alkali_metal');
       return;
     }
   }
@@ -1416,6 +1417,7 @@ function reactBakingSoda(x,y){
       grid[idx(x,y)] = { type:'saltwater', v: randInt(0,1) };
       grid[n.idx] = { type:'co2', v:0, life: randInt(200,350) };
       logEvent('neutralize','🫧 Phản ứng trung hoà sủi bọt khí CO₂: Axit tác dụng với muối Natri Hydrocacbonat NaHCO₃.');
+      unlockAchievement('volcano');
       return;
     }
   }
@@ -1571,6 +1573,7 @@ function reactMagnesium(x,y){
       grid[idx(x,y)] = { type:'whitefire', v:0, life: randInt(15,30) };
       explode(x,y,3,'flash');
       logEvent('magnesium-burn','✨ Magie bắt cháy tỏa nhiệt lượng cực lớn với ngọn lửa trắng chói sáng.');
+      unlockAchievement('magical_light');
       return;
     }
   }
@@ -1677,6 +1680,7 @@ function reactCarbide(x,y){
         grid[idx(x,y)] = { type:'ash', v:0 };
       }
       logEvent('carbide-water','🫧 Đất đèn CaC₂ phản ứng sủi bọt khí axetilen C₂H₂ nhạy nổ.');
+      unlockAchievement('acetylene_torch');
       return;
     }
   }
@@ -1722,6 +1726,7 @@ function reactNitroglycerin(x,y){
       grid[idx(x,y)] = null;
       explode(x,y,6,'tnt');
       unlockAchievement('nobel');
+      unlockAchievement('unstable_nitro');
       logEvent('nitro-explode','💥 Nitroglycerin lỏng nhạy nổ kích nổ dữ dội.');
       return;
     }
@@ -2094,7 +2099,12 @@ const ACHIEVEMENTS = {
   willowisp: { name: "Lửa ma trơi", desc: "Tạo ra ngọn lửa màu xanh lam.", hint: "Đốt cháy bột Lưu huỳnh màu vàng.", unlocked: false },
   darksorcerer: { name: "Phù thủy bóng tối", desc: "Cacbon hóa đường bằng Axit Sunfuric đặc.", hint: "Cho axit sunfuric đặc ăn mòn đường.", unlocked: false },
   cleanenergy: { name: "Năng lượng sạch", desc: "Sản sinh khí Hydro từ kim loại và axit.", hint: "Cho bột nhôm hoặc kẽm gặp axit mạnh.", unlocked: false },
-  extinguisher: { name: "Dập lửa cứu hỏa", desc: "Dập tắt ngọn lửa bằng khí CO₂ hoặc băng khô.", hint: "Thả khí CO₂ hoặc băng khô lên ngọn lửa đang cháy.", unlocked: false }
+  extinguisher: { name: "Dập lửa cứu hỏa", desc: "Dập tắt ngọn lửa bằng khí CO₂ hoặc băng khô.", hint: "Thả khí CO₂ hoặc băng khô lên ngọn lửa đang cháy.", unlocked: false },
+  magical_light: { name: "Ánh sáng ma thuật", desc: "Đốt cháy kim loại Magie tạo ra ngọn lửa trắng lóa mắt.", hint: "Đốt cháy bột Magie bằng lửa hoặc dung nham.", unlocked: false },
+  volcano: { name: "Thử nghiệm núi lửa", desc: "Cho giấm hoặc axit phản ứng với Baking Soda sủi bọt khí CO₂ dữ dội.", hint: "Cho bột Baking Soda tiếp xúc với dung dịch Axit hoặc Giấm.", unlocked: false },
+  alkali_metal: { name: "Kim loại kiềm nổi loạn", desc: "Thả Natri hoặc Kali kim loại vào nước tạo phản ứng nổ mãnh liệt.", hint: "Cho kim loại Natri hoặc Kali tiếp xúc với nước.", unlocked: false },
+  acetylene_torch: { name: "Đèn khò Axetilen", desc: "Đất đèn gặp nước tạo khí đất Axetilen dễ cháy nổ.", hint: "Cho đất đèn (carbide) phản ứng với nước.", unlocked: false },
+  unstable_nitro: { name: "Hiểm họa Nitroglycerin", desc: "Kích nổ chất lỏng Nitroglycerin nhạy nổ thành công.", hint: "Đốt nóng hoặc kích nổ Nitroglycerin bằng thuốc nổ.", unlocked: false }
 };
 
 function loadAchievements() {
@@ -2133,7 +2143,12 @@ function getChemIcon(id) {
     willowisp: "👻",
     darksorcerer: "🔮",
     cleanenergy: "🔋",
-    extinguisher: "🧯"
+    extinguisher: "🧯",
+    magical_light: "✨",
+    volcano: "🌋",
+    alkali_metal: "⚡",
+    acetylene_torch: "🫧",
+    unstable_nitro: "🧨"
   };
   return icons[id] || "🧪";
 }

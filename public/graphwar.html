@@ -324,6 +324,10 @@
     let hasWon = false;
     let bossRound = 1;
     let unlockedLevel = 0;
+    let currentWinStreak = 0;
+    let botLastYError = 0;
+    let botLastHitObstacle = false;
+    let botLastObstacleHit = null;
 
     let playerPos = { x: 0, y: 0 };
     let botPos = { x: 10, y: 10 };
@@ -833,6 +837,9 @@
       hasWon = false;
       botAttemptCount = 0;
       playerAttemptCount = 0;
+      botLastYError = 0;
+      botLastHitObstacle = false;
+      botLastObstacleHit = null;
       previewValid = false;
 
       shotHistory = [];
@@ -949,20 +956,82 @@
           showMessage(isLastBoss ? ("HẠ GỤC TRÙM! 🎉 Vòng " + bossRound + " hoàn thành!") : "TRÚNG MỤC TIÊU! 🎉", true);
           state = 'DONE';
 
-          if (currentLevel === 3 && playerAttemptCount === 1) {
-            notifyAchievement("graphwar_epic", "🎯 Thiện Xạ Không Gian", "Hạ gục Bot ở Màn 4 Trùm Cuối ngay trong lượt bắn đầu tiên!", "🏆");
+          // -----------------------------------------------------------
+          // CẬP NHẬT CHUỖI THẮNG & THÀNH TỰU GAME
+          // -----------------------------------------------------------
+          currentWinStreak++;
+
+          // 1. Chuỗi thắng liên tục
+          if (currentWinStreak >= 3) {
+            notifyAchievement("graphwar_streak_3", "🔥 Tay Súng Vào Phom", "Đạt chuỗi 3 trận thắng liên tiếp chống lại Bot!", "🔥");
           }
+          if (currentWinStreak >= 5) {
+            notifyAchievement("graphwar_streak_5", "⚡ Bất Khả Chiến Bại", "Đạt chuỗi 5 trận thắng liên tiếp chống lại Bot!", "⚡");
+          }
+          if (currentWinStreak >= 10) {
+            notifyAchievement("graphwar_streak_10", "👑 Huyền Thoại Toán Học", "Đạt chuỗi 10 trận thắng liên tiếp chống lại Bot!", "👑");
+          }
+
+          // 2. Thành tựu bắn một phát ăn ngay (One-shot)
+          if (playerAttemptCount === 1) {
+            if (currentLevel === 0) {
+              notifyAchievement("graphwar_one_shot_l1", "⚡ Nhất Kích Tất Sát", "Hạ gục Bot ở Màn 1 chỉ với 1 phát bắn duy nhất!", "⚡");
+            } else if (currentLevel === 1) {
+              notifyAchievement("graphwar_one_shot_l2", "🎯 Xuyên Qua Khe Hở", "Hạ gục Bot ở Màn 2 chỉ với 1 phát bắn duy nhất!", "🎯");
+            } else if (currentLevel === 2) {
+              notifyAchievement("graphwar_one_shot_l3", "🌊 Lướt Sóng Điêu Luyện", "Hạ gục Bot ở Màn 3 chỉ với 1 phát bắn duy nhất!", "🌊");
+            } else if (currentLevel === 3) {
+              notifyAchievement("graphwar_epic", "🛸 Thiện Xạ Không Gian", "Hạ gục Bot ở Màn 4 Trùm Cuối ngay trong lượt bắn đầu tiên!", "🏆");
+            }
+          }
+
+          // 3. Màn chơi trùm cuối
           if (currentLevel === 3) {
             notifyAchievement("graphwar_boss", "👑 Kẻ Diệt Trùm", "Chinh phục thành công Màn 4 - Thử thách tối thượng!", "🏆");
             triggerConfetti();
           }
-          if (lastUsedExpr.toLowerCase().includes("sin") || lastUsedExpr.toLowerCase().includes("cos")) {
+
+          // 4. Nhận diện các lớp hàm toán học sáng tạo
+          const expr = lastUsedExpr.toLowerCase().replace(/\s+/g, '');
+          if (expr.includes("sin") || expr.includes("cos")) {
             notifyAchievement("graphwar_sine", "🌊 Nhịp Sóng Lượng Giác", "Tiêu diệt mục tiêu bằng cách sử dụng hàm lượng giác sin(x) hoặc cos(x)!", "〰️");
           }
+          if (expr.includes("tan")) {
+            notifyAchievement("graphwar_tan", "🎢 Hàm Tan Siêu Tốc", "Tiêu diệt mục tiêu bằng hàm lượng giác tan(x) hoặc cot(x)!", "🎢");
+          }
+          if (expr.includes("^2") || expr.includes("x*x")) {
+            notifyAchievement("graphwar_parabol", "🏹 Cầu Vồng Parabol", "Tiêu diệt mục tiêu bằng hàm số bậc hai (Parabol)!", "🏹");
+          }
+          if (expr.includes("^3") || expr.includes("x*x*x") || expr.includes("^4") || expr.includes("x*x*x*x")) {
+            notifyAchievement("graphwar_poly", "🌀 Cơn Lốc Đa Thức", "Tiêu diệt mục tiêu bằng hàm đa thức bậc cao (bậc 3 trở lên)!", "🌀");
+          }
+          if (expr.includes("exp") || expr.includes("log") || expr.includes("ln")) {
+            notifyAchievement("graphwar_explog", "📈 Hàm Số Mũ Bay Cao", "Tiêu diệt mục tiêu bằng hàm số mũ hoặc hàm logarit!", "📈");
+          }
+          if (expr.includes("abs")) {
+            notifyAchievement("graphwar_abs", "📐 Góc Chữ V Thần Kỳ", "Tiêu diệt mục tiêu bằng hàm trị tuyệt đối abs(x)!", "📐");
+          }
+          
+          // Kiểm tra xem có phải hàm tuyến tính bậc nhất hoặc hàm hằng đơn giản (không có các đường cong phức tạp)
+          const hasCurves = expr.includes("^") || expr.includes("*x") || expr.includes("sin") || expr.includes("cos") || 
+                            expr.includes("tan") || expr.includes("exp") || expr.includes("log") || expr.includes("ln") || 
+                            expr.includes("abs") || expr.includes("sqrt");
+          if (!hasCurves && (expr.includes("x") || expr === "" || !isNaN(Number(expr)))) {
+            notifyAchievement("graphwar_linear", "📏 Tuyến Tính Đơn Giản", "Tiêu diệt mục tiêu bằng đường thẳng tuyến tính bậc nhất hoặc hàm hằng!", "📏");
+          }
+
           return;
         }
       } else {
         const r_player = 15 / SCALE;
+        
+        // Ghi lại sai số Y khi đạn bay ngang qua tọa độ X của người chơi
+        // Do bot bắn từ phải qua trái, t giảm dần. Khi t đi qua playerPos.x:
+        if (prev_t >= playerPos.x && t <= playerPos.x) {
+          botLastYError = y - playerPos.y;
+          botLastHitObstacle = false;
+        }
+
         if (segmentIntersectsCircle(prev_t, prev_y, t, y, playerPos.x, playerPos.y, r_player + r_proj)) {
           hasWon = false;
           nextBtn.textContent = "Chơi lại 🔄";
@@ -973,6 +1042,16 @@
           recordShot('Bot', lastBotExpr, 'hit');
           showMessage("BẠN ĐÃ BỊ TIÊU DIỆT! 💥", true);
           state = 'DONE';
+
+          // Ghi nhận thành tựu khi bị tiêu diệt
+          notifyAchievement("graphwar_lose_bot", "🤕 Bia Tập Bắn Cho Bot", "Bị Bot hạ gục trong trận đấu! Hãy học thêm các hàm số để phục thù nhé!", "🤕");
+          if (botAttemptCount === 1) {
+            notifyAchievement("graphwar_lose_first_shot", "⚡ Thất Bại Siêu Tốc", "Bị Bot bắn hạ ngay từ lượt bắn đầu tiên! Có vẻ như tọa độ của bạn đang nằm quá gần vùng đỏ.", "⚡");
+          }
+
+          // Reset chuỗi thắng khi bị tiêu diệt
+          currentWinStreak = 0;
+
           return;
         }
       }
@@ -984,7 +1063,12 @@
           sfxMiss();
           const info = currentShooterInfo();
           recordShot(info.who, info.expr, 'obstacle');
-          showMessage("Va chạm rào cản!", false);
+          
+          if (!isPlayerTurn) {
+            botLastHitObstacle = true;
+            botLastObstacleHit = obs;
+          }
+
           state = 'DONE';
           setTimeout(nextTurn, 1500);
           return;
@@ -1011,7 +1095,18 @@
     // ============================================================
     function botThinkAndFire() {
       state = 'BOT_THINKING';
-      showMessage("Bot đang suy nghĩ...", false);
+      
+      let thinkMsg = "Bot đang suy nghĩ...";
+      if (botLastHitObstacle) {
+        thinkMsg = "Bot: 'Phát trước trúng chướng ngại vật rồi! Cần tăng độ cong để vượt qua...' 🧠";
+      } else if (botLastYError > 0.4) {
+        thinkMsg = "Bot: 'Phát trước hơi cao rồi! Hạ thấp góc bắn xuống...' 🧠";
+      } else if (botLastYError < -0.4) {
+        thinkMsg = "Bot: 'Phát trước hơi thấp rồi! Nâng cao góc bắn lên...' 🧠";
+      } else if (botAttemptCount > 0) {
+        thinkMsg = "Bot: 'Phát bắn trước gần trúng rồi! Đang tinh chỉnh lại...' 🧠";
+      }
+      showMessage(thinkMsg, false);
 
       setTimeout(function () {
         const xb = botPos.x, yb = botPos.y;
@@ -1024,7 +1119,13 @@
         botAttemptCount++;
 
         let xt = xp + (Math.random() * 2 - 1) * err;
-        const yt = yp + (Math.random() * 2 - 1) * err;
+        let yt = yp + (Math.random() * 2 - 1) * err;
+
+        // RÚT KINH NGHIỆM: Bù trừ sai số dọc từ phát bắn trước
+        if (!botLastHitObstacle && Math.abs(botLastYError) > 0.1) {
+          yt = yt - botLastYError * 0.65;
+        }
+
         if (Math.abs(xt - xb) < 0.5) {
           xt = xb + (xt >= xb ? 0.5 : -0.5);
         }

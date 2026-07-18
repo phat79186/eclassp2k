@@ -934,10 +934,55 @@ function playBoardFlash(){
 /* ---- Âm thanh nổ/tia điện tổng hợp (Web Audio, không cần file ngoài) ---- */
 let sfxEnabled = true;
 let audioCtx = null;
+let globalBuzzerSound = null;
+
 function getAudioCtx(){
   if(audioCtx) return audioCtx;
   try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
   return audioCtx;
+}
+
+function updateBuzzerSound(hasActiveBuzzer) {
+  if (!sfxEnabled) {
+    stopBuzzerSound();
+    return;
+  }
+  if (hasActiveBuzzer) {
+    if (!globalBuzzerSound) {
+      try {
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume();
+        
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, ctx.currentTime); // Tần số còi báo trầm ấm dễ chịu
+        gainNode.gain.setValueAtTime(0.04, ctx.currentTime); // Âm lượng nhỏ gọn vừa đủ nghe
+        
+        osc.connect(gainNode).connect(ctx.destination);
+        osc.start();
+        
+        globalBuzzerSound = { osc, gainNode };
+      } catch (e) {
+        console.error("Error starting buzzer sound:", e);
+      }
+    }
+  } else {
+    stopBuzzerSound();
+  }
+}
+
+function stopBuzzerSound() {
+  if (globalBuzzerSound) {
+    try {
+      globalBuzzerSound.osc.stop();
+      globalBuzzerSound.osc.disconnect();
+      globalBuzzerSound.gainNode.disconnect();
+    } catch(e) {}
+    globalBuzzerSound = null;
+  }
 }
 function playFxSound(power){
   if(!sfxEnabled) return;
@@ -976,6 +1021,7 @@ function playFxSound(power){
 }
 
 function renderLevel(){
+  stopBuzzerSound();
   const level = state.levels[state.levelIndex];
   const sbToolbar = document.getElementById('sbToolbar');
   const hintLine  = document.getElementById('hintLine');
@@ -1961,6 +2007,9 @@ function sbEval(){
       }, "*");
     } catch(e) {}
   }
+
+  const hasActiveBuzzer = SB.components.some(c => c.type === 'buzzer' && Math.abs(currents[c.id] || 0) > 0.001 && !c.isDestroyed);
+  updateBuzzerSound(hasActiveBuzzer);
 
   return { live, bright, currents, voltages };
 }
