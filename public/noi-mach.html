@@ -22,6 +22,9 @@
     --current: #fbbf24;
     --current-soft: #f59e0b;
     --danger: #ef4444;
+    --fire: #f97316;
+    --ember: #fde68a;
+    --smoke: #64748b;
     --bulb-glow: rgba(251,191,36,0.22);
     --font-mono: 'Fira Code', 'Courier New', monospace;
     --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -334,6 +337,53 @@
   }
   @keyframes flowDash { to { stroke-dashoffset: -14; } }
 
+  /* ---- DANGER / SHORT-CIRCUIT FX ---- */
+  .slot-line.shorted {
+    stroke: var(--ember);
+    stroke-width: 5;
+    filter: drop-shadow(0 0 5px var(--danger)) drop-shadow(0 0 10px var(--fire));
+    animation: wireDangerPulse 0.11s linear infinite alternate;
+  }
+  @keyframes wireDangerPulse {
+    from { stroke: var(--ember); }
+    to   { stroke: var(--fire); }
+  }
+  .board-wrap.danger-active {
+    animation: dangerBorderPulse 0.55s ease-in-out infinite alternate;
+  }
+  @keyframes dangerBorderPulse {
+    from { box-shadow: inset 0 0 0 rgba(239,68,68,0); border-color: var(--border-soft); }
+    to   { box-shadow: inset 0 0 36px rgba(239,68,68,0.4); border-color: var(--danger); }
+  }
+  .board-flash {
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background: radial-gradient(circle, rgba(255,224,158,0.6), rgba(239,68,68,0.3) 45%, transparent 74%);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .board-flash.flash-active { animation: boardFlashPulse 0.55s ease-out; }
+  @keyframes boardFlashPulse {
+    0%   { opacity: 0.95; }
+    100% { opacity: 0; }
+  }
+  .sfx-toggle {
+    width: auto;
+    padding: 6px 11px;
+    border-radius: 8px;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border-soft);
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    margin-left: 10px;
+    transition: all 0.2s ease;
+  }
+  .sfx-toggle:hover { background: var(--border-soft); }
+
   .resistor-path {
     fill: none;
     stroke: var(--copper);
@@ -418,6 +468,7 @@
 
   @media (prefers-reduced-motion: reduce){
     .slot-line, .slot-line.active.live, .app { animation: none !important; }
+    .slot-line.shorted, .board-wrap.danger-active, .board-flash.flash-active { animation: none !important; }
   }
 
   /* ---- SANDBOX TOOLBAR ---- */
@@ -463,6 +514,7 @@
     <div class="brand"><span class="brand-icon">⚡</span><span>NỐI MẠCH</span></div>
     <div class="level-pips" id="levelPips"></div>
     <div class="status-pill" id="statusPill">● MẠCH HỞ</div>
+    <button class="sfx-toggle" id="sfxToggle" title="Tắt âm thanh hiệu ứng" aria-label="Bật/tắt âm thanh hiệu ứng">🔊</button>
   </header>
 
   <main class="layout">
@@ -490,7 +542,7 @@
       </div>
     </aside>
 
-    <section class="board-wrap">
+    <section class="board-wrap" id="boardWrap">
       <div class="sb-toolbar" id="sbToolbar">
         <button class="sb-tool-btn active" data-type="pointer">🖱️ Con trỏ</button>
         <button class="sb-tool-btn" data-type="battery">🔋 Pin DC</button>
@@ -504,7 +556,6 @@
         <button class="sb-tool-btn" data-type="rheostat">🎚️ Biến trở</button>
         <button class="sb-tool-btn" data-type="npn">🔌 Transistor</button>
         <button class="sb-tool-btn" data-type="diode">▶️ Điốt</button>
-        <button class="sb-tool-btn" data-type="led">🚨 Đèn LED</button>
         <button class="sb-tool-btn" data-type="fuse">💥 Cầu chì</button>
         <button class="sb-tool-btn" data-type="capacitor">🥛 Tụ điện</button>
         <button class="sb-tool-btn" data-type="buzzer">🔊 Còi báo</button>
@@ -516,6 +567,7 @@
         <span class="sb-hint">Chọn linh kiện → Click để đặt · Click đầu nối (●) để nối dây · Double-click để xóa linh kiện · Click dây để ngắt</span>
       </div>
       <svg id="board" viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="board-flash" id="boardFlash"></div>
       <p class="hint-line" id="hintLine">💡 Kéo chuột/chạm từ nút đồng này sang nút đồng khác để nối dây · Click vào dây để ngắt · Click công tắc để đóng/mở</p>
     </section>
   </main>
@@ -738,6 +790,190 @@ function el(tag, attrs){
 
 function dist(p1,p2){ return Math.hypot(p2.x-p1.x, p2.y-p1.y); }
 function lerp(p1,p2,t){ return {x:p1.x+(p2.x-p1.x)*t, y:p1.y+(p2.y-p1.y)*t}; }
+
+/* =========================================================
+   FX ENGINE — sparks, fire, smoke, shockwave, screen-shake
+   Dùng chung cho cả màn cố định (chập mạch) và Sandbox
+   (chập mạch + cầu chì đứt).
+========================================================= */
+const EFFECTS = [];
+const FX_MAX = 240;
+const SHORT_CIRCUIT_CURRENT = 200; // A — chỉ đúng-nghĩa "chập mạch" (dây nối thẳng +/-), không nhầm với tải nặng hợp lệ
+let fxShake = { time: 0, maxTime: 0, mag: 0 };
+const fxLayer = el('g', { id: 'fxLayer', 'pointer-events': 'none' });
+
+function fxPush(p){ if (EFFECTS.length < FX_MAX) EFFECTS.push(p); }
+
+function spawnSpark(x, y, power){
+  const ang = Math.random() * Math.PI * 2;
+  const speed = (70 + Math.random() * 190) * power;
+  fxPush({
+    type: 'spark', x, y,
+    vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed - 60 * Math.random(),
+    life: 0.22 + Math.random() * 0.28, maxLife: 0.22 + Math.random() * 0.28
+  });
+}
+
+function spawnExplosion(x, y, power){
+  power = power || 1;
+  fxPush({ type:'flash', x, y, life:0.16, maxLife:0.16, power });
+  fxPush({ type:'shock', x, y, life:0.5, maxLife:0.5, power });
+  const nSparks = Math.round(16 * power);
+  for(let i=0;i<nSparks;i++) spawnSpark(x, y, power);
+  const nFire = Math.round(9 * power);
+  for(let i=0;i<nFire;i++){
+    const ang = Math.random()*Math.PI*2, sp=(15+Math.random()*45)*power;
+    fxPush({
+      type:'fire', x:x+(Math.random()-0.5)*12, y:y+(Math.random()-0.5)*12,
+      vx:Math.cos(ang)*sp*0.25, vy:-40-Math.random()*50,
+      life:0.35+Math.random()*0.4, maxLife:0.35+Math.random()*0.4,
+      r:(7+Math.random()*11)*power
+    });
+  }
+  const nSmoke = Math.round(7 * power);
+  for(let i=0;i<nSmoke;i++){
+    fxPush({
+      type:'smoke', x:x+(Math.random()-0.5)*16, y:y+(Math.random()-0.5)*12,
+      vx:(Math.random()-0.5)*16, vy:-20-Math.random()*26,
+      life:1.3+Math.random()*1.1, maxLife:1.3+Math.random()*1.1,
+      r:(11+Math.random()*15)*power
+    });
+  }
+  fxPush({ type:'smolder', x, y, life:2.6+1.4*power, maxLife:2.6+1.4*power, timer:0 });
+  fxShakeStart(0.4 + 0.25*power, 8*power);
+  playBoardFlash();
+  playFxSound(power);
+}
+
+function fxShakeStart(time, mag){
+  fxShake = { time: Math.max(fxShake.time, time), maxTime: Math.max(fxShake.maxTime, time), mag: Math.max(fxShake.mag, mag) };
+}
+
+function updateEffects(dt){
+  const spawn = [];
+  for(let i = EFFECTS.length-1; i>=0; i--){
+    const p = EFFECTS[i];
+    p.life -= dt;
+    if(p.life <= 0){ EFFECTS.splice(i,1); continue; }
+    if(p.type === 'spark'){
+      p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 260*dt; p.vx *= 0.985;
+    } else if(p.type === 'fire'){
+      p.x += p.vx*dt; p.y += p.vy*dt; p.vy *= 0.94;
+    } else if(p.type === 'smoke'){
+      p.x += p.vx*dt; p.y += p.vy*dt; p.vy *= 0.985; p.vx *= 0.98;
+    } else if(p.type === 'smolder'){
+      p.timer -= dt;
+      if(p.timer <= 0){
+        p.timer = 0.09 + Math.random()*0.1;
+        spawn.push({
+          type:'smoke', x:p.x+(Math.random()-0.5)*10, y:p.y+(Math.random()-0.5)*6,
+          vx:(Math.random()-0.5)*8, vy:-14-Math.random()*14,
+          life:0.7+Math.random()*0.6, maxLife:0.7+Math.random()*0.6,
+          r:5+Math.random()*7
+        });
+      }
+    }
+  }
+  spawn.forEach(fxPush);
+  if(fxShake.time > 0) fxShake.time = Math.max(0, fxShake.time - dt);
+}
+
+function applyShakeVisual(){
+  if(fxShake.time > 0){
+    const t = fxShake.time / (fxShake.maxTime || 1);
+    const mag = fxShake.mag * t;
+    const dx = (Math.random()-0.5)*2*mag, dy = (Math.random()-0.5)*2*mag;
+    svg.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+  } else if(svg.style.transform){
+    svg.style.transform = '';
+  }
+}
+
+function fxParticleEl(p){
+  const t = Math.max(0, p.life / p.maxLife);
+  if(p.type === 'flash'){
+    return el('circle',{cx:p.x, cy:p.y, r:(18+70*(1-t))*p.power, fill:'#fff7e0', opacity:(t*0.85).toFixed(2)});
+  }
+  if(p.type === 'shock'){
+    return el('circle',{cx:p.x, cy:p.y, r:80*p.power*(1-t), fill:'none', stroke:'var(--current)', 'stroke-width':Math.max(0.5,3.5*t), opacity:t.toFixed(2)});
+  }
+  if(p.type === 'spark'){
+    const ex = p.x - p.vx*0.028, ey = p.y - p.vy*0.028;
+    return el('line',{x1:p.x, y1:p.y, x2:ex, y2:ey, stroke:'var(--ember)', 'stroke-width':2, 'stroke-linecap':'round', opacity:t.toFixed(2)});
+  }
+  if(p.type === 'fire'){
+    const g = el('g',{});
+    g.appendChild(el('circle',{cx:p.x, cy:p.y, r:(p.r*t).toFixed(1), fill:'var(--fire)', opacity:(t*0.85).toFixed(2), filter:'blur(1.5px)'}));
+    g.appendChild(el('circle',{cx:p.x, cy:p.y, r:(p.r*t*0.5).toFixed(1), fill:'var(--ember)', opacity:(t*0.9).toFixed(2)}));
+    return g;
+  }
+  if(p.type === 'smoke'){
+    return el('circle',{cx:p.x, cy:p.y, r:(p.r*(1.5-t*0.5)).toFixed(1), fill:'var(--smoke)', opacity:(t*0.42).toFixed(2), filter:'blur(3px)'});
+  }
+  return null;
+}
+
+function renderFxLayer(){
+  fxLayer.innerHTML = '';
+  EFFECTS.forEach(p=>{
+    if(p.type === 'smolder') return; // emitter vô hình, không tự vẽ
+    const node = fxParticleEl(p);
+    if(node) fxLayer.appendChild(node);
+  });
+  if(fxLayer.parentNode !== svg) svg.appendChild(fxLayer);
+}
+
+function playBoardFlash(){
+  const flashEl = document.getElementById('boardFlash');
+  if(!flashEl) return;
+  flashEl.classList.remove('flash-active');
+  void flashEl.offsetWidth; // ép reflow để restart animation
+  flashEl.classList.add('flash-active');
+}
+
+/* ---- Âm thanh nổ/tia điện tổng hợp (Web Audio, không cần file ngoài) ---- */
+let sfxEnabled = true;
+let audioCtx = null;
+function getAudioCtx(){
+  if(audioCtx) return audioCtx;
+  try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx = null; }
+  return audioCtx;
+}
+function playFxSound(power){
+  if(!sfxEnabled) return;
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const dur = 0.26 + 0.22*power;
+    const bufLen = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buffer = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufLen;i++) data[i] = (Math.random()*2-1) * Math.pow(1-i/bufLen, 1.6);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const nf = ctx.createBiquadFilter();
+    nf.type = 'lowpass';
+    nf.frequency.setValueAtTime(2200+900*power, now);
+    nf.frequency.exponentialRampToValueAtTime(100, now+dur);
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(Math.min(0.7, 0.32+0.14*power), now);
+    ng.gain.exponentialRampToValueAtTime(0.001, now+dur);
+    noise.connect(nf).connect(ng).connect(ctx.destination);
+    noise.start(now); noise.stop(now+dur);
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1200+300*power, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now+0.16);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.22, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+    osc.connect(og).connect(ctx.destination);
+    osc.start(now); osc.stop(now+0.2);
+  }catch(e){}
+}
 
 function renderLevel(){
   const level = state.levels[state.levelIndex];
@@ -1132,7 +1368,8 @@ function checkWin(){
     if (e.type === 'bulb' || e.type === 'resistor') return false;
     return true;
   });
-  if (reachable(plus, minus, lowResistanceEdges)) {
+  const isShortNow = !level.isSandbox && reachable(plus, minus, lowResistanceEdges);
+  if (isShortNow) {
     try {
       window.parent.postMessage({
         type: "UNLOCK_ACHIEVEMENT",
@@ -1142,6 +1379,15 @@ function checkWin(){
         icon: "💥"
       }, "*");
     } catch(e) {}
+    if (!level._shortTriggered) {
+      level._shortTriggered = true;
+      const pPos = level.nodes[plus], mPos = level.nodes[minus];
+      const mid = lerp(pPos, mPos, 0.5);
+      logEvent('short-fixed', '🔥 CHẬP MẠCH! Đã nối trực tiếp cực dương và cực âm — cực kỳ nguy hiểm trong thực tế!');
+      spawnExplosion(mid.x, mid.y, 1.5);
+    }
+  } else {
+    level._shortTriggered = false;
   }
   
   const banner = document.getElementById('winBanner');
@@ -1398,10 +1644,28 @@ function addVoltageSource(A, B, i, j, k, V_val) {
 }
 
 let simTime = 0.0;
+let simDt   = 0.016; // delta-time của frame hiện tại (giây), được cập nhật mỗi tick
 
 function sbEval(){
   const { nodeMap, nodeCount } = findNodes();
   if (nodeCount <= 1) {
+    // Bảng mạch chỉ có (các) nguồn điện tự nối tắt hai cực — hệ phương trình
+    // suy biến không giải được, nhưng đây vẫn là chập mạch thật cần cảnh báo.
+    SB.components.forEach(c => {
+      if (c.type === 'battery' || c.type === 'ac_source') {
+        const n0 = nodeMap[c.id+'-0'], n1 = nodeMap[c.id+'-1'];
+        const selfShorted = (n0 !== undefined && n0 === n1);
+        if (selfShorted) {
+          if (!c.isShorted) {
+            c.isShorted = true;
+            logEvent('short-'+c.id, '🔥 CHẬP MẠCH! Cực dương nối trực tiếp cực âm — dòng điện tăng vọt cực kỳ nguy hiểm!');
+            spawnExplosion(c.x, c.y, 1.6);
+          }
+        } else if (c.isShorted) {
+          c.isShorted = false;
+        }
+      }
+    });
     return { live: new Set(), bright: {}, currents: {}, voltages: {} };
   }
   const N = nodeCount - 1;
@@ -1444,16 +1708,18 @@ function sbEval(){
       const n0 = mapNode(c.id + '-0');
       const n1 = mapNode(c.id + '-1');
       if (c.type === 'battery') {
+        if (c.isDestroyed) { addConductance(A, n0, n1, 1 / 1e9); return; }
         addVoltageSource(A, B, n0, n1, N + vSrcIdx, 9.0);
         vSrcIdx++;
       } else if (c.type === 'ac_source') {
+        if (c.isDestroyed) { addConductance(A, n0, n1, 1 / 1e9); return; }
         const vAc = 12.0 * Math.sin(2 * Math.PI * 1.5 * simTime);
         addVoltageSource(A, B, n0, n1, N + vSrcIdx, vAc);
         vSrcIdx++;
       } else if (c.type === 'bulb') {
-        addConductance(A, n0, n1, 1 / 10.0);
+        addConductance(A, n0, n1, c.isDestroyed ? 1 / 1e9 : 1 / 10.0);
       } else if (c.type === 'motor') {
-        addConductance(A, n0, n1, 1 / 15.0);
+        addConductance(A, n0, n1, c.isDestroyed ? 1 / 1e9 : 1 / 15.0);
       } else if (c.type === 'resistor') {
         addConductance(A, n0, n1, 1 / 100.0);
       } else if (c.type === 'rheostat') {
@@ -1486,9 +1752,14 @@ function sbEval(){
         const rFuse = c.isBlown ? 1e7 : 0.01;
         addConductance(A, n0, n1, 1 / rFuse);
       } else if (c.type === 'capacitor') {
-        if (!c.charge) c.charge = 0.0;
-        const rCap = 0.1 + c.charge * 1e6;
-        addConductance(A, n0, n1, 1 / rCap);
+        // Companion Model (Norton Equivalent) — Đúng vật lý RC thực tế
+        const C_val = 0.001; // Farad (1000µF)
+        const G_cap = C_val / Math.max(simDt, 1e-4);
+        if (c.vcap === undefined) c.vcap = 0.0;
+        const I_norton = G_cap * c.vcap;
+        addConductance(A, n0, n1, G_cap);
+        if (n0 >= 0) B[n0] += I_norton;
+        if (n1 >= 0) B[n1] -= I_norton;
       } else if (c.type === 'buzzer') {
         addConductance(A, n0, n1, 1 / 50.0);
       } else if (c.type === 'relay') {
@@ -1560,15 +1831,17 @@ function sbEval(){
       current = vDiff / (c.isBlown ? 1e7 : 0.01);
       if (!c.isBlown && Math.abs(current) > 3.0) {
         c.isBlown = true;
+        c.blownAt = simTime;
         logEvent('fuse-blow', '💥 Cầu chì đã bị đứt do dòng điện quá tải (> 3A)!');
+        spawnExplosion(c.x, c.y, 1);
       }
     } else if (c.type === 'capacitor') {
-      current = vDiff / (0.1 + c.charge * 1e6);
-      if (Math.abs(vDiff) > 0.1) {
-        c.charge = Math.min(1.0, c.charge + Math.abs(current) * 0.02);
-      } else {
-        c.charge = Math.max(0.0, c.charge - 0.005);
-      }
+      const C_val = 0.001;
+      const G_cap = C_val / Math.max(simDt, 1e-4);
+      if (c.vcap === undefined) c.vcap = 0.0;
+      const v_new = vDiff;
+      current = G_cap * (v_new - c.vcap);
+      c.vcap = Math.max(-25, Math.min(25, v_new));
     } else if (c.type === 'buzzer') {
       current = vDiff / 50.0;
     } else if (c.type === 'relay') {
@@ -1582,6 +1855,20 @@ function sbEval(){
     voltages[c.id] = vDiff;
     c.lastCurrent = current;
     c.lastVoltage = vDiff;
+    if (c.type === 'battery' || c.type === 'ac_source') {
+      if (!c.isDestroyed && Math.abs(current) > SHORT_CIRCUIT_CURRENT) {
+        c.isShorted = true;
+        c.isDestroyed = true;
+        logEvent('short-'+c.id, '🔥 CHẬP MẠCH! Pin bị phá hủy — cần Reset để tiếp tục!');
+        spawnExplosion(c.x, c.y, 1.6);
+      }
+    } else if (!c.isDestroyed && (c.type === 'bulb' || c.type === 'motor' || c.type === 'buzzer')) {
+      if (Math.abs(current) > 5.0) {
+        c.isDestroyed = true;
+        logEvent('burnt-'+c.id, '💥 ' + (c.type==='bulb'?'Bóng đèn':c.type==='motor'?'Động cơ':'Còi báo') + ' bị cháy do quá tải!');
+        spawnExplosion(c.x, c.y, 0.8);
+      }
+    }
     if (Math.abs(current) > 0.001) live.add('comp-' + c.id);
     if (c.type === 'bulb') {
       const aCurrent = Math.abs(current);
@@ -1683,6 +1970,7 @@ function sbRender(){
   svg.innerHTML='';
   const {live,bright}=sbEval();
   // Wires
+  let anyShorted = false;
   SB.wires.forEach(w=>{
     const fk=w.from.split('-'),tk=w.to.split('-');
     const fc=sbGetComp(parseInt(fk[0])),tc=sbGetComp(parseInt(tk[0]));
@@ -1691,12 +1979,22 @@ function sbRender(){
     const isLive=live.has('wire-'+w.id);
     const iVal = fc ? (fc.lastCurrent || 0) : 0;
     const dirStyle = iVal < 0 ? 'animation-direction: reverse;' : '';
+    const isHot = !!((!fc.isDestroyed && fc.isShorted) || (!tc.isDestroyed && tc.isShorted));
+    if(isHot){
+      anyShorted = true;
+      if(Math.random() < 0.22){
+        const t = 0.25 + Math.random()*0.5;
+        spawnSpark(fp.x+(tp.x-fp.x)*t, fp.y+(tp.y-fp.y)*t, 0.6);
+      }
+    }
     svg.appendChild(el('line',{x1:fp.x,y1:fp.y,x2:tp.x,y2:tp.y,
-      class:'slot-line active'+(isLive?' live':''),style:dirStyle,'pointer-events':'none'}));
+      class:'slot-line active'+(isLive?' live':'')+(isHot?' shorted':''),style:dirStyle,'pointer-events':'none'}));
     svg.appendChild(el('line',{x1:fp.x,y1:fp.y,x2:tp.x,y2:tp.y,
       stroke:'transparent','stroke-width':18,cursor:'pointer',
       'data-role':'sbwire','data-wid':w.id,'pointer-events':'stroke'}));
   });
+  const boardWrapEl = document.getElementById('boardWrap');
+  if(boardWrapEl) boardWrapEl.classList.toggle('danger-active', anyShorted);
   // Preview wire
   if(SB.pendingWire){
     svg.appendChild(el('line',{x1:SB.pendingWire.x,y1:SB.pendingWire.y,
@@ -1738,6 +2036,19 @@ function sbRender(){
     else if(comp.type==='ammeter') sbDrawAmmeter(g,comp,isLiveComp,comp.lastCurrent||0);
     else if(comp.type==='voltmeter') sbDrawVoltmeter(g,comp,isLiveComp,comp.lastVoltage||0);
     else if(comp.type==='motor') sbDrawMotor(g,comp,isLiveComp,comp.lastCurrent||0);
+    
+    // --- Overlay thiết bị bị phá hủy (cháy/nổ) ---
+    if(comp.isDestroyed){
+      const bx=comp.x-d.w/2-6, by=comp.y-d.h/2-6, bw=d.w+12, bh=d.h+12;
+      g.appendChild(el('rect',{x:bx,y:by,width:bw,height:bh,rx:6,
+        fill:'rgba(20,8,8,0.78)',stroke:'#7f1d1d','stroke-width':1.5,'pointer-events':'none'}));
+      g.appendChild(el('text',{x:comp.x,y:comp.y-6,fill:'#ef4444','font-size':'13',
+        'font-weight':'bold','text-anchor':'middle','pointer-events':'none','font-family':'var(--font-mono)'
+      })).textContent='💀';
+      g.appendChild(el('text',{x:comp.x,y:comp.y+12,fill:'#fca5a5','font-size':'9',
+        'font-weight':'bold','text-anchor':'middle','pointer-events':'none','font-family':'var(--font-mono)'
+      })).textContent='ĐÃ CHÁY';
+    }
     
     if(comp.id === SB.selectedId){
       g.appendChild(el('rect',{
@@ -1884,11 +2195,21 @@ function sbDrawFuse(g,c,live){
   const x=c.x,y=c.y;
   g.appendChild(el('line',{x1:x-38,y1:y,x2:x-20,y2:y,class:'resistor-lead'+(live?' live':'')}));
   g.appendChild(el('line',{x1:x+20,y1:y,x2:x+38,y2:y,class:'resistor-lead'+(live?' live':'')}));
-  g.appendChild(el('rect',{x:x-20,y:y-8,width:40,height:16,rx:2,fill:'none',stroke:c.isBlown?'#ef4444':'var(--copper)','stroke-width':2}));
+  const age = c.isBlown ? (simTime - (c.blownAt!=null?c.blownAt:simTime)) : 0;
+  const hot = c.isBlown && age < 1.2;
+  const caseFill = c.isBlown ? (hot ? 'rgba(239,68,68,0.14)' : '#1c1917') : 'none';
+  const caseStroke = c.isBlown ? (hot ? 'var(--fire)' : '#44403c') : 'var(--copper)';
+  g.appendChild(el('rect',{x:x-20,y:y-8,width:40,height:16,rx:2,fill:caseFill,stroke:caseStroke,'stroke-width':2}));
   if(c.isBlown) {
-    g.appendChild(el('line',{x1:x-20,y1:y,x2:x-6,y2:y-2,stroke:'#64748b','stroke-width':1.5}));
-    g.appendChild(el('line',{x1:x+6,y1:y+2,x2:x+20,y2:y,stroke:'#64748b','stroke-width':1.5}));
-    g.appendChild(el('circle',{cx:x,cy:y,r:4,fill:'#ef4444',opacity:0.65}));
+    g.appendChild(el('line',{x1:x-20,y1:y,x2:x-6,y2:y-2,stroke:'#57534e','stroke-width':1.5}));
+    g.appendChild(el('line',{x1:x+6,y1:y+2,x2:x+20,y2:y,stroke:'#57534e','stroke-width':1.5}));
+    if(hot){
+      const emberOp = Math.max(0, 1 - age/1.2);
+      g.appendChild(el('circle',{cx:x,cy:y,r:9,fill:'var(--ember)',opacity:(emberOp*0.28).toFixed(2),filter:'blur(3px)'}));
+      g.appendChild(el('circle',{cx:x,cy:y,r:4.5,fill:'var(--fire)',opacity:(emberOp*0.9).toFixed(2)}));
+    } else {
+      g.appendChild(el('circle',{cx:x,cy:y,r:4,fill:'#292524',opacity:0.8}));
+    }
   } else {
     g.appendChild(el('line',{x1:x-20,y1:y,x2:x+20,y2:y,stroke:live?'var(--current)':'#d97706','stroke-width':1.5}));
   }
@@ -1911,8 +2232,8 @@ function sbDrawAmmeter(g,c,live,val){
   g.appendChild(el('circle',{cx:x,cy:y,r:20,fill:'#0f172a',stroke:'var(--accent-teal)','stroke-width':2}));
   g.appendChild(textEl(x,y-24,'Ampe kế','label'));
   const sign = val < 0 ? '-' : '';
-  const displayVal = sign + Math.abs(val).toFixed(2) + ' A';
-  g.appendChild(el('text',{x,y:y+5,fill:'var(--accent-teal)','font-size':'11px','font-family':'var(--font-mono)','text-anchor':'middle','font-weight':'bold'})
+  const displayVal = Math.abs(val) > SHORT_CIRCUIT_CURRENT ? '⚠️ QUÁ TẢI' : sign + Math.abs(val).toFixed(2) + ' A';
+  g.appendChild(el('text',{x,y:y+5,fill:Math.abs(val)>SHORT_CIRCUIT_CURRENT?'var(--danger)':'var(--accent-teal)','font-size':'11px','font-family':'var(--font-mono)','text-anchor':'middle','font-weight':'bold'})
     .appendChild(document.createTextNode(displayVal)).parentNode);
 }
 function sbDrawVoltmeter(g,c,live,val){
@@ -2098,6 +2419,7 @@ function sbMouseDown(ev){
     const comp=sbGetComp(cid);
     if(comp && comp.isBlown){
       comp.isBlown=false;
+      comp.blownAt=null;
       logEvent('fuse-replace', '🔧 Đã thay cầu chì mới.');
     }
     sbRender(); ev.stopPropagation(); ev.preventDefault(); return;
@@ -2212,20 +2534,33 @@ function initSbToolbar(){
 let lastLoopTime = Date.now();
 function animLoop(){
   requestAnimationFrame(animLoop);
+  const now = Date.now();
+  const dt = Math.min((now - lastLoopTime)/1000.0, 0.05);
+  lastLoopTime = now;
+  updateEffects(dt);
   if(isSandboxMode()){
-    const now = Date.now();
-    const dt = (now - lastLoopTime)/1000.0;
-    lastLoopTime = now;
     simTime += dt;
+    simDt = dt;
     sbRender();
-  } else {
-    lastLoopTime = Date.now();
+    renderFxLayer();
+  } else if(EFFECTS.length > 0 || fxShake.time > 0){
+    renderFxLayer();
   }
+  applyShakeVisual();
 }
 
 /* =========================================================
    INIT
 ========================================================= */
+const sfxToggleBtn = document.getElementById('sfxToggle');
+if(sfxToggleBtn){
+  sfxToggleBtn.addEventListener('click', ()=>{
+    sfxEnabled = !sfxEnabled;
+    sfxToggleBtn.textContent = sfxEnabled ? '🔊' : '🔇';
+    sfxToggleBtn.title = sfxEnabled ? 'Tắt âm thanh hiệu ứng' : 'Bật âm thanh hiệu ứng';
+    if(sfxEnabled){ const ctx=getAudioCtx(); if(ctx && ctx.state==='suspended') ctx.resume(); }
+  });
+}
 initSbToolbar();
 renderPips();
 renderLevel();

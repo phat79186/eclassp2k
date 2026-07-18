@@ -288,8 +288,14 @@
         <input type="range" id="speed" min="1" max="3" value="1">
         <span class="val-badge" id="speed-val">1×</span>
       </div>
+      <div class="row">
+        <label>Âm lượng</label>
+        <input type="range" id="volume" min="0" max="100" value="55">
+        <span class="val-badge" id="volume-val">55%</span>
+      </div>
       <div class="btn-row" style="margin-top:10px;">
         <button class="btn primary" id="btn-pause">⏸ Tạm dừng</button>
+        <button class="btn" id="btn-mute" title="Bật/tắt âm thanh">🔊</button>
         <button class="btn danger" id="btn-clear">🗑 Xoá hết</button>
       </div>
     </div>
@@ -812,30 +818,318 @@ function movementPass(){
     }
   }
 }
+/* ============================= ÂM THANH (tổng hợp bằng Web Audio) ============================= */
+const SFX = (function(){
+  let ac = null;
+  let master = null;
+  let muted = false;
+
+  function ensure(){
+    if(!ac){
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(!AC) return null;
+        ac = new AC();
+        master = ac.createGain();
+        master.gain.value = 0.55;
+        master.connect(ac.destination);
+      } catch(e){ return null; }
+    }
+    if(ac.state === 'suspended') ac.resume().catch(()=>{});
+    return ac;
+  }
+
+  function noiseBuffer(c, duration){
+    const len = Math.max(1, Math.floor(c.sampleRate * duration));
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<len;i++) data[i] = Math.random()*2-1;
+    return buf;
+  }
+
+  function tone(freq, dur, type, vol, glideTo){
+    const c = ensure();
+    if(!c || muted) return;
+    const t0 = c.currentTime;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if(glideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20,glideTo), t0+dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.001,vol), t0+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    osc.connect(g).connect(master);
+    osc.start(t0); osc.stop(t0+dur+0.05);
+  }
+
+  function noiseHiss(dur, fStart, fEnd, vol, type){
+    const c = ensure();
+    if(!c || muted) return;
+    const t0 = c.currentTime;
+    const buf = noiseBuffer(c, dur);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const filter = c.createBiquadFilter();
+    filter.type = type || 'bandpass';
+    filter.frequency.setValueAtTime(fStart, t0);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(40,fEnd), t0+dur);
+    filter.Q.value = 0.9;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    src.connect(filter).connect(g).connect(master);
+    src.start(t0); src.stop(t0+dur+0.05);
+  }
+
+  // Tiếng nổ tổng hợp: "thump" trầm + gió noise + phụ âm theo từng "chất liệu"
+  function explosionBoom(theme, radius){
+    const c = ensure();
+    if(!c || muted) return;
+    const t0 = c.currentTime;
+    const big = radius >= 11;
+    const dur = Math.min(2.4, 0.35 + radius*0.09);
+    const vol = Math.min(1, 0.32 + radius*0.035);
+    const baseFreq = theme==='nuclear' ? 55 : theme==='radioactive' ? 85 : theme==='spark' ? 260 : theme==='flash' ? 200 : theme==='tnt' ? 100 : 120;
+
+    const thump = c.createOscillator();
+    const thumpGain = c.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(baseFreq, t0);
+    thump.frequency.exponentialRampToValueAtTime(Math.max(20,baseFreq*0.22), t0+dur*0.8);
+    thumpGain.gain.setValueAtTime(0.0001, t0);
+    thumpGain.gain.exponentialRampToValueAtTime(vol, t0+0.02);
+    thumpGain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    thump.connect(thumpGain).connect(master);
+    thump.start(t0); thump.stop(t0+dur+0.05);
+
+    const buf = noiseBuffer(c, dur);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const filter = c.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(big ? 2600 : 1600, t0);
+    filter.frequency.exponentialRampToValueAtTime(200, t0+dur);
+    const noiseGain = c.createGain();
+    noiseGain.gain.setValueAtTime(vol*0.8, t0);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    src.connect(filter).connect(noiseGain).connect(master);
+    src.start(t0); src.stop(t0+dur+0.05);
+
+    if(theme==='spark' || theme==='flash'){
+      const crack = c.createOscillator();
+      const crackGain = c.createGain();
+      crack.type = 'square';
+      crack.frequency.setValueAtTime(1200, t0);
+      crack.frequency.exponentialRampToValueAtTime(400, t0+0.12);
+      crackGain.gain.setValueAtTime(vol*0.3, t0);
+      crackGain.gain.exponentialRampToValueAtTime(0.0001, t0+0.15);
+      crack.connect(crackGain).connect(master);
+      crack.start(t0); crack.stop(t0+0.2);
+    }
+    if(big){
+      const rumble = c.createOscillator();
+      const rumbleGain = c.createGain();
+      rumble.type = 'triangle';
+      rumble.frequency.setValueAtTime(42, t0);
+      rumbleGain.gain.setValueAtTime(0.0001, t0);
+      rumbleGain.gain.exponentialRampToValueAtTime(vol*0.6, t0+0.1);
+      rumbleGain.gain.exponentialRampToValueAtTime(0.0001, t0+2.0);
+      rumble.connect(rumbleGain).connect(master);
+      rumble.start(t0); rumble.stop(t0+2.1);
+    }
+  }
+
+  function sizzle(){ noiseHiss(0.5, 3500, 900, 0.22); tone(180, 0.35, 'sawtooth', 0.08, 90); }
+  function bubble(){
+    for(let i=0;i<4;i++){
+      const f = 260+Math.random()*260, gl = 500+Math.random()*300;
+      setTimeout(()=> tone(f, 0.09, 'sine', 0.12, gl), i*45);
+    }
+  }
+  function hiss(){ noiseHiss(0.4, 2600, 500, 0.18); }
+  function fireCrackle(){ noiseHiss(0.22, 1800, 700, 0.14); tone(140, 0.18, 'triangle', 0.07, 80); }
+  function glassTing(){ tone(1600, 0.35, 'sine', 0.14, 2000); tone(2400, 0.25, 'sine', 0.06, 3000); }
+  function iceTink(){ tone(2000, 0.2, 'sine', 0.12, 2600); }
+  function dissolveFizz(){ noiseHiss(0.3, 2000, 600, 0.16); }
+  function metalClink(){ tone(1200, 0.15, 'square', 0.08, 700); tone(1800, 0.1, 'sine', 0.06, 1200); }
+  function growPop(){ tone(500, 0.12, 'sine', 0.1, 760); }
+  function corrodeCrack(){ noiseHiss(0.22, 900, 300, 0.14); }
+  function uiClick(){ tone(700, 0.05, 'square', 0.06, 500); }
+  function achievement(){
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((f,i)=> setTimeout(()=> tone(f, 0.28, 'triangle', 0.16), i*90));
+  }
+
+  return {
+    unlock(){ ensure(); },
+    setMuted(v){ muted = v; },
+    isMuted(){ return muted; },
+    setVolume(v){ if(master) master.gain.value = v; },
+    explosionBoom, sizzle, bubble, hiss, fireCrackle, glassTing, iceTink,
+    dissolveFizz, metalClink, growPop, corrodeCrack, achievement, uiClick
+  };
+})();
+
+// Ánh xạ mỗi loại phản ứng trong nhật ký sang một tiếng động phù hợp.
+// Các khoá liên quan tới vụ nổ KHÔNG có mặt ở đây vì đã phát trực tiếp trong explode().
+const KEY_TO_SFX = {
+  'burn': SFX.fireCrackle,
+  'magnesium-burn': SFX.fireCrackle,
+  'sulfur-burn': SFX.fireCrackle,
+  'plutonium-burn': SFX.fireCrackle,
+  'uranium-oxidize': SFX.fireCrackle,
+  'sodium': SFX.sizzle,
+  'carbide-water': SFX.bubble,
+  'neutralize': SFX.bubble,
+  'peroxide-decompose': SFX.bubble,
+  'so2-acid': SFX.bubble,
+  'chlorine-water': SFX.bubble,
+  'extinguish': SFX.hiss,
+  'co2-extinguish': SFX.hiss,
+  'lava-water': SFX.hiss,
+  'nuclear-heat': SFX.hiss,
+  'acid-dissolve': SFX.dissolveFizz,
+  'amalgam-dissolve': SFX.dissolveFizz,
+  'dissolve-salt': SFX.dissolveFizz,
+  'corrode': SFX.corrodeCrack,
+  'chlorine-metal': SFX.corrodeCrack,
+  'vinegar-rust': SFX.corrodeCrack,
+  'so2-algae': SFX.corrodeCrack,
+  'glass': SFX.glassTing,
+  'glass2': SFX.glassTing,
+  'freeze': SFX.iceTink,
+  'grow': SFX.growPop,
+  'algae-grow': SFX.growPop,
+  'mercury-amalgam': SFX.metalClink
+};
+
 /* ============================= NỔ ============================= */
 let screenShake = 0;
+let screenShakeRot = 0;
 let explosionFlash = 0;
+let explosionFlashColor = '#fff6d8';
+let explosionPunch = 0;
 const shockwaves = [];
+const sparkParticles = [];
+const emberParticles = [];
+const smokeParticles = [];
+const rayParticles = [];
+const fireballs = [];
+const SPARK_MAX = 460, EMBER_MAX = 220, SMOKE_MAX = 140, RAY_MAX = 110, FIREBALL_MAX = 24;
 
-function explode(cx,cy,radius){
+// Bảng màu theo "chất liệu" của vụ nổ, để mỗi loại phản ứng có cảm giác khác nhau
+const EXPLOSION_THEMES = {
+  nuclear:     { core:'#fffef2', mid:'#ffe17d', spark:['#fffef2','#fff2b0','#ffb84d'], smoke:['#e8e2d0','#c9c2ab'], ember:['#ffb84d','#ff7b3d'], ring:'#ffe9ad' },
+  radioactive: { core:'#effbdc', mid:'#a6e639', spark:['#effbdc','#c8f77e','#8fe030'], smoke:['#3c4a2e','#28331e'], ember:['#8fe030','#5bab1b'], ring:'#b4f06e' },
+  tnt:         { core:'#fff3c4', mid:'#ff8a3d', spark:['#ffe17d','#ff9d3d','#ff5e3a'], smoke:['#3a3530','#211d1a'], ember:['#ff5e3a','#c92a1f'], ring:'#ffab5c' },
+  spark:       { core:'#fffde8', mid:'#ffe27a', spark:['#fffde8','#ffe27a','#ffb84d'], smoke:['#514f3d','#3a3928'], ember:['#ffcf6b','#ff9d3d'], ring:'#ffe6a3' },
+  fire:        { core:'#fff3c4', mid:'#ff7b3d', spark:['#ffe17d','#ff9d3d','#ff5e3a'], smoke:['#42403c','#211f1c'], ember:['#ff7b3d','#d1421a'], ring:'#ff9c5c' },
+  flash:       { core:'#f2feff', mid:'#8fe3ff', spark:['#f2feff','#bdf4ff','#7fd8ff'], smoke:['#3d4650','#262d33'], ember:['#7fd8ff','#3d9bd6'], ring:'#c4f2ff' }
+};
+
+function spawnExplosionFX(cx, cy, radius, theme){
+  const t = EXPLOSION_THEMES[theme] || EXPLOSION_THEMES.fire;
+  const px = cx * SIZE + SIZE/2;
+  const py = cy * SIZE + SIZE/2;
+  const scale = Math.max(1, radius);
+  const big = radius >= 11;
+
+  fireballs.push({
+    x: px, y: py, life: 1.0, decay: big ? 0.022 : 0.05 + Math.random()*0.01,
+    maxR: scale * SIZE * (big ? 1.85 : 1.3),
+    colorA: t.core, colorB: t.mid
+  });
+  if(fireballs.length > FIREBALL_MAX) fireballs.splice(0, fireballs.length - FIREBALL_MAX);
+
+  const sparkCount = Math.min(120, Math.round(scale * 8 + 12));
+  for(let i=0;i<sparkCount;i++){
+    const ang = Math.random()*Math.PI*2;
+    const spd = 2.5 + Math.random()*(scale*1.5+4);
+    sparkParticles.push({
+      x: px, y: py, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+      life: 1.0, decay: 0.025 + Math.random()*0.035,
+      size: 1.2 + Math.random()*2.2,
+      color: t.spark[Math.floor(Math.random()*t.spark.length)]
+    });
+  }
+  if(sparkParticles.length > SPARK_MAX) sparkParticles.splice(0, sparkParticles.length - SPARK_MAX);
+
+  const emberCount = Math.min(50, Math.round(scale * 3.5 + 5));
+  for(let i=0;i<emberCount;i++){
+    const ang = Math.random()*Math.PI*2;
+    const spd = 1.5 + Math.random()*(scale*1.05+2.5);
+    emberParticles.push({
+      x: px, y: py, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd - Math.random()*1.5,
+      life: 1.0, decay: 0.012 + Math.random()*0.014,
+      size: 2 + Math.random()*3.2,
+      rot: Math.random()*Math.PI*2, vrot: (Math.random()-0.5)*0.5,
+      color: t.ember[Math.floor(Math.random()*t.ember.length)]
+    });
+  }
+  if(emberParticles.length > EMBER_MAX) emberParticles.splice(0, emberParticles.length - EMBER_MAX);
+
+  const smokeCount = Math.min(22, Math.round(scale*1.8+4));
+  for(let i=0;i<smokeCount;i++){
+    const ang = Math.random()*Math.PI*2;
+    const dist = Math.random()*scale*SIZE*0.45;
+    smokeParticles.push({
+      x: px + Math.cos(ang)*dist, y: py + Math.sin(ang)*dist,
+      vx: (Math.random()-0.5)*0.6, vy: -0.3 - Math.random()*0.6,
+      life: 1.0, decay: 0.006 + Math.random()*0.008,
+      size: SIZE*(0.8+Math.random()*1.3), grow: 0.15+Math.random()*0.2,
+      color: t.smoke[Math.floor(Math.random()*t.smoke.length)]
+    });
+  }
+  if(smokeParticles.length > SMOKE_MAX) smokeParticles.splice(0, smokeParticles.length - SMOKE_MAX);
+
+  if(radius >= 5){
+    const rayCount = big ? 18 : 9;
+    for(let i=0;i<rayCount;i++){
+      const ang = (Math.PI*2/rayCount)*i + Math.random()*0.2;
+      rayParticles.push({
+        x: px, y: py, angle: ang, maxLen: scale*SIZE*(big?2.1:1.4),
+        life: 1.0, decay: big ? 0.032 : 0.055,
+        width: 2+Math.random()*3, color: t.ring
+      });
+    }
+    if(rayParticles.length > RAY_MAX) rayParticles.splice(0, rayParticles.length - RAY_MAX);
+  }
+}
+
+function explode(cx,cy,radius,theme){
+  if(!theme) theme = radius >= 11 ? 'nuclear' : 'fire';
+  const t = EXPLOSION_THEMES[theme] || EXPLOSION_THEMES.fire;
+
   if(radius >= 11) {
     screenShake = Math.max(screenShake, 35);
+    screenShakeRot = Math.max(screenShakeRot, 0.03);
     explosionFlash = 1.0;
+    explosionFlashColor = t.core;
+    explosionPunch = Math.max(explosionPunch, 0.55);
   } else {
-    screenShake = Math.max(screenShake, radius * 2);
-    explosionFlash = Math.max(explosionFlash, 0.4);
+    screenShake = Math.max(screenShake, radius * 2.2);
+    screenShakeRot = Math.max(screenShakeRot, Math.min(0.02, radius*0.0018));
+    const fv = Math.min(0.5, radius*0.055);
+    if(fv >= explosionFlash){ explosionFlash = fv; explosionFlashColor = t.core; }
+    explosionPunch = Math.max(explosionPunch, Math.min(0.35, radius*0.032));
   }
-  
-  // Add a visual shockwave ring
+
+  spawnExplosionFX(cx, cy, radius, theme);
+  SFX.explosionBoom(theme, radius);
+
+  // Hai vòng sóng xung kích lồng nhau để tạo chiều sâu
   shockwaves.push({
-    x: cx * SIZE + SIZE/2,
-    y: cy * SIZE + SIZE/2,
-    radius: 0,
-    maxRadius: radius * SIZE * 1.5,
-    strength: radius >= 11 ? 16 : 8,
-    color: radius >= 11 ? 'rgba(255, 235, 180, 0.8)' : 'rgba(255, 120, 50, 0.8)',
-    life: 1.0,
-    decay: 0.04
+    x: cx * SIZE + SIZE/2, y: cy * SIZE + SIZE/2,
+    radius: 0, maxRadius: radius * SIZE * 1.6,
+    strength: radius >= 11 ? 18 : 9,
+    color: t.ring, life: 1.0, decay: radius >= 11 ? 0.026 : 0.045
+  });
+  shockwaves.push({
+    x: cx * SIZE + SIZE/2, y: cy * SIZE + SIZE/2,
+    radius: 0, maxRadius: radius * SIZE * 1.1,
+    strength: radius >= 11 ? 11 : 5,
+    color: '#ffffff', life: 0.85, decay: radius >= 11 ? 0.05 : 0.08
   });
 
   for(let y=cy-radius;y<=cy+radius;y++){
@@ -852,7 +1146,7 @@ function explode(cx,cy,radius){
           grid[idx(x,y)] = null;
           const tx = x, ty = y;
           setTimeout(() => {
-            explode(tx, ty, 7);
+            explode(tx, ty, 7, 'radioactive');
             unlockAchievement('chernobyl');
           }, 80);
           continue;
@@ -861,7 +1155,7 @@ function explode(cx,cy,radius){
           grid[idx(x,y)] = null;
           const tx = x, ty = y;
           setTimeout(() => {
-            explode(tx, ty, 12);
+            explode(tx, ty, 12, 'nuclear');
             unlockAchievement('thermonuclear');
           }, 120);
           continue;
@@ -898,6 +1192,8 @@ function logEvent(key,msg){
   const now = frameCount;
   if(logCooldown[key] !== undefined && now - logCooldown[key] < 34) return;
   logCooldown[key] = now;
+  const sfx = KEY_TO_SFX[key];
+  if(sfx) sfx();
   logMessages.unshift(msg);
   if(logMessages.length>8) logMessages.length=8;
   renderLog();
@@ -928,12 +1224,12 @@ function reactFire(x,y,cell){
       return;
     }
     if(n.cell.type==='gas'){
-      explode(n.x,n.y,5);
+      explode(n.x,n.y,5,'flash');
       return;
     }
     if(n.cell.type==='tnt'){
       grid[n.idx]=null;
-      explode(n.x,n.y,6);
+      explode(n.x,n.y,6,'tnt');
       return;
     }
     const ninfo = CATALOG[n.cell.type];
@@ -976,7 +1272,7 @@ function reactLava(x,y){
     }
     if(n.cell.type==='tnt'){
       grid[n.idx]=null;
-      explode(n.x,n.y,6);
+      explode(n.x,n.y,6,'tnt');
     }
   }
 }
@@ -1092,7 +1388,7 @@ function reactTnt(x,y){
     const c = nb[k].cell;
     if(c && (c.type==='fire' || c.type==='lava')){
       grid[idx(x,y)] = null;
-      explode(x,y,6);
+      explode(x,y,6,'tnt');
       unlockAchievement('nobel');
       return;
     }
@@ -1105,7 +1401,7 @@ function reactGunpowder(x,y){
     const c = nb[k].cell;
     if(c && (c.type==='fire' || c.type==='lava')){
       grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
-      explode(x,y,3);
+      explode(x,y,3,'spark');
       logEvent('gunpowder-burn','💥 Thuốc súng bén lửa kích nổ nhanh, giải phóng nhiệt lượng.');
       return;
     }
@@ -1131,7 +1427,7 @@ function reactPetrol(x,y){
     const c = nb[k].cell;
     if(c && (c.type==='fire' || c.type==='lava')){
       grid[idx(x,y)] = { type:'fire', v:0, life: randInt(FIRE_LIFE[0],FIRE_LIFE[1]) };
-      explode(x,y,4);
+      explode(x,y,4,'fire');
       logEvent('petrol-explode','🔥 Xăng bắt cháy cực nhanh, phát nổ và toả khói mù mịt.');
       return;
     }
@@ -1210,7 +1506,7 @@ function reactUranium(x,y){
     if(n.cell && (n.cell.type==='tnt' || n.cell.type==='gunpowder' || n.cell.type==='nitroglycerin')){
       grid[idx(x,y)] = null;
       grid[n.idx] = null;
-      explode(x,y,7);
+      explode(x,y,7,'radioactive');
       unlockAchievement('chernobyl');
       logEvent('nuclear-reaction','☢️ Nén ép Uranium đạt khối lượng tới hạn bằng thuốc nổ cao áp tạo phản ứng phân hạch!');
       return;
@@ -1242,7 +1538,7 @@ function reactPlutonium(x,y){
     if(n.cell.type==='tnt' || n.cell.type==='nitroglycerin' || n.cell.type==='gunpowder' || n.cell.type==='uranium'){
       grid[idx(x,y)] = null;
       grid[n.idx] = null;
-      explode(x,y,12); // Massive thermonuclear blast!
+      explode(x,y,12,'nuclear'); // Massive thermonuclear blast!
       unlockAchievement('thermonuclear');
       logEvent('nuclear-implosion','☢️ Sóng kích nổ hội tụ nén ép lõi Plutonium kích hoạt phản ứng nhiệt hạch giải phóng năng lượng kinh hoàng!');
       return;
@@ -1273,7 +1569,7 @@ function reactMagnesium(x,y){
     const c = nb[k].cell;
     if(c && (c.type==='fire' || c.type==='whitefire' || c.type==='bluefire' || c.type==='lava')){
       grid[idx(x,y)] = { type:'whitefire', v:0, life: randInt(15,30) };
-      explode(x,y,3);
+      explode(x,y,3,'flash');
       logEvent('magnesium-burn','✨ Magie bắt cháy tỏa nhiệt lượng cực lớn với ngọn lửa trắng chói sáng.');
       return;
     }
@@ -1292,12 +1588,12 @@ function reactWhiteFire(x,y,cell){
       return;
     }
     if(n.cell.type==='gas' || n.cell.type==='acetylene'){
-      explode(n.x,n.y,6);
+      explode(n.x,n.y,6,'flash');
       return;
     }
     if(n.cell.type==='tnt' || n.cell.type==='nitroglycerin'){
       grid[n.idx]=null;
-      explode(n.x,n.y,7);
+      explode(n.x,n.y,7,'tnt');
       return;
     }
     if(n.cell.type==='sand'){
@@ -1393,7 +1689,7 @@ function reactAcetylene(x,y,cell){
     const n = nb[k];
     if(n.cell && (n.cell.type==='fire' || n.cell.type==='whitefire' || n.cell.type==='bluefire')){
       grid[idx(x,y)] = null;
-      explode(x,y,5);
+      explode(x,y,5,'flash');
       logEvent('acetylene-explode','💥 Khí axetilen phát nổ cực mạnh khi tiếp xúc với tia lửa.');
       return;
     }
@@ -1424,7 +1720,7 @@ function reactNitroglycerin(x,y){
     const c = nb[k].cell;
     if(c && (c.type==='fire' || c.type==='whitefire' || c.type==='bluefire' || c.type==='lava')){
       grid[idx(x,y)] = null;
-      explode(x,y,6);
+      explode(x,y,6,'tnt');
       unlockAchievement('nobel');
       logEvent('nitro-explode','💥 Nitroglycerin lỏng nhạy nổ kích nổ dữ dội.');
       return;
@@ -1537,15 +1833,152 @@ function simulate(){
 }
 
 /* ============================= HIỂN THỊ ============================= */
+function drawSmokeParticles(){
+  for(let i=smokeParticles.length-1;i>=0;i--){
+    const p = smokeParticles[i];
+    p.life -= p.decay;
+    if(p.life<=0){ smokeParticles.splice(i,1); continue; }
+    p.x += p.vx; p.y += p.vy; p.size += p.grow;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life*0.55);
+    const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,Math.max(p.size,1));
+    g.addColorStop(0, p.color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(p.size,1), 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawFireballs(){
+  for(let i=fireballs.length-1;i>=0;i--){
+    const f = fireballs[i];
+    f.life -= f.decay;
+    if(f.life<=0){ fireballs.splice(i,1); continue; }
+    const progress = 1 - f.life;
+    const eased = 1 - Math.pow(1-progress, 3);
+    const r = Math.max(1, f.maxR * eased);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, f.life);
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+    g.addColorStop(0, f.colorA);
+    g.addColorStop(0.35, f.colorB);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawRayParticles(){
+  for(let i=rayParticles.length-1;i>=0;i--){
+    const p = rayParticles[i];
+    p.life -= p.decay;
+    if(p.life<=0){ rayParticles.splice(i,1); continue; }
+    const len = p.maxLen * (1 - p.life);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life*0.55);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = Math.max(0.5, p.width * p.life);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + Math.cos(p.angle)*len, p.y + Math.sin(p.angle)*len);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawShockwaves(){
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    const sw = shockwaves[i];
+    sw.radius += sw.strength;
+    sw.life -= sw.decay;
+    if (sw.life <= 0 || sw.radius >= sw.maxRadius) {
+      shockwaves.splice(i, 1);
+      continue;
+    }
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, sw.life);
+    ctx.shadowColor = sw.color;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+    ctx.strokeStyle = sw.color;
+    ctx.lineWidth = Math.max(0.5, sw.strength * sw.life * 1.3);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawEmberParticles(){
+  for(let i=emberParticles.length-1;i>=0;i--){
+    const p = emberParticles[i];
+    p.life -= p.decay;
+    if(p.life<=0){ emberParticles.splice(i,1); continue; }
+    p.vy += 0.12;
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.98;
+    p.rot += p.vrot;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    const s = p.size * (0.5 + p.life*0.5);
+    ctx.fillRect(-s/2, -s/2, s, s);
+    ctx.restore();
+  }
+}
+
+function drawSparkParticles(){
+  for(let i=sparkParticles.length-1;i>=0;i--){
+    const p = sparkParticles[i];
+    p.life -= p.decay;
+    if(p.life<=0){ sparkParticles.splice(i,1); continue; }
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.94; p.vy *= 0.94;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 7;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(0.4, p.size * p.life), 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  
+
   ctx.save();
+
+  // Rung màn hình (dịch + xoay nhẹ) khi có vụ nổ
   if (screenShake > 0.5) {
     const dx = (Math.random() - 0.5) * screenShake;
     const dy = (Math.random() - 0.5) * screenShake;
-    ctx.translate(dx, dy);
+    const rot = (Math.random() - 0.5) * screenShakeRot;
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.rotate(rot);
+    ctx.translate(-canvas.width/2 + dx, -canvas.height/2 + dy);
     screenShake *= 0.9;
+    screenShakeRot *= 0.85;
+  } else {
+    screenShakeRot = 0;
+  }
+
+  // Hiệu ứng "punch" phóng to nhẹ khung hình khi nổ, tạo cảm giác lực ép
+  if (explosionPunch > 0.01) {
+    const s = 1 + explosionPunch * 0.07;
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.scale(s, s);
+    ctx.translate(-canvas.width/2, -canvas.height/2);
+    explosionPunch *= 0.85;
   }
 
   let count=0;
@@ -1566,21 +1999,18 @@ function render(){
     }
   }
 
-  // Draw shockwaves
-  for (let i = shockwaves.length - 1; i >= 0; i--) {
-    const sw = shockwaves[i];
-    sw.radius += sw.strength;
-    sw.life -= sw.decay;
-    if (sw.life <= 0 || sw.radius >= sw.maxRadius) {
-      shockwaves.splice(i, 1);
-      continue;
-    }
-    ctx.beginPath();
-    ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
-    ctx.strokeStyle = sw.color;
-    ctx.lineWidth = sw.strength * sw.life;
-    ctx.stroke();
-  }
+  // Lớp khói mềm (dưới cùng của hiệu ứng nổ)
+  drawSmokeParticles();
+  // Quầng lửa nổ bùng lên
+  drawFireballs();
+  // Tia sáng toả ra từ tâm vụ nổ
+  drawRayParticles();
+  // Vòng sóng xung kích
+  drawShockwaves();
+  // Mảnh vụn/tro than bắn ra, rơi theo trọng lực
+  drawEmberParticles();
+  // Tia lửa sáng, bay nhanh, nằm trên cùng
+  drawSparkParticles();
 
   if(hover && currentTool!=='eraser'){
     ctx.strokeStyle = 'rgba(111,224,138,0.65)';
@@ -1591,10 +2021,13 @@ function render(){
     ctx.stroke();
   }
 
-  // Draw thermonuclear flash overlay
+  // Chớp sáng phủ toàn màn hình cho các vụ nổ lớn/hạt nhân
   if (explosionFlash > 0.01) {
-    ctx.fillStyle = `rgba(255, 255, 230, ${explosionFlash * 0.85})`;
+    ctx.save();
+    ctx.globalAlpha = explosionFlash * 0.85;
+    ctx.fillStyle = explosionFlashColor;
     ctx.fillRect(-50, -50, canvas.width + 100, canvas.height + 100);
+    ctx.restore();
     explosionFlash -= 0.05;
   }
 
@@ -1642,12 +2075,12 @@ function eventToGrid(e){
   return { x: Math.floor(lx/SIZE), y: Math.floor(ly/SIZE) };
 }
 
-canvas.addEventListener('mousedown', function(e){ isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); });
+canvas.addEventListener('mousedown', function(e){ SFX.unlock(); isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); SFX.uiClick(); });
 canvas.addEventListener('mousemove', function(e){ const p=eventToGrid(e); hover=p; if(isDown) paintAt(p.x,p.y); });
 canvas.addEventListener('mouseleave', function(){ hover=null; });
 window.addEventListener('mouseup', function(){ isDown=false; });
 
-canvas.addEventListener('touchstart', function(e){ e.preventDefault(); isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); }, {passive:false});
+canvas.addEventListener('touchstart', function(e){ e.preventDefault(); SFX.unlock(); isDown=true; const p=eventToGrid(e); hover=p; paintAt(p.x,p.y); SFX.uiClick(); }, {passive:false});
 canvas.addEventListener('touchmove', function(e){ e.preventDefault(); const p=eventToGrid(e); hover=p; if(isDown) paintAt(p.x,p.y); }, {passive:false});
 canvas.addEventListener('touchend', function(e){ e.preventDefault(); isDown=false; hover=null; }, {passive:false});
 /* ============================= HỆ THỐNG THÀNH TỰU ẨN ============================= */
@@ -1709,6 +2142,7 @@ function unlockAchievement(id) {
   if (!ACHIEVEMENTS[id] || ACHIEVEMENTS[id].unlocked) return;
   ACHIEVEMENTS[id].unlocked = true;
   localStorage.setItem('chem_ach_' + id, 'true');
+  SFX.achievement();
   
   try {
     window.parent.postMessage({
@@ -1794,7 +2228,7 @@ function buildPalette(){
   }
   paletteEl.innerHTML = html;
   paletteEl.querySelectorAll('.swatch').forEach(function(btn){
-    btn.addEventListener('click', function(){ selectTool(btn.getAttribute('data-key')); });
+    btn.addEventListener('click', function(){ SFX.unlock(); SFX.uiClick(); selectTool(btn.getAttribute('data-key')); });
   });
 }
 
@@ -1824,11 +2258,27 @@ document.getElementById('speed').addEventListener('input', function(e){
   speed = parseInt(e.target.value,10);
   document.getElementById('speed-val').textContent = speed+'×';
 });
+document.getElementById('volume').addEventListener('input', function(e){
+  const v = parseInt(e.target.value,10);
+  SFX.unlock();
+  SFX.setVolume(v/100);
+  document.getElementById('volume-val').textContent = v+'%';
+});
+document.getElementById('btn-mute').addEventListener('click', function(e){
+  SFX.unlock();
+  const nowMuted = !SFX.isMuted();
+  SFX.setMuted(nowMuted);
+  e.target.textContent = nowMuted ? '🔇' : '🔊';
+  e.target.classList.toggle('primary', !nowMuted);
+  if(!nowMuted) SFX.uiClick();
+});
 document.getElementById('btn-pause').addEventListener('click', function(e){
+  SFX.unlock(); SFX.uiClick();
   running = !running;
   e.target.textContent = running ? '⏸ Tạm dừng' : '▶ Tiếp tục';
 });
 document.getElementById('btn-clear').addEventListener('click', function(){
+  SFX.unlock(); SFX.uiClick();
   grid = new Array(COLS*ROWS).fill(null);
   logMessages = ['🗑 Đã xoá toàn bộ khung mô phỏng.'];
   renderLog();
