@@ -1023,17 +1023,13 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
           )}
         </div>
         
-        <div style={{ flex: 1, minWidth: 300, display: 'flex', alignItems: 'center' }}>
-          {isTeacher ? (
-            <div style={{ width: '100%', padding: 18, background: 'rgba(52,211,153,0.08)', border: '1px dashed rgba(52,211,153,0.35)', borderRadius: 12, fontSize: 14, fontWeight: 700, color: '#34D399', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <CheckCircle size={18} /> Tự động tính điểm & xếp loại
-            </div>
-          ) : (
+        {!isTeacher && (
+          <div style={{ flex: 1, minWidth: 300, display: 'flex', alignItems: 'center' }}>
             <button onClick={calculateAll} className="bprimary gc-btn" style={{ width: '100%', padding: 18, borderRadius: 12, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               <FileText size={20} /> TÍNH ĐIỂM & XẾP LOẠI
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {result && (

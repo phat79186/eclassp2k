@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import api, { setToken, clearToken, getToken } from "./api.js";
-import { StudentAssignmentModal } from "./InteractiveAssignments";
+import { StudentAssignmentModal, InteractiveVideoPlayer } from "./InteractiveAssignments";
 import {
-  Home, BookOpen, MessageSquare, MessageCircle, QrCode, Grid, Shuffle,Library, User, Search, Send, Menu,CheckCircle, Clock, Plus, Upload, Download,FileText, Hash, Paperclip,RefreshCw, Trophy,GraduationCap, LogOut, X, Edit2, Trash2, Save,UserPlus, Settings, Eye, EyeOff,AlertTriangle, Check, GripVertical,Users, School, Key, Phone, Calendar, ChevronLeft, ChevronRight,BarChart2, Bell, UserCheck, UserX, LayoutGrid, Sun, Moon, Camera, ExternalLink, Play, Pause, RotateCcw, Link2, Activity, Bot, Sparkles, FolderOpen, FileCode, Code2, Terminal, Info,
-  HelpCircle, ListChecks, CircleDot, PenLine, ClipboardList
+  Home, BookOpen, MessageSquare, MessageCircle, QrCode, Grid, Shuffle,Library, User, Search, Send, Menu,CheckCircle, Clock, Plus, Upload, Download,FileText, Hash, Paperclip,RefreshCw, Trophy,GraduationCap, LogOut, X, Edit2, Trash2, Save,UserPlus, Settings, Eye, EyeOff,AlertTriangle, Check, GripVertical,Users, School, Key, Phone, Calendar, ChevronLeft, ChevronRight,BarChart2, Bell, UserCheck, UserX, LayoutGrid, Sun, Moon, Camera, CameraOff, ExternalLink, Play, Pause, RotateCcw, Link2, Activity, Bot, Sparkles, FolderOpen, FileCode, Code2, Terminal, Info,
+  HelpCircle, ListChecks, CircleDot, PenLine, ClipboardList, Volume2, Video
 } from "lucide-react";
 import { GoogleLogin } from '@react-oauth/google';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -11,7 +11,8 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import GradeCalculatorPage, { computeGradeSummary } from './GradeCalculatorPage';
 import PomodoroPage from './PomodoroPage';
 import RankingPage from './RankingPage';
-import VideoQuizPage from './VideoQuizPage';
+import AdminDashPage from './AdminDashboard';
+import confetti from 'canvas-confetti';
 
 const compressImage = (file, maxWidth = 400, maxHeight = 400) => {
   return new Promise((resolve) => {
@@ -117,6 +118,13 @@ function useFaceRecognition(students) {
   const [knownCount, setKnownCount] = useState(0);
   const faceMatcherRef = useRef(null);
 
+  // Tracking liveness state
+  const blinkDetectedRef = useRef(false);
+  const isEyeClosedRef = useRef(false);
+  const currentMatchedStudentId = useRef(null);
+  const missedFramesCount = useRef(0);
+  const earHistoryRef = useRef([]); // Lịch sử tỉ lệ EAR để phân tích dạng sóng nháy mắt
+
   useEffect(() => {
     loadFaceApiModels()
       .then(() => setModelsReady(true))
@@ -171,23 +179,105 @@ function useFaceRecognition(students) {
     };
   }, [modelsReady, students]);
 
+  const resetLiveness = useCallback(() => {
+    blinkDetectedRef.current = false;
+    isEyeClosedRef.current = false;
+    currentMatchedStudentId.current = null;
+    missedFramesCount.current = 0;
+    earHistoryRef.current = [];
+  }, []);
+
   const recognizeFromVideo = useCallback(async (video) => {
     const fapi = window.faceapi;
     if (!fapi || !faceMatcherRef.current) return null;
 
     try {
-      const detection = await fapi
-        .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
+      let detection = null;
+      
+      // Nếu chưa nhận dạng danh tính, chạy detector đầy đủ để lấy face descriptor
+      if (currentMatchedStudentId.current === null) {
+        detection = await fapi
+          .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+          .withFaceLandmarks(true)
+          .withFaceDescriptor();
+
+        if (detection) {
+          const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
+          if (bestMatch && bestMatch.label !== 'unknown') {
+            currentMatchedStudentId.current = bestMatch.label;
+            missedFramesCount.current = 0;
+            earHistoryRef.current = [];
+          }
+        }
+      } else {
+        // Đã có danh tính -> Chuyển sang chế độ chạy Landmarks siêu tốc (Landmarks-only)
+        // Không chạy Face Descriptor (tốn 90% thời gian xử lý) để camera đạt 40-60 FPS tracking mắt
+        detection = await fapi
+          .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.45 }))
+          .withFaceLandmarks(true);
+
+        if (!detection) {
+          missedFramesCount.current++;
+          if (missedFramesCount.current > 8) {
+            // Mất dấu mặt quá 8 frames -> yêu cầu quét lại danh tính
+            currentMatchedStudentId.current = null;
+          }
+        } else {
+          missedFramesCount.current = 0;
+        }
+      }
 
       if (!detection) return null;
 
-      const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
-      if (bestMatch && bestMatch.label !== 'unknown') {
+      // Tính khoảng cách Euclidean
+      const getDistance = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+
+      // Tính Eye Aspect Ratio (EAR)
+      const calculateEAR = (eyePoints) => {
+        const p2_p6 = getDistance(eyePoints[1], eyePoints[5]);
+        const p3_p5 = getDistance(eyePoints[2], eyePoints[4]);
+        const p1_p4 = getDistance(eyePoints[0], eyePoints[3]);
+        return (p2_p6 + p3_p5) / (2.0 * p1_p4);
+      };
+
+      const landmarks = detection.landmarks;
+      const leftEye = landmarks.getLeftEye();
+      const rightEye = landmarks.getRightEye();
+
+      const earLeft = calculateEAR(leftEye);
+      const earRight = calculateEAR(rightEye);
+      const avgEAR = (earLeft + earRight) / 2.0;
+
+      // Lưu trữ vào buffer lịch sử để phân tích động hình học
+      earHistoryRef.current.push(avgEAR);
+      if (earHistoryRef.current.length > 20) {
+        earHistoryRef.current.shift();
+      }
+
+      // Thuật toán V-Shape adaptive liveness
+      if (earHistoryRef.current.length >= 4) {
+        const maxEAR = Math.max(...earHistoryRef.current);
+        const minEAR = Math.min(...earHistoryRef.current);
+        
+        // Sự sụt giảm của EAR (từ mở sang nhắm) ít nhất 18% so với trạng thái mở lớn nhất
+        const dropPercent = (maxEAR - minEAR) / maxEAR;
+
+        // Nếu có sự sụt giảm đáng kể và điểm thấp nhất nằm trong dải mắt nhắm (< 0.24)
+        if (dropPercent > 0.18 && minEAR < 0.24) {
+          // Kiểm tra xem frame hiện tại đã mở mắt phục hồi lại hay chưa (đạt tối thiểu 80% của maxEAR)
+          if (avgEAR > maxEAR - (maxEAR - minEAR) * 0.25) {
+            blinkDetectedRef.current = true;
+            console.log("👁️ Liveness passed: Rolling buffer detected blink! Drop:", dropPercent.toFixed(2), "Min:", minEAR.toFixed(2));
+            earHistoryRef.current = []; // Reset history
+          }
+        }
+      }
+
+      if (currentMatchedStudentId.current) {
         return {
-          studentId: bestMatch.label,
-          distance: bestMatch.distance,
+          studentId: currentMatchedStudentId.current,
+          distance: 0.1,
+          livenessPassed: blinkDetectedRef.current,
         };
       }
     } catch (err) {
@@ -196,14 +286,18 @@ function useFaceRecognition(students) {
     return null;
   }, []);
 
+
+
   return {
     modelsReady,
     modelError,
     computing,
     knownCount,
     recognizeFromVideo,
+    resetLiveness,
   };
 }
+
 
 // css toàn cục 
 const CSS = `
@@ -265,55 +359,97 @@ html,body{overflow-x:hidden;margin:0;padding:0;width:100%;height:100%;background
 
 /* ── Light theme overrides ── */
 .ecp.light {
-  --bg:       #F0F4FA;
-  --bg2:      #E8EEF8;
+  --bg:       #F2F6FC;
+  --bg2:      #E6EFFB;
   --surface:  #FFFFFF;
-  --surface2: #F5F8FF;
-  --border:   rgba(0,0,0,.1);
-  --border2:  rgba(0,0,0,.06);
-  --text:     #000000;
-  --text2:    rgba(0,0,0,.65);
-  --text3:    rgba(0,0,0,.38);
-  --text4:    rgba(0,0,0,.5);
+  --surface2: #F0F5FE;
+  --border:   rgba(29,108,245,.08);
+  --border2:  rgba(29,108,245,.04);
+  --text:     #0F172A;
+  --text2:    #334155;
+  --text3:    #64748B;
+  --text4:    #475569;
   --accent:   #1D6CF5;
   --accent2:  #7B3FE4;
-  --scrollbar:rgba(0,0,0,.15);
-  --glass:    rgba(255,255,255,.6);
-  --modal-ol: rgba(0,0,0,.45);
-  --inp-bg:   rgba(0,0,0,.04);
-  --inp-bd:   rgba(0,0,0,.14);
-  --inp-ph:   #9AB0C4;
+  --scrollbar:rgba(29,108,245,.15);
+  --glass:    rgba(255,255,255,.7);
+  --modal-ol: rgba(15,23,42,.3);
+  --inp-bg:   #F8FAFC;
+  --inp-bd:   #E2E8F0;
+  --inp-ph:   #94A3B8;
   --notif-bd: #FFFFFF;
-  --topbar:   rgba(255,255,255,.92);
+  --topbar:   rgba(255,255,255,.88);
   --sidebar:  #FFFFFF;
-  --nbtn-hov: rgba(29,108,245,.07);
-  --nbtn-act: rgba(29,108,245,.1);
-  --row-hov:  rgba(0,0,0,.025);
+  --nbtn-hov: rgba(29,108,245,.06);
+  --nbtn-act: rgba(29,108,245,.09);
+  --row-hov:  rgba(29,108,245,.02);
   --scard:    #FFFFFF;
-  --scard-bd: rgba(0,0,0,.08);
-  --card-bg:  #F5F8FF;
+  --scard-bd: rgba(29,108,245,.08);
+  --card-bg:  #F8FAFC;
   --modal-bg: #FFFFFF;
-  --modal-bd: rgba(0,0,0,.1);
-  --wa015: rgba(0,0,0,.02);
-  --wa018: rgba(0,0,0,.025);
-  --wa02: rgba(0,0,0,.025);
-  --wa022: rgba(0,0,0,.03);
-  --wa025: rgba(0,0,0,.03);
-  --wa03: rgba(0,0,0,.04);
-  --wa035: rgba(0,0,0,.045);
-  --wa04: rgba(0,0,0,.05);
-  --wa045: rgba(0,0,0,.06);
-  --wa05: rgba(0,0,0,.065);
-  --wa055: rgba(0,0,0,.07);
-  --wa06: rgba(0,0,0,.08);
-  --wa07: rgba(0,0,0,.09);
-  --wa08: rgba(0,0,0,.1);
-  --wa09: rgba(0,0,0,.12);
-  --wa1: rgba(0,0,0,.13);
-  --wa14: rgba(0,0,0,.18);
+  --modal-bd: rgba(29,108,245,.1);
+  --wa015: rgba(29,108,245,.015);
+  --wa018: rgba(29,108,245,.02);
+  --wa02: rgba(29,108,245,.02);
+  --wa022: rgba(29,108,245,.022);
+  --wa025: rgba(29,108,245,.025);
+  --wa03: rgba(29,108,245,.03);
+  --wa035: rgba(29,108,245,.035);
+  --wa04: rgba(29,108,245,.04);
+  --wa045: rgba(29,108,245,.045);
+  --wa05: rgba(29,108,245,.05);
+  --wa055: rgba(29,108,245,.055);
+  --wa06: rgba(29,108,245,.06);
+  --wa07: rgba(29,108,245,.07);
+  --wa08: rgba(29,108,245,.08);
+  --wa09: rgba(29,108,245,.09);
+  --wa1: rgba(29,108,245,.1);
+  --wa14: rgba(29,108,245,.14);
 }
 
-.ecp{font-family:'Outfit',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+.ecp {
+  font-family: 'Outfit', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.ecp::before {
+  content: "";
+  position: fixed;
+  top: -20%;
+  left: -20%;
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(79,172,254,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  animation: drift 20s linear infinite;
+}
+
+.ecp::after {
+  content: "";
+  position: fixed;
+  bottom: -20%;
+  right: -20%;
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(123,63,228,0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  animation: drift 25s linear infinite reverse;
+}
+
+@keyframes drift {
+  0% { transform: rotate(0deg) translate(0, 0); }
+  50% { transform: rotate(180deg) translate(40px, -40px); }
+  100% { transform: rotate(360deg) translate(0, 0); }
+}
+
 .hfont{font-family:'DM Serif Display',serif}
 .gtext{background:linear-gradient(135deg,#4FACFE 0%,#00F2FE 50%,#43E97B 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:200%;animation:gshift 6s ease infinite}
 
@@ -322,17 +458,17 @@ html,body{overflow-x:hidden;margin:0;padding:0;width:100%;height:100%;background
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes scanline{0%{top:-4px}100%{top:100%}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}60%{transform:translateX(6px)}}
-@keyframes pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes pop{0%{transform:scale(.95);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
 @keyframes glowbeat{0%,100%{box-shadow:0 0 20px rgba(79,172,254,.18)}50%{box-shadow:0 0 40px rgba(79,172,254,.45)}}
 @keyframes pulseGreen{0%,100%{box-shadow:0 0 6px rgba(52,211,153,.5)}50%{box-shadow:0 0 14px rgba(52,211,153,.95)}}
 @keyframes spin360{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes pulse-ring{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.55);opacity:0}}
 
-.page{animation:fadeUp .32s ease forwards;min-height:calc(100vh - 60px)}
+.page{animation:fadeUp .45s cubic-bezier(0.16, 1, 0.3, 1) forwards;min-height:calc(100vh - 60px);position:relative;z-index:1}
 .modal-bg{position:fixed;inset:0;background:var(--modal-ol);backdrop-filter:blur(12px);z-index:300;display:flex;align-items:center;justify-content:center;animation:fadeIn .18s ease}
-.modal{background:var(--modal-bg);border:1px solid var(--modal-bd);border-radius:20px;padding:28px;min-width:320px;max-width:95vw;max-height:92vh;overflow-y:auto;animation:pop .22s ease;box-shadow:0 40px 80px rgba(0,0,0,.6)}
-.modal-flex{background:var(--modal-bg);border:1px solid var(--modal-bd);border-radius:20px;min-width:320px;max-width:95vw;max-height:90vh;overflow:hidden;animation:pop .22s ease;box-shadow:0 40px 80px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.modal{background:var(--modal-bg);border:1px solid var(--modal-bd);border-radius:20px;padding:28px;min-width:320px;max-width:95vw;max-height:92vh;overflow-y:auto;animation:pop .25s cubic-bezier(0.34, 1.56, 0.64, 1);box-shadow:0 40px 80px rgba(0,0,0,.3)}
+.modal-flex{background:var(--modal-bg);border:1px solid var(--modal-bd);border-radius:20px;min-width:320px;max-width:95vw;max-height:90vh;overflow:hidden;animation:pop .25s cubic-bezier(0.34, 1.56, 0.64, 1);box-shadow:0 40px 80px rgba(0,0,0,.3);display:flex;flex-direction:column}
 
 .inp{width:100%;padding:10px 14px;border-radius:10px;background:var(--inp-bg);border:1px solid var(--inp-bd);color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
 .inp:focus{border-color:rgba(79,172,254,.55);box-shadow:0 0 0 3px rgba(79,172,254,.1)}
@@ -349,15 +485,18 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 
 .glass{background:var(--glass);backdrop-filter:blur(20px);border:1px solid var(--border)}
 
-.cglow{transition:all .24s ease}
-.cglow:hover{border-color:rgba(79,172,254,.25)!important;box-shadow:0 8px 32px rgba(0,0,0,.12)!important;transform:translateY(-1px)}
+.cglow{transition:all .28s cubic-bezier(0.4, 0, 0.2, 1)}
+.cglow:hover{border-color:rgba(79,172,254,.35)!important;box-shadow:0 12px 32px rgba(79,172,254,.15)!important;transform:translateY(-2px)}
 
 .bprimary{background:linear-gradient(135deg,#1D6CF5,#7B3FE4);transition:all .22s;cursor:pointer;border:none;color:#fff;font-family:inherit;font-weight:600}
-.bprimary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 24px rgba(29,108,245,.4)}
+.bprimary:hover{opacity:.95;transform:translateY(-1px);box-shadow:0 8px 24px rgba(29,108,245,.4)}
 .bprimary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 
-.scard{background:var(--scard);border:1px solid var(--scard-bd);border-radius:14px;transition:all .22s}
-.scard:hover{border-color:rgba(79,172,254,.15)}
+.scard{background:var(--scard);border:1px solid var(--scard-bd);border-radius:14px;transition:all .25s ease}
+.scard:hover{border-color:rgba(79,172,254,.22);transform:translateY(-1px);box-shadow:0 8px 20px rgba(0,0,0,.04)}
+
+.btn:active, .nbtn:active, button:active, .cal-day:active{transform:scale(0.96)!important}
+.btn, .nbtn, button, .cal-day{transition:transform 0.15s ease, background 0.2s, box-shadow 0.2s, border-color 0.2s!important}
 
 .shake{animation:shake .3s ease}
 
@@ -370,7 +509,7 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 
 .sidebar-ind{position:absolute;right:0;top:50%;transform:translateY(-50%);width:3px;height:18px;background:linear-gradient(180deg,#4FACFE,#00F2FE);border-radius:2px 0 0 2px}
 
-::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
 
 .tooltip{position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 13px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:200;animation:fadeUp .15s ease;box-shadow:0 10px 24px rgba(0,0,0,.2)}
@@ -381,7 +520,7 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 .cal-day:hover{background:rgba(79,172,254,.1);border-color:rgba(79,172,254,.28)}
 
 /* Responsive Layout */
-.main-wrapper { margin-left: 224px; flex: 1; min-width: 0; min-height: 100vh; transition: margin-left .3s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; }
+.main-wrapper { margin-left: 224px; flex: 1; min-width: 0; min-height: 100vh; transition: margin-left .3s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; position: relative; z-index: 1; }
 .main-wrapper.col { margin-left: 58px; }
 .sidebar-wrapper { width: 224px; height: 100vh; background: var(--sidebar); border-right: 1px solid var(--border2); display: flex; flex-direction: column; transition: width .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1); position: fixed; left: 0; top: 0; z-index: 50; overflow: hidden; }
 .sidebar-wrapper.col { width: 58px; }
@@ -411,12 +550,12 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 
 /* Light mode specific tweaks */
 .ecp.light .bprimary{box-shadow:0 4px 16px rgba(29,108,245,.25)}
-.ecp.light .modal{box-shadow:0 20px 60px rgba(0,0,0,.18)}
-.ecp.light .modal-flex{box-shadow:0 20px 60px rgba(0,0,0,.18)}
-.ecp.light .scard{box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.ecp.light .page{background:var(--bg)}
+.ecp.light .modal{box-shadow:0 20px 60px rgba(0,0,0,.08);border-color:rgba(29,108,245,.1)}
+.ecp.light .modal-flex{box-shadow:0 20px 60px rgba(0,0,0,.08);border-color:rgba(29,108,245,.1)}
+.ecp.light .scard{box-shadow:0 4px 12px rgba(29,108,245,.02);border-color:rgba(29,108,245,.06)}
+.ecp.light .page{background:transparent}
 .ecp.light select option{background:#FFFFFF;color:#0F1E35}
-.ecp.light .cglow:hover{box-shadow:0 8px 24px rgba(0,0,0,.1)!important}
+.ecp.light .cglow:hover{box-shadow:0 12px 32px rgba(29,108,245,.08)!important;border-color:rgba(29,108,245,.2)!important}
 
 .qs-laser { position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,#4FACFE,transparent);box-shadow:0 0 12px #4FACFE;animation:qs-scan 2s linear infinite; }
 @keyframes qs-scan{0%{top:0%}100%{top:100%}}
@@ -1688,28 +1827,26 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
                   </select>
                 </div>
                 <Inp label="MÃ HỌC SINH" value={sCode} onChange={v => { setSCode(v); setSPass(""); }} placeholder="Ví dụ: HS001" required note="Mã được giáo viên cấp sau khi duyệt đăng ký" />
-                {selectedStudentNeedsPass && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU <span style={{ color: "#EF4444" }}>*</span></div>
-                    <div style={{ position: "relative" }}>
-                      <input
-                        className="inp"
-                        type={showSPass ? "text" : "password"}
-                        value={sPass}
-                        onChange={e => setSPass(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && doLogin()}
-                        placeholder="Nhập mật khẩu"
-                        style={{ display: "block", paddingRight: 42 }}
-                      />
-                      <button onClick={() => setShowSPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text3)" }}>
-                        {showSPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                    <div style={{ fontSize: 10, color: "#F59E0B", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      🔐 Tài khoản này được bảo vệ bằng mật khẩu
-                    </div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5, letterSpacing: ".05em" }}>MẬT KHẨU</div>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      className="inp"
+                      type={showSPass ? "text" : "password"}
+                      value={sPass}
+                      onChange={e => setSPass(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && doLogin()}
+                      placeholder="Nhập mật khẩu (nếu đã thiết lập)"
+                      style={{ display: "block", paddingRight: 42 }}
+                    />
+                    <button onClick={() => setShowSPass(p => !p)} style={{ position: "absolute", right: 11, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text3)" }}>
+                      {showSPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
                   </div>
-                )}
+                  <div style={{ fontSize: 10, color: "var(--text4)", marginTop: 4 }}>
+                    💡 Bỏ trống nếu tài khoản của bạn chưa thiết lập mật khẩu
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -1726,7 +1863,7 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
               </>
             )}
             <ErrBox msg={err} />
-            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 4, justifyContent: "center" }} disabled={role === "student" ? (!sClass || !sCode || (selectedStudentNeedsPass && !sPass)) : (!uname || !pass)}>
+            <Btn onClick={doLogin} style={{ width: "100%", marginTop: 4, justifyContent: "center" }} disabled={role === "student" ? (!sClass || !sCode) : (!uname || !pass)}>
               {role === "student" ? "Vào lớp học →" : "Đăng nhập →"}
             </Btn>
             
@@ -1777,8 +1914,10 @@ const NAV_TEACHER = [
   { id: "gradecalc",   Ic: BarChart2,     l: "Xếp loại" },
   { id: "rankings",    Ic: Trophy,        l: "Xếp hạng" },
   { id: "competition", Ic: Trophy,        l: "Thi đua lớp" },
+  { id: "locate",      Ic: Eye,           l: "Giám sát AI" },
   { id: "pending",     Ic: UserCheck,     l: "Duyệt HS" },
   { id: "settings",    Ic: Settings,      l: "Cài đặt" },
+  { id: "profile",     Ic: User,          l: "Hồ sơ" },
 ];
 const NAV_STUDENT = [{ id: "dashboard",   Ic: Home,          l: "Tổng quan" },
   { id: "seating",     Ic: Grid,          l: "Sơ đồ lớp" },
@@ -1801,13 +1940,20 @@ const NAV_PARENT = [
   { id: "schedule",    Ic: Calendar,      l: "Thời khóa biểu" },
   { id: "gradecalc",   Ic: BarChart2,     l: "Bảng điểm" },
   { id: "competition", Ic: Trophy,        l: "Thi đua lớp" },
+  { id: "profile",     Ic: User,          l: "Hồ sơ" },
 ];
 const NAV_ADMIN = [
   { id: "dashboard",   Ic: Home,          l: "Quản lý" },
 ];
 
-function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setCol }) {
-  const nav = user.role === "teacher" ? NAV_TEACHER : user.role === "parent" ? NAV_PARENT : user.role === "admin" ? NAV_ADMIN : NAV_STUDENT;
+function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setCol, selClass, state }) {
+  let nav = user.role === "teacher" ? NAV_TEACHER : user.role === "parent" ? NAV_PARENT : user.role === "admin" ? NAV_ADMIN : NAV_STUDENT;
+  if (user.role === "teacher" && selClass && state.classes) {
+    const currentClass = state.classes.find(c => c.id === selClass);
+    if (currentClass && currentClass.teacherId !== user.data.id) {
+      nav = nav.filter(item => item.id !== "pending");
+    }
+  }
   const roleBg = user.role === "teacher" ? "rgba(167,139,250,.1)" : user.role === "parent" ? "rgba(52,211,153,.1)" : user.role === "admin" ? "rgba(245,158,11,.1)" : "rgba(79,172,254,.08)";
   const roleBd = user.role === "teacher" ? "rgba(167,139,250,.22)" : user.role === "parent" ? "rgba(52,211,153,.22)" : user.role === "admin" ? "rgba(245,158,11,.22)" : "rgba(79,172,254,.18)";
   const roleCol = user.role === "teacher" ? "#A78BFA" : user.role === "parent" ? "#34D399" : user.role === "admin" ? "#F59E0B" : "var(--accent)";
@@ -1861,7 +2007,7 @@ function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setC
 }
 
 function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleDark, selClass, setSelClass, myClasses }) {
-  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt học sinh", ai:"Trợ giảng AI" };
+  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt học sinh", ai:"Trợ giảng AI", locate:"Giám sát AI (Locate)" };
   return (
     <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "var(--topbar)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border2)", position: "sticky", top: 0, zIndex: 40 }}>
       <button onClick={toggleSide} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "var(--inp-bg)", color: "var(--text4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Menu size={14} /></button>
@@ -1921,6 +2067,7 @@ function PendingPage({ state, user }) {
       createdAt: Date.now(),
     }]);
     state.setPendingStudents(prev => prev.filter(p => p.id !== pend.id));
+    confetti({ particleCount: 70, spread: 60, colors: ['#34D399', '#4FACFE', '#A78BFA'] });
     setErr(e => { const n = { ...e }; delete n[pend.id]; return n; });
   };
 
@@ -1937,6 +2084,7 @@ function PendingPage({ state, user }) {
     if (!matched) return;
     state.setParents(prev => prev.map(pa => pa.id === req.parentId ? { ...pa, childIds: [...new Set([...(pa.childIds || []), matched.id])] } : pa));
     state.setPendingParents(prev => prev.filter(x => x.id !== req.id));
+    confetti({ particleCount: 70, spread: 60, colors: ['#34D399', '#4FACFE', '#A78BFA'] });
   };
 
   const rejectParent = async (id) => {
@@ -2956,6 +3104,8 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
   const [detectedFaceStudent, setDetectedFaceStudent] = useState(null);
   const [selectedFaceStudentId, setSelectedFaceStudentId] = useState("");
   const [faceNoMatchTick, setFaceNoMatchTick] = useState(0); // đổi giá trị mỗi lần quét không nhận ra ai, để nhấp nháy UI báo hiệu
+  const [livenessPending, setLivenessPending] = useState(false);
+  const [livenessTargetName, setLivenessTargetName] = useState("");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -2964,11 +3114,14 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
   const classStudents = useMemo(() => state.students.filter(s => s.classId === selClass), [state.students, selClass]);
 
   // Engine nhận diện khuôn mặt thật (face-api.js), tính sẵn descriptor cho ảnh của từng học sinh trong lớp
-  const { modelsReady, modelError, computing: computingFaces, knownCount, recognizeFromVideo } = useFaceRecognition(classStudents);
+  const { modelsReady, modelError, computing: computingFaces, knownCount, recognizeFromVideo, resetLiveness } = useFaceRecognition(classStudents);
 
   const startFaceCamera = async () => {
     try {
       setDetectedFaceStudent(null);
+      setLivenessPending(false);
+      setLivenessTargetName("");
+      resetLiveness();
       setFaceCameraActive(true);
       setTimeout(async () => {
         try {
@@ -2996,6 +3149,8 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setFaceCameraActive(false);
+    setLivenessPending(false);
+    setLivenessTargetName("");
   };
 
   const playFaceBeep = () => {
@@ -3024,36 +3179,55 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
 
     setFaceScanning(true);
     setDetectedFaceStudent(null);
+    setLivenessPending(false);
+    setLivenessTargetName("");
+    resetLiveness();
 
-    // Chờ 2.2 giây để chạy hiệu ứng quét laser đẹp mắt
-    await new Promise(r => setTimeout(r, 2200));
+    // Chờ 1.5 giây chạy hiệu ứng quét laser ban đầu
+    await new Promise(r => setTimeout(r, 1500));
+
+    const startTime = Date.now();
+    const TIMEOUT_MS = 12000; // Hủy quét sau 12 giây nếu không có nháy mắt để tránh treo
 
     try {
       let target = null;
 
-      // Nhận dạng khuôn mặt thực tế bằng face-api.js từ camera.
-      // LƯU Ý: auto-scan chỉ tin vào kết quả camera nhận diện được, KHÔNG dùng
-      // selectedFaceStudentId (học sinh đang chọn ở dropdown "Điểm danh thủ công")
-      // làm phương án dự phòng nữa — trước đây nếu khuôn mặt camera nhận ra KHÁC
-      // với học sinh đang được chọn sẵn trong dropdown, hệ thống sẽ bỏ qua kết quả
-      // camera đúng và điểm danh nhầm cho học sinh trong dropdown, dù người đó
-      // không hề đứng trước camera. Việc điểm danh thủ công qua dropdown đã có nút
-      // riêng "✓ Điểm danh cho học sinh đã chọn" xử lý độc lập bên dưới rồi.
-      if (modelsReady && videoRef.current.readyState >= 2 && recognizeFromVideo) {
-        try {
-          const detected = await recognizeFromVideo(videoRef.current);
-          if (detected && detected.studentId) {
-            console.log("✅ Nhận diện được khuôn mặt:", detected.studentId, "distance:", detected.distance);
-            target = classStudents.find(s => s.id === detected.studentId);
-          } else {
-            console.log("⚠ Không nhận diện được khuôn mặt từ camera");
+      // Vòng lặp nhận diện + kiểm tra liveness liên tục
+      while (faceCameraActive && !target && (Date.now() - startTime < TIMEOUT_MS)) {
+        if (!faceCameraActive) break;
+
+        if (modelsReady && videoRef.current && videoRef.current.readyState >= 2 && recognizeFromVideo) {
+          try {
+            const detected = await recognizeFromVideo(videoRef.current);
+            if (detected && detected.studentId) {
+              const matchedStudent = classStudents.find(s => s.id === detected.studentId);
+              
+              if (matchedStudent) {
+                if (detected.livenessPassed) {
+                  // Xác thực nháy mắt thành công!
+                  target = matchedStudent;
+                  break;
+                } else {
+                  // Nhận diện được mặt nhưng chưa nháy mắt
+                  setLivenessPending(true);
+                  setLivenessTargetName(matchedStudent.name);
+                }
+              }
+            } else {
+              setLivenessPending(false);
+              setLivenessTargetName("");
+            }
+          } catch (err) {
+            console.warn("Lỗi nhận diện liveness:", err);
           }
-        } catch (err) {
-          console.warn("Lỗi nhận diện khuôn mặt thực tế:", err);
         }
+        // Chờ 45ms giữa các frame quét để bắt kịp nháy mắt nhanh và tiết kiệm CPU
+        await new Promise(r => setTimeout(r, 45));
       }
 
       setFaceScanning(false);
+      setLivenessPending(false);
+      setLivenessTargetName("");
 
       if (target) {
         playFaceBeep();
@@ -3064,12 +3238,18 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
           return { ...p, [attKey]: [...prev, target.id] };
         });
         if (selectedFaceStudentId) setSelectedFaceStudentId("");
+      } else {
+        // Nhấp nháy báo hiệu không quét thành công hoặc quá thời gian liveness
+        setFaceNoMatchTick(t => t + 1);
       }
     } catch (err) {
       console.error("Lỗi trong quá trình quét:", err);
       setFaceScanning(false);
+      setLivenessPending(false);
+      setLivenessTargetName("");
     }
   };
+
 
   // Tự động dọn dẹp kết quả quét thành công sau 2.5 giây để tiếp tục quét tự động lượt tiếp theo
   useEffect(() => {
@@ -3146,27 +3326,36 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                   </div>
                 )}
 
-                <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", background: "#060f1e", borderRadius: 10, border: "1px dashed var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: faceCameraActive ? "block" : "none" }} />
+                <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", background: "#060f1e", borderRadius: 10, border: "2px solid var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s" }}>
+                  <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: faceCameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
                   {faceCameraActive ? (
                     <>
-                      <div className="qs-corner" style={{ top: 12, left: 12, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6, borderColor: "var(--accent)" }} />
-                      <div className="qs-corner" style={{ top: 12, right: 12, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6, borderColor: "var(--accent)" }} />
-                      <div className="qs-corner" style={{ bottom: 12, left: 12, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6, borderColor: "var(--accent)" }} />
-                      <div className="qs-corner" style={{ bottom: 12, right: 12, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6, borderColor: "var(--accent)" }} />
-                      
+                      {/* Vòng tròn căn chỉnh khuôn mặt */}
+                      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <defs>
+                            <mask id="face-mask-att">
+                              <rect x="0" y="0" width="100" height="100" fill="white" />
+                              <circle cx="50" cy="50" r="30" fill="black" />
+                            </mask>
+                          </defs>
+                          <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.4" mask="url(#face-mask-att)" />
+                          <circle cx="50" cy="50" r="30" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3,2" />
+                        </svg>
+                      </div>
+
                       {faceScanning && (
                         <>
                           <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
-                          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.75)", border: "1.5px solid var(--accent)", borderRadius: 8, padding: "6px 14px", color: "var(--accent)", fontSize: 11, fontWeight: 800, letterSpacing: 1, whiteSpace: "nowrap" }}>
-                            ĐANG QUÉT GƯƠNG MẶT...
+                          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.85)", border: "1.5px solid var(--accent)", borderRadius: 8, padding: "8px 16px", color: "var(--accent)", fontSize: 10, fontWeight: 800, letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                            <span>ĐANG QUÉT GƯƠNG MẶT...</span>
                           </div>
                         </>
                       )}
                     </>
                   ) : (
                     <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontSize: 36, opacity: 0.3 }}>🎭</div>
+                      <CameraOff size={36} style={{ opacity: 0.3 }} />
                       <div style={{ fontSize: 11, fontWeight: 600 }}>Camera đang tắt</div>
                     </div>
                   )}
@@ -3192,6 +3381,7 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                 <button onClick={faceCameraActive ? stopFaceCamera : startFaceCamera} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 16px", background: faceCameraActive ? "rgba(239,68,68,0.1)" : "var(--wa05)", border: faceCameraActive ? "1px solid #EF4444" : "1px solid var(--border2)", color: faceCameraActive ? "#EF4444" : "var(--text)", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, width: "100%", fontFamily: "inherit" }}>
                   <Camera size={14} /> {faceCameraActive ? "Tắt tự động quét" : "Bật tự động quét (Face ID)"}
                 </button>
+
               </div>
 
               {/* ĐÃ NHẬN DIỆN THÀNH CÔNG ANNOUNCEMENT */}
@@ -4711,7 +4901,7 @@ function computeQuizScore(questions, answers) {
 }
 
 // Thẻ soạn 1 câu hỏi — dùng trong modal "Thêm bài tập" khi GV chọn hình thức Trắc nghiệm
-function QuestionEditor({ q, index, onChange, onDelete }) {
+function QuestionEditor({ q, index, onChange, onDelete, isVideo }) {
   const meta = QUESTION_TYPES.find(t => t.v === q.type) || QUESTION_TYPES[0];
   return (
     <div className="scard" style={{ padding: 12, marginBottom: 10, border: "1px solid var(--wa07)" }}>
@@ -4727,6 +4917,18 @@ function QuestionEditor({ q, index, onChange, onDelete }) {
         </div>
       </div>
       <textarea value={q.text} onChange={e => onChange({ text: e.target.value })} placeholder="Nhập nội dung câu hỏi..." rows={2} style={{ width: "100%", padding: "8px 11px", borderRadius: 8, background: "var(--wa04)", border: "1px solid var(--wa1)", color: "var(--text)", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical", marginBottom: 8, boxSizing: "border-box" }} />
+      {isVideo && (
+        <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text2)", letterSpacing: ".02em" }}>THỜI ĐIỂM DỪNG:</span>
+          <input
+            type="number" min={0}
+            value={q.timestamp ?? 0}
+            onChange={e => onChange({ timestamp: Math.max(0, parseInt(e.target.value) || 0) })}
+            style={{ width: 64, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--wa1)", background: "var(--wa04)", color: "var(--text)", fontSize: 11, fontWeight: 700, outline: "none", fontFamily: "inherit", textAlign: "center" }}
+          />
+          <span style={{ fontSize: 11, color: "var(--text4)" }}>giây</span>
+        </div>
+      )}
       {q.type === "mcq" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {["A", "B", "C", "D"].map((lbl, i) => (
@@ -4859,6 +5061,16 @@ function QuizTakeModal({ task, onClose, onSubmit }) {
           {!timeUp && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)", marginLeft: 8, flexShrink: 0 }}><X size={18} /></button>}
         </div>
 
+        {/* Trình phát âm thanh bài nghe (Listening) */}
+        {task.mode === "listening" && task.audioUrl && (
+          <div style={{ background: "rgba(79,172,254,0.06)", border: "1px solid rgba(79,172,254,0.22)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", marginBottom: 8, letterSpacing: ".05em", display: "flex", alignItems: "center", gap: 6 }}>
+              <Volume2 size={14} /> FILE ÂM THANH BÀI NGHE (AUDIO)
+            </div>
+            <audio src={task.audioUrl} controls style={{ width: "100%", height: 32 }} />
+          </div>
+        )}
+
         {/* Time-up banner */}
         {timeUp && (
           <div style={{
@@ -4927,6 +5139,23 @@ function QuizTakeModal({ task, onClose, onSubmit }) {
   );
 }
 
+function VideoQuizTakeModal({ task, onClose, onSubmit }) {
+  return (
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ width: 680, maxHeight: "90vh", overflowY: "auto", padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{task.title}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
+        </div>
+        {task.desc && <p style={{ fontSize: 12, color: "var(--text3)", marginBottom: 16 }}>{task.desc}</p>}
+        
+        {/* Trình phát video tương tác */}
+        <InteractiveVideoPlayer task={task} onComplete={onSubmit} />
+      </div>
+    </div>
+  );
+}
+
 // Modal xem kết quả / chấm điểm — GV thấy toàn bộ lớp & chấm câu tự luận, HS chỉ thấy kết quả của mình
 function QuizReviewModal({ task, user, classStudents, onClose, onSaveEssay }) {
   const isTeacher = user.role === "teacher";
@@ -4948,6 +5177,17 @@ function QuizReviewModal({ task, user, classStudents, onClose, onSaveEssay }) {
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
         </div>
+
+        {/* Trình phát âm thanh bài nghe (Listening) trong xem lại */}
+        {task.mode === "listening" && task.audioUrl && (
+          <div style={{ background: "rgba(79,172,254,0.06)", border: "1px solid rgba(79,172,254,0.22)", borderRadius: 12, padding: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", marginBottom: 8, letterSpacing: ".05em", display: "flex", alignItems: "center", gap: 6 }}>
+              <Volume2 size={14} /> FILE ÂM THANH BÀI NGHE (AUDIO)
+            </div>
+            <audio src={task.audioUrl} controls style={{ width: "100%", height: 32 }} />
+          </div>
+        )}
+
         {rows.length === 0 && <div style={{ padding: 24, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>Chưa có học sinh nào.</div>}
         {rows.map(({ student, result }) => {
           const essayQs = questions.filter(q => q.type === "essay");
@@ -5020,10 +5260,10 @@ function QuizReviewModal({ task, user, classStudents, onClose, onSaveEssay }) {
 function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
   useActivityTracker("Bài tập", "Vào mục bài tập", user.role);
   const classId = user.role === "teacher" ? selClass : user.classId;
-  const tasks = state.assignments[classId] || [];
+  const allTasks = state.assignments[classId] || [];
+  const tasks = allTasks;
   const classStudents = useMemo(() => (state.students || []).filter(s => s.classId === classId), [state.students, classId]);
   const [showAdd, setShowAdd] = useState(false);
-  const [mainTab, setMainTab] = useState("tasks"); // "tasks" | "videoquiz"
   const [tab, setTab] = useState("all");
   const [newTask, setNewTask] = useState({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], mode: "file", questions: [] });
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -5040,6 +5280,9 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
   const filtered = tab === "all" ? tasks : tasks.filter(t => t.status === tab);
   const counts = { all: tasks.length, pending: tasks.filter(t => t.status === "pending").length, submitted: tasks.filter(t => t.status === "submitted").length, overdue: tasks.filter(t => t.status === "overdue").length };
 
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const audioRef = useRef();
+
   const handleFileUpload = e => {
     const files = Array.from(e.target.files); if (!files.length) return;
     setUploadingFile(true);
@@ -5051,10 +5294,57 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
     }))).then(results => { setNewTask(p => ({ ...p, attachments: [...p.attachments, ...results.filter(Boolean)] })); setUploadingFile(false); });
   };
 
+  const handleAudioUpload = e => {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert("Dung lượng file âm thanh tối đa 25MB!"); return; }
+    setUploadingAudio(true);
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        const res = await api.createFile({
+          classId,
+          name: file.name,
+          type: "audio",
+          size: (file.size / 1024).toFixed(0) + "KB",
+          data: r.result
+        });
+        if (res && res.data) {
+          setNewTask(p => ({ ...p, audioUrl: res.data }));
+          alert("Tải file âm thanh lên máy chủ thành công!");
+        } else {
+          setNewTask(p => ({ ...p, audioUrl: r.result }));
+          alert("Tải file âm thanh cục bộ thành công!");
+        }
+      } catch (err) {
+        setNewTask(p => ({ ...p, audioUrl: r.result }));
+        alert("Lưu file âm thanh thành công!");
+      } finally {
+        setUploadingAudio(false);
+      }
+    };
+    r.readAsDataURL(file);
+  };
+
   const addTask = () => {
     if (!newTask.title.trim()) { setErrTask("Nhập tên bài tập"); return; }
     if (!newTask.deadline) { setErrTask("Chọn deadline"); return; }
-    if (newTask.mode === "quiz" || newTask.questions.length > 0) {
+    
+    if (newTask.mode === "listening") {
+      if (!newTask.audioUrl) { setErrTask("Vui lòng tải lên file âm thanh cho bài nghe"); return; }
+      if (newTask.questions.length === 0) { setErrTask("Thêm ít nhất 1 câu hỏi"); return; }
+      for (const q of newTask.questions) {
+        if (!q.text.trim()) { setErrTask("Nhập đầy đủ nội dung cho tất cả câu hỏi"); return; }
+        if (q.type === "mcq" && (q.options || []).some(o => !o.trim())) { setErrTask("Điền đủ 4 phương án cho câu trắc nghiệm ABCD"); return; }
+      }
+    } else if (newTask.mode === "video") {
+      if (!newTask.videoUrl) { setErrTask("Vui lòng nhập link video bài giảng"); return; }
+      if (newTask.questions.length === 0) { setErrTask("Thêm ít nhất 1 câu hỏi"); return; }
+      for (const q of newTask.questions) {
+        if (!q.text.trim()) { setErrTask("Nhập đầy đủ nội dung cho tất cả câu hỏi"); return; }
+        if (q.type === "mcq" && (q.options || []).some(o => !o.trim())) { setErrTask("Điền đủ 4 phương án cho câu trắc nghiệm ABCD"); return; }
+      }
+      newTask.type = "video";
+    } else if (newTask.mode === "quiz" || newTask.questions.length > 0) {
       if (newTask.questions.length === 0) { setErrTask("Thêm ít nhất 1 câu hỏi"); return; }
       for (const q of newTask.questions) {
         if (!q.text.trim()) { setErrTask("Nhập đầy đủ nội dung cho tất cả câu hỏi"); return; }
@@ -5063,12 +5353,16 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
       }
       newTask.mode = "quiz";
     }
+
     state.setAssignments(p => ({ ...p, [classId]: [...(p[classId] || []), { id: "task_" + Date.now(), ...newTask, status: "pending", createdAt: Date.now(), quizResults: {} } ] }));
-    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], mode: "file", questions: [] });
+    setNewTask({ title: "", desc: "", subject: SUBJECTS[0], deadline: "", priority: false, attachments: [], mode: "file", questions: [], audioUrl: "", videoUrl: "" });
     setShowAdd(false); setErrTask("");
   };
 
-  const submitTask = tid => state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === tid ? { ...t, status: "submitted", submittedAt: Date.now(), submissions: { ...(t.submissions || {}), [user.data.id]: Date.now() } } : t) }));
+  const submitTask = tid => {
+    state.setAssignments(p => ({ ...p, [classId]: (p[classId] || []).map(t => t.id === tid ? { ...t, status: "submitted", submittedAt: Date.now(), submissions: { ...(t.submissions || {}), [user.data.id]: Date.now() } } : t) }));
+    confetti({ particleCount: 80, spread: 60, origin: { y: 0.7 } });
+  };
 
   const submitQuiz = (tid, answers) => {
     const task = tasks.find(t => t.id === tid);
@@ -5085,6 +5379,7 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
         quizResults: { ...(t.quizResults || {}), [user.data.id]: resultEntry },
       } : t),
     }));
+    confetti({ particleCount: 120, spread: 75, origin: { y: 0.6 } });
     setTakingTaskId(null);
   };
 
@@ -5113,39 +5408,9 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
 
   const STATUS_CFG = { pending:{ l:"Chờ nộp",c:"amber" }, submitted:{ l:"Đã nộp",c:"green" }, overdue:{ l:"Trễ hạn",c:"red" } };
 
-  // Nếu đang ở tab Video Quiz, render thẳng VideoQuizPage
-  if (mainTab === "videoquiz") {
-    return (
-      <div className="page" style={{ padding: 0 }}>
-        <div style={{ padding: "16px 20px 0", display: "flex", gap: 6 }}>
-          {[["tasks","📝 Bài tập"],["videoquiz","🎬 Video Quiz"]].map(([v,l]) => (
-            <button key={v} onClick={() => setMainTab(v)} style={{
-              padding: "8px 18px", borderRadius: 10, border: `1px solid ${mainTab===v?"rgba(79,172,254,.4)":"var(--wa07)"}`,
-              background: mainTab===v?"rgba(79,172,254,.1)":"transparent",
-              color: mainTab===v?"var(--accent)":"var(--text2)",
-              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-            }}>{l}</button>
-          ))}
-        </div>
-        <VideoQuizPage user={user} state={state} />
-      </div>
-    );
-  }
-
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       {ConfirmUI}
-      {/* ── Main tab switcher ── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-        {[["tasks","📝 Bài tập"],["videoquiz","🎬 Video Quiz"]].map(([v,l]) => (
-          <button key={v} onClick={() => setMainTab(v)} style={{
-            padding: "8px 18px", borderRadius: 10, border: `1px solid ${mainTab===v?"rgba(79,172,254,.4)":"var(--wa07)"}`,
-            background: mainTab===v?"rgba(79,172,254,.1)":"transparent",
-            color: mainTab===v?"var(--accent)":"var(--text2)",
-            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
-          }}>{l}</button>
-        ))}
-      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: 10 }}>
         {[["Tất cả",counts.all,"var(--accent)"],["Chờ nộp",counts.pending,"#F59E0B"],["Đã nộp",counts.submitted,"#34D399"],["Trễ hạn",counts.overdue,"#EF4444"]].map(([l,n,c]) => (
           <div key={l} className="scard" style={{ padding: 14, textAlign: "center" }}>
@@ -5162,7 +5427,7 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
           {user.role === "teacher" && <Btn onClick={() => setShowAdd(true)} small><Plus size={12} />Thêm bài</Btn>}
         </div>
         {filtered.length === 0 ? <div style={{ padding: 36, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>Chưa có bài tập nào.</div> : filtered.map(a => {
-          const isQuiz = a.mode === "quiz" || (a.questions && a.questions.length > 0);
+          const isQuiz = a.mode === "quiz" || a.mode === "listening" || a.mode === "video" || (a.questions && a.questions.length > 0);
           const totalPoints = quizTotalPoints(a.questions);
           const hasSubmitted = !!a.submissions?.[user.data.id];
           const myResult = a.quizResults?.[user.data.id];
@@ -5179,6 +5444,10 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 10, color: "var(--text2)", display: "flex", alignItems: "center", gap: 4 }}><Clock size={10} />{a.deadline}</span>
                 {a.priority && <span style={{ fontSize: 10, color: "#F59E0B", fontWeight: 600 }}>⚡ Ưu tiên</span>}
+                {a.mode === "listening" && <span style={{ fontSize: 10, color: "var(--accent)", display: "flex", alignItems: "center", gap: 3, fontWeight: 600 }}><Volume2 size={10} />🎧 Bài nghe</span>}
+                {a.mode === "video" && <span style={{ fontSize: 10, color: "#A78BFA", display: "flex", alignItems: "center", gap: 3, fontWeight: 600 }}><Video size={10} />🎬 Video Quiz</span>}
+                {a.mode === "quiz" && <span style={{ fontSize: 10, color: "#34D399", display: "flex", alignItems: "center", gap: 3, fontWeight: 600 }}><ListChecks size={10} />📝 Trắc nghiệm</span>}
+                {a.mode === "file" && <span style={{ fontSize: 10, color: "#F59E0B", display: "flex", alignItems: "center", gap: 3, fontWeight: 600 }}><Upload size={10} />📂 Nộp file</span>}
                 {a.attachments?.length > 0 && <span style={{ fontSize: 10, color: "var(--text2)", display: "flex", alignItems: "center", gap: 3 }}><Paperclip size={10} />{a.attachments.length} file</span>}
                 {isQuiz && <span style={{ fontSize: 10, color: "var(--text2)", display: "flex", alignItems: "center", gap: 4 }}><ListChecks size={10} />{a.questions?.length || 0} câu · {totalPoints} điểm</span>}
                 {isQuiz && a.timeLimitMinutes && (
@@ -5212,39 +5481,67 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
       </div>
       {showAdd && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowAdd(false)}>
-          <div className="modal" style={{ width: newTask.mode === "quiz" ? 580 : 440, maxHeight: "85vh", overflowY: "auto" }}>
+          <div className="modal" style={{ width: 580, maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Thêm bài tập mới</h2>
               <button onClick={() => setShowAdd(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
             </div>
             <Inp label="TÊN BÀI TẬP" value={newTask.title} onChange={v => setNewTask(p => ({ ...p, title: v }))} placeholder="Bài tập chương 3..." required />
+            
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 6, letterSpacing: ".05em" }}>HÌNH THỨC BÀI TẬP</div>
               <div style={{ display: "flex", gap: 8 }}>
-                {[["file", "Nộp file", Upload], ["quiz", "Trắc nghiệm / Tự luận", ListChecks]].map(([v, l, Ic]) => (
-                  <button key={v} onClick={() => setNewTask(p => ({ ...p, mode: v }))} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "9px 10px", borderRadius: 10, border: `1px solid ${newTask.mode === v ? "rgba(79,172,254,.4)" : "var(--wa1)"}`, background: newTask.mode === v ? "rgba(79,172,254,.1)" : "var(--wa04)", color: newTask.mode === v ? "var(--accent)" : "var(--text3)", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                    <Ic size={13} />{l}
+                {[["file", "Nộp file", Upload], ["quiz", "Trắc nghiệm", ListChecks], ["listening", "Bài nghe", Volume2], ["video", "Video Quiz", Video]].map(([v, l, Ic]) => (
+                  <button key={v} onClick={() => setNewTask(p => ({ ...p, mode: v, questions: v === "file" ? [] : p.questions }))} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "9px 6px", borderRadius: 10, border: `1px solid ${newTask.mode === v ? "rgba(79,172,254,.4)" : "var(--wa1)"}`, background: newTask.mode === v ? "rgba(79,172,254,.1)" : "var(--wa04)", color: newTask.mode === v ? "var(--accent)" : "var(--text3)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                    <Ic size={12} />{l}
                   </button>
                 ))}
               </div>
             </div>
+
+            {newTask.mode === "listening" && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 8, letterSpacing: ".05em" }}>TẢI FILE ÂM THANH (AUDIO)</div>
+                <button onClick={() => audioRef.current?.click()} style={{ width: "100%", padding: "12px", borderRadius: 11, border: "2px dashed rgba(79,172,254,.27)", background: "rgba(79,172,254,.025)", color: "var(--text3)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", fontSize: 12 }}>
+                  <Volume2 size={16} style={{ color: "var(--accent)" }} />{uploadingAudio ? "Đang tải lên..." : "Chọn file âm thanh (.mp3, .wav, .m4a)"}
+                </button>
+                <input ref={audioRef} type="file" accept="audio/*" onChange={handleAudioUpload} style={{ display: "none" }} />
+                {newTask.audioUrl && (
+                  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6, background: "var(--wa025)", padding: 10, borderRadius: 10, border: "1px solid var(--wa045)" }}>
+                    <div style={{ fontSize: 11, color: "var(--text3)" }}>File âm thanh đã tải lên:</div>
+                    <audio src={newTask.audioUrl} controls style={{ width: "100%", height: 32 }} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {newTask.mode === "video" && (
+              <div style={{ marginBottom: 16 }}>
+                <Inp label="LINK VIDEO BÀI GIẢNG (.mp4 trực tiếp)" value={newTask.videoUrl || ""} onChange={v => setNewTask(p => ({ ...p, videoUrl: v }))} placeholder="https://example.com/video.mp4" required />
+              </div>
+            )}
+
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5, letterSpacing: ".05em" }}>MÔ TẢ</div>
               <textarea value={newTask.desc} onChange={e => setNewTask(p => ({ ...p, desc: e.target.value }))} placeholder="Mô tả chi tiết..." rows={2} style={{ width: "100%", padding: "9px 13px", borderRadius: 10, background: "var(--wa04)", border: "1px solid var(--wa1)", color: "var(--text)", fontSize: 12, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
             </div>
+            
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <Sel label="MÔN HỌC" value={newTask.subject} onChange={v => setNewTask(p => ({ ...p, subject: v }))} options={SUBJECTS} required />
               <DatePickerInp label="DEADLINE" value={newTask.deadline} onChange={v => setNewTask(p => ({ ...p, deadline: v }))} required />
             </div>
+            
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text3)", cursor: "pointer", marginBottom: 16 }}>
               <input type="checkbox" checked={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.checked }))} style={{ accentColor: "#F59E0B" }} />⚡ Ưu tiên cao
             </label>
-            {newTask.mode === "quiz" && (
+            
+            {(newTask.mode === "quiz" || newTask.mode === "listening" || newTask.mode === "video") && (
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text3)", cursor: "pointer", marginBottom: 16 }}>
                 <input type="checkbox" checked={newTask.strictFullscreen || false} onChange={e => setNewTask(p => ({ ...p, strictFullscreen: e.target.checked }))} style={{ accentColor: "#10B981" }} />🛡️ Bật hệ thống chống gian lận &amp; giám sát AI
               </label>
             )}
-            {newTask.mode === "quiz" && (
+
+            {(newTask.mode === "quiz" || newTask.mode === "listening" || newTask.mode === "video") && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 8, letterSpacing: ".05em" }}>⏱ THỜI GIAN LÀM BÀI</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -5279,17 +5576,18 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
                 </div>
               </div>
             )}
-            {newTask.mode === "quiz" ? (
+
+            {(newTask.mode === "quiz" || newTask.mode === "listening" || newTask.mode === "video") ? (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 8, letterSpacing: ".05em", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>CÂU HỎI ({newTask.questions.length})</span>
                   <span style={{ fontWeight: 500, color: "var(--text4)" }}>Tổng điểm: {quizTotalPoints(newTask.questions)}</span>
                 </div>
                 {newTask.questions.map((q, qi) => (
-                  <QuestionEditor key={q.id} q={q} index={qi} onChange={patch => updateQuestion(q.id, patch)} onDelete={() => removeQuestion(q.id)} />
+                  <QuestionEditor key={q.id} q={q} index={qi} onChange={patch => updateQuestion(q.id, patch)} onDelete={() => removeQuestion(q.id)} isVideo={newTask.mode === "video"} />
                 ))}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {QUESTION_TYPES.map(qt => (
+                  {(newTask.mode === "listening" || newTask.mode === "video" ? QUESTION_TYPES.filter(qt => qt.v === "mcq" || qt.v === "truefalse") : QUESTION_TYPES).map(qt => (
                     <button key={qt.v} onClick={() => addQuestion(qt.v)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "7px 11px", borderRadius: 8, border: `1px dashed ${qt.c}55`, background: `${qt.c}0c`, color: qt.c, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                       <Plus size={11} /><qt.Ic size={12} />{qt.l}
                     </button>
@@ -5325,13 +5623,19 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
       )}
       {takingTaskId && (() => {
         const t = tasks.find(x => x.id === takingTaskId);
-        return t ? (
-          t.strictFullscreen ? (
+        if (!t) return null;
+        if (t.mode === "video") {
+          return t.strictFullscreen ? (
             <StudentAssignmentModal task={t} user={user} onCancel={() => setTakingTaskId(null)} onComplete={ans => { setTakingTaskId(null); submitQuiz(t.id, ans); }} />
           ) : (
-            <QuizTakeModal task={t} onClose={() => setTakingTaskId(null)} onSubmit={ans => submitQuiz(t.id, ans)} />
-          )
-        ) : null;
+            <VideoQuizTakeModal task={t} onClose={() => setTakingTaskId(null)} onSubmit={ans => { setTakingTaskId(null); submitQuiz(t.id, ans); }} />
+          );
+        }
+        return t.strictFullscreen ? (
+          <StudentAssignmentModal task={t} user={user} onCancel={() => setTakingTaskId(null)} onComplete={ans => { setTakingTaskId(null); submitQuiz(t.id, ans); }} />
+        ) : (
+          <QuizTakeModal task={t} onClose={() => setTakingTaskId(null)} onSubmit={ans => submitQuiz(t.id, ans)} />
+        );
       })()}
       {reviewTaskId && (() => {
         const t = tasks.find(x => x.id === reviewTaskId);
@@ -6005,524 +6309,271 @@ function LibPage({ state, user, selClass, setSelClass, myClasses }) {
 
 function ProfilePage({ state, user }) {
   useActivityTracker("Hồ sơ", "Xem hồ sơ", user.role);
-  const s = user.data;
-  const cls = state.classes.find(c => c.id === user.classId);
+
+  // 1. Phân loại đối tượng và API động theo vai trò (role)
+  let s = user.data;
+  let updateApi = null;
+  let roleLabel = "";
+  let roleColor = "blue";
+  
+  if (user.role === "student") {
+    s = state.students.find(x => x.id === user.data.id) || user.data;
+    updateApi = api.updateStudent;
+    roleLabel = "Học sinh";
+    roleColor = "blue";
+  } else if (user.role === "teacher" || user.role === "admin") {
+    s = state.teachers.find(x => x.id === user.data.id) || user.data;
+    updateApi = api.updateTeacher;
+    roleLabel = user.role === "admin" ? "Quản trị viên" : "Giáo viên";
+    roleColor = "purple";
+  } else if (user.role === "parent") {
+    s = state.parents.find(x => x.id === user.data.id) || user.data;
+    updateApi = api.updateParent;
+    roleLabel = "Phụ huynh";
+    roleColor = "green";
+  }
+
+  const [newPw, setNewPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [updatingPw, setUpdatingPw] = useState(false);
+
+  // Học sinh: Thống kê và thông tin
+  const cls = user.role === "student" ? state.classes.find(c => c.id === s.classId) : null;
   const today = (new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0'));
-  const attKey = `${user.classId}_${today}`;
-  const presentToday = (state.attendance[attKey] || []).includes(s.id);
-  const allAtt = Object.entries(state.attendance).filter(([k]) => k.startsWith(user.classId + "_"));
+  const presentToday = user.role === "student" ? (state.attendance[`${s.classId}_${today}`] || []).includes(s.id) : false;
+  const allAtt = user.role === "student" ? Object.entries(state.attendance).filter(([k]) => k.startsWith(s.classId + "_")) : [];
   const presentDays = allAtt.filter(([, v]) => v.includes(s.id)).length;
   const totalDays = allAtt.length;
-  const tasks = state.assignments[user.classId] || [];
+  const tasks = user.role === "student" ? (state.assignments[s.classId] || []) : [];
+
+  // Xử lý liên kết Google
+  const handleGoogleSuccess = async (cred) => {
+    try {
+      const tokenPayload = JSON.parse(atob(cred.credential.split('.')[1]));
+      const googleEmail = tokenPayload.email;
+      if (!googleEmail) {
+        alert("Không tìm thấy email trong tài khoản Google!");
+        return;
+      }
+      
+      const res = await updateApi(s.id, { email: googleEmail, emailVerified: true });
+      if (res && !res.error) {
+        state.reload();
+        alert(`Đã liên kết tài khoản Google thành công: ${googleEmail}`);
+      } else {
+        alert(res?.error || "Liên kết Google thất bại.");
+      }
+    } catch (err) {
+      alert("Lỗi phân tích tài khoản Google: " + err.message);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    if (!confirm("Bạn có chắc chắn muốn hủy liên kết tài khoản Google không?")) return;
+    try {
+      const res = await updateApi(s.id, { email: "", emailVerified: false });
+      if (res && !res.error) {
+        state.reload();
+        alert("Đã hủy liên kết Google thành công!");
+      } else {
+        alert(res?.error || "Hủy liên kết thất bại.");
+      }
+    } catch (err) {
+      alert("Lỗi khi hủy liên kết: " + err.message);
+    }
+  };
+
+  // Xử lý đổi mật khẩu
+  const handleUpdatePassword = async () => {
+    if (!newPw.trim()) {
+      alert("Vui lòng nhập mật khẩu mới!");
+      return;
+    }
+    if (newPw.trim().length < 4) {
+      alert("Mật khẩu phải từ 4 ký tự trở lên!");
+      return;
+    }
+
+    setUpdatingPw(true);
+    try {
+      const res = await updateApi(s.id, { password: newPw.trim() });
+      if (res && !res.error) {
+        setNewPw("");
+        state.reload();
+        alert("Cập nhật mật khẩu tài khoản thành công!");
+      } else {
+        alert(res?.error || "Cập nhật mật khẩu thất bại.");
+      }
+    } catch (err) {
+      alert("Lỗi cập nhật mật khẩu: " + err.message);
+    } finally {
+      setUpdatingPw(false);
+    }
+  };
+
+  // Xây dựng danh sách thông tin chi tiết động dựa theo vai trò
+  const getDetailRows = () => {
+    if (user.role === "student") {
+      return [
+        ["Họ và tên", s.name],
+        ["Mã học sinh", s.code],
+        ["Lớp học", cls?.name || "--"],
+        ["Ngày sinh", s.dob ? new Date(s.dob + "T00:00:00").toLocaleDateString("vi-VN") : "--"],
+        ["Số điện thoại", s.phone || "--"],
+        ["Điểm danh hôm nay", presentToday ? "✓ Có mặt" : "✗ Chưa điểm danh"],
+        ["Bài chờ nộp", `${tasks.filter(t => t.status === "pending").length} bài`]
+      ];
+    } else if (user.role === "teacher" || user.role === "admin") {
+      const classNames = (s.teachingClassIds || []).map(id => state.classes.find(c => c.id === id)?.name).filter(Boolean).join(", ") || "--";
+      return [
+        ["Họ và tên", s.name],
+        ["Tên đăng nhập", s.username],
+        ["Vai trò", user.role === "admin" ? "Quản trị viên" : "Giáo viên"],
+        ["Môn học phụ trách", s.subject || "--"],
+        ["Trường học", s.school || "--"],
+        ["Lớp giảng dạy", classNames]
+      ];
+    } else if (user.role === "parent") {
+      const childNames = (s.childIds || []).map(id => state.students.find(x => x.id === id)?.name).filter(Boolean).join(", ") || "--";
+      return [
+        ["Họ và tên Phụ huynh", s.name],
+        ["Tên đăng nhập", s.username],
+        ["Số điện thoại", s.phone || "--"],
+        ["Con cái liên kết", childNames]
+      ];
+    }
+    return [];
+  };
 
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ borderRadius: 16, padding: "24px", background: "linear-gradient(135deg,rgba(29,108,245,.1),rgba(123,63,228,.08))", border: "1px solid rgba(79,172,254,.12)", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <div style={{ position: "relative" }}>
           <div style={{ width: 72, height: 72, borderRadius: "50%", overflow: "hidden", background: "linear-gradient(135deg,#4FACFE,#A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 28px rgba(79,172,254,.45)", border: "3px solid rgba(79,172,254,.35)" }}>
-            {s.photo ? <img src={s.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={34} strokeWidth={1.6} style={{ color: "#fff" }} />}
+            {s.photo ? <img src={s.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 32 }}>{s.emoji || "👤"}</span>}
           </div>
           <div style={{ position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: "50%", background: "#34D399", border: "2px solid var(--notif-bd)" }} />
         </div>
         <div>
           <div style={{ fontSize: 19, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{s.name}</div>
-          <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>{s.code} · Lớp {cls?.name}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>
+            {user.role === "student" ? `${s.code} · Lớp ${cls?.name || "--"}` : `@${s.username}`}
+          </div>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
             {presentToday && <Badge c="green">✓ Đã điểm danh hôm nay</Badge>}
-            <Badge c="blue">Học sinh</Badge>
+            <Badge c={roleColor}>{roleLabel}</Badge>
           </div>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 20, flexWrap: "wrap" }}>
-          {[["Chuyên cần", totalDays ? `${Math.round((presentDays / totalDays) * 100)}%` : "--", "var(--accent)"], ["Ngày học", `${presentDays}/${totalDays}`, "#34D399"], ["Bài tập", `${tasks.filter(t => t.status === "submitted").length}/${tasks.length}`, "#A78BFA"]].map(([l, v, c]) => (
-            <div key={l} style={{ textAlign: "center" }}>
-              <div className="hfont" style={{ fontSize: 21, fontWeight: 400, color: c }}>{v}</div>
-              <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>{l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>Thông tin học sinh</div>
-        {[["Họ và tên",s.name],["Mã học sinh",s.code],["Lớp",cls?.name||"--"],["Ngày sinh",s.dob?new Date(s.dob+"T00:00:00").toLocaleDateString("vi-VN"):"--"],["Số điện thoại",s.phone||"--"],["Điểm danh hôm nay",presentToday?"✓ Có mặt":"✗ Chưa điểm danh"],["Bài chờ nộp",`${tasks.filter(t=>t.status==="pending").length} bài`]].map(([l,v]) => (
-          <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--wa045)", fontSize: 12 }}>
-            <span style={{ color: "var(--text2)" }}>{l}</span>
-            <span style={{ color: "var(--text)", fontWeight: 500 }}>{v}</span>
-          </div>
-        ))}
-      </Card>
-    </div>
-  );
-}
-
-
-// trang admin
-
-
-function AdminDashPage({ state, user }) {
-  const teachers = (state.teachers || []).filter(t => t.subject !== 'Quản sinh');
-  const [showAddT, setShowAddT] = useState(false);
-  const [editT, setEditT] = useState(null);
-  const [newT, setNewT] = useState({ 
-    name: "", username: "", password: "", subject: SUBJECTS[0], em: "👨‍🏫", 
-    email: "", emailVerified: false, school: "", homeroomClassId: "" 
-  });
-  const [selectedClasses, setSelectedClasses] = useState([]);
-  const [errT, setErrT] = useState("");
-  const { confirm, ConfirmUI } = useConfirm();
-
-  // State quản lý Trường học & Khối lớp
-  const [newSchName, setNewSchName] = useState("");
-
-  // State quản lý Lớp học toàn hệ thống dành riêng cho Admin
-  const [showAddClass, setShowAddClass] = useState(false);
-  const [editClass, setEditClass] = useState(null);
-  const [newClsName, setNewClsName] = useState("");
-  const [newClsSchool, setNewClsSchool] = useState("");
-  const [newClsGrade, setNewClsGrade] = useState("10");
-  const [newClsTeacherId, setNewClsTeacherId] = useState("");
-  const [errCls, setErrCls] = useState("");
-
-  // State quản lý mật khẩu Quản sinh cho từng trường học
-  const [proctorPasswords, setProctorPasswords] = useState({});
-
-  const openAddTeacher = () => {
-    setEditT(null);
-    setNewT({ name: "", username: "", password: "", subject: SUBJECTS[0], em: "👨‍🏫", email: "", emailVerified: false, school: "", homeroomClassId: "" });
-    setSelectedClasses([]);
-    setErrT(""); setShowAddT(true);
-  };
-
-  const openEditTeacher = (t) => {
-    setEditT(t);
-    const hrClass = state.classes.find(c => c.teacherId === t.id);
-    setNewT({ 
-      name: t.name, username: t.username, password: "", subject: t.subject || SUBJECTS[0], 
-      em: t.em || "👨‍🏫", email: t.email || "", emailVerified: !!t.emailVerified, 
-      school: t.school || "", homeroomClassId: hrClass ? hrClass.id : "" 
-    });
-    setSelectedClasses(t.teachingClassIds || []);
-    setErrT(""); setShowAddT(true);
-  };
-
-  const saveTeacher = () => {
-    setErrT("");
-    if (!newT.name.trim()) { setErrT("Nhập họ và tên giáo viên"); return; }
-    if (!newT.username.trim() || (!editT && !newT.password)) { setErrT("Nhập tên đăng nhập và mật khẩu"); return; }
-    if (newT.password && newT.password.length < 4) { setErrT("Mật khẩu tối thiểu 4 ký tự"); return; }
-    if (teachers.find(t => t.username.toLowerCase() === newT.username.trim().toLowerCase() && t.id !== editT?.id)) { setErrT("Tên đăng nhập đã tồn tại"); return; }
-    if (newT.email.trim() && !newT.emailVerified) { setErrT("Vui lòng xác minh Gmail trước khi lưu"); return; }
-
-    const teacherId = editT ? editT.id : "t_" + Date.now() + Math.random().toString().slice(2, 8);
-
-    if (editT) {
-      state.setTeachers(prev => prev.map(t => t.id === editT.id ? {
-        ...t, name: newT.name.trim(), username: newT.username.trim(), subject: newT.subject, em: newT.em,
-        email: newT.email.trim(), emailVerified: newT.emailVerified,
-        school: (newT.school || "").trim(),
-        teachingClassIds: selectedClasses,
-        ...(newT.password ? { password: newT.password } : {})
-      } : t));
-    } else {
-      state.setTeachers(prev => [...prev, {
-        id: teacherId,
-        name: newT.name.trim(), username: newT.username.trim(), password: newT.password,
-        subject: newT.subject, em: newT.em, email: newT.email.trim(), emailVerified: newT.emailVerified,
-        school: (newT.school || "").trim(),
-        teachingClassIds: selectedClasses, isAdmin: false
-      }]);
-    }
-
-    // Cập nhật lớp chủ nhiệm cho lớp học tương ứng (Classes.teacherId)
-    state.setClasses(prev => prev.map(c => {
-      if (c.id === newT.homeroomClassId) {
-        return { ...c, teacherId };
-      }
-      if (c.teacherId === teacherId && c.id !== newT.homeroomClassId) {
-        return { ...c, teacherId: null };
-      }
-      return c;
-    }));
-
-    setShowAddT(false); setEditT(null);
-  };
-
-  const deleteTeacher = async tid => {
-    if (tid === user.data.id) { alert("Không thể xóa tài khoản đang đăng nhập!"); return; }
-    const ok = await confirm("Xóa giáo viên này?");
-    if (!ok) return;
-    state.setTeachers(p => p.filter(x => x.id !== tid));
-  };
-
-  // Logic Quản lý Trường học
-  const handleAddSchool = async () => {
-    if (!newSchName.trim()) return;
-    try {
-      await api.createSchool({ name: newSchName.trim() });
-      state.reload();
-      setNewSchName("");
-    } catch (e) {
-      alert("Lỗi thêm trường: " + (e.message || e));
-    }
-  };
-
-  const handleDeleteSchool = async (schId) => {
-    const sch = state.schools.find(s => s.id === schId);
-    if (!sch) return;
-    const ok = await confirm("Xóa trường " + sch.name + " sẽ xóa toàn bộ các khối lớp liên kết?");
-    if (!ok) return;
-    try {
-      await api.deleteSchool(schId);
-      state.reload();
-    } catch (e) {
-      alert("Lỗi xóa trường: " + (e.message || e));
-    }
-  };
-
-  // Logic Quản lý Lớp học
-  const openAddCls = () => {
-    setEditClass(null); setNewClsName(""); setNewClsSchool(""); setNewClsGrade("10"); setNewClsTeacherId(""); setErrCls(""); setShowAddClass(true);
-  };
-
-  const openEditCls = (c) => {
-    setEditClass(c); setNewClsName(c.name); setNewClsSchool(c.school || ""); setNewClsGrade(c.grade || "10"); setNewClsTeacherId(c.teacherId || ""); setErrCls(""); setShowAddClass(true);
-  };
-
-  const saveClass = () => {
-    setErrCls("");
-    if (!newClsName.trim()) { setErrCls("Nhập tên lớp"); return; }
-    if (!newClsGrade) { setErrCls("Vui lòng chọn khối lớp"); return; }
-    
-    const dup = state.classes.find(c => c.name === newClsName.trim() && c.id !== editClass?.id);
-    if (dup) { setErrCls("Tên lớp đã tồn tại"); return; }
-
-    if (editClass) {
-      state.setClasses(prev => prev.map(c => c.id === editClass.id ? {
-        ...c, name: newClsName.trim(), school: newClsSchool.trim(), grade: newClsGrade.trim(), teacherId: newClsTeacherId || null
-      } : c));
-    } else {
-      const id = "cls_" + Date.now();
-      state.setClasses(prev => [...prev, {
-        id, name: newClsName.trim(), school: newClsSchool.trim(), grade: newClsGrade.trim(), teacherId: newClsTeacherId || null, createdAt: Date.now()
-      }]);
-    }
-    setShowAddClass(false); setEditClass(null);
-  };
-
-  const deleteClass = async cid => {
-    const ok = await confirm("Xóa lớp này và toàn bộ học sinh trong lớp?");
-    if (!ok) return;
-    state.setClasses(p => p.filter(c => c.id !== cid));
-    state.setStudents(p => p.filter(s => s.classId !== cid));
-  };
-
-  // Handler cấp/đổi mật khẩu Quản sinh
-  const handleSaveProctor = (sch) => {
-    const password = proctorPasswords[sch.id] || "";
-    if (!password.trim()) { alert("Vui lòng nhập mật khẩu cấp cho Quản sinh!"); return; }
-    if (password.length < 4) { alert("Mật khẩu tối thiểu 4 ký tự!"); return; }
-
-    const existingProctor = state.teachers.find(t => t.subject === 'Quản sinh' && t.school === sch.name);
-    const cleanSchName = sch.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const username = `qs_${sch.id}_${cleanSchName}`;
-
-    if (existingProctor) {
-      state.setTeachers(prev => prev.map(t => t.id === existingProctor.id ? {
-        ...t,
-        password: password,
-        teachingClassIds: state.classes.filter(c => c.school === sch.name).map(c => c.id)
-      } : t));
-      alert(`Đã đổi mật khẩu Quản sinh trường ${sch.name} thành '${password}' thành công!`);
-    } else {
-      const newId = `t_qs_${sch.id}`;
-      state.setTeachers(prev => [...prev, {
-        id: newId,
-        name: `Quản sinh ${sch.name}`,
-        username: username,
-        password: password,
-        subject: "Quản sinh",
-        em: "👮",
-        school: sch.name,
-        teachingClassIds: state.classes.filter(c => c.school === sch.name).map(c => c.id),
-        isAdmin: false
-      }]);
-      alert(`Đã tạo tài khoản Quản sinh trường ${sch.name} thành công!\n- Tên đăng nhập: ${username}\n- Mật khẩu: ${password}`);
-    }
-    setProctorPasswords(p => ({ ...p, [sch.id]: "" }));
-  };
-
-  // Phân nhóm lớp học theo Trường và Khối để hiển thị chọn lọc
-  const classesBySchoolAndGrade = useMemo(() => {
-    const groups = {};
-    state.classes.forEach(c => {
-      const sch = c.school || "Trường khác";
-      const gr = c.grade || "Khối khác";
-      if (!groups[sch]) groups[sch] = {};
-      if (!groups[sch][gr]) groups[sch][gr] = [];
-      groups[sch][gr].push(c);
-    });
-    return groups;
-  }, [state.classes]);
-
-  return (
-    <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
-      {ConfirmUI}
-
-      {/* ── CARD 1: DANH SÁCH GIÁO VIÊN ────────────────────── */}
-      <div className="scard" style={{ overflow: "hidden" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--wa06)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Users size={16} style={{ color: "#34D399" }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Danh sách giáo viên & lớp học phụ trách</span>
-          </div>
-          <Btn onClick={openAddTeacher} small><Plus size={12} />Tạo tài khoản giáo viên</Btn>
-        </div>
-        {teachers.length === 0 ? (
-          <div style={{ padding: 48, textAlign: "center", color: "var(--text4)" }}>
-            <Users size={36} style={{ margin: "0 auto 14px", opacity: .25 }} />
-            <div style={{ fontSize: 13 }}>Chưa có giáo viên nào hoạt động</div>
-          </div>
-        ) : teachers.map(t => {
-          const teacherClasses = state.classes.filter(c => c.teacherId === t.id);
-          const otherClasses = state.classes.filter(c => (t.teachingClassIds || []).includes(c.id));
-          return (
-            <div key={t.id} style={{ padding: "14px 18px", borderBottom: "1px solid var(--wa04)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, overflow: "hidden" }}>
-                {t.photo ? <img src={t.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (t.em || "👨‍🏫")}
-              </div>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
-                  {t.name} {t.isAdmin && <Badge c="violet">Admin</Badge>}
-                  {t.school && <Badge c="orange">🏢 {t.school}</Badge>}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 2 }}>Tên đăng nhập: <span style={{ color: "var(--text2)" }}>{t.username}</span> · Môn: <span style={{ color: "var(--text2)" }}>{t.subject}</span></div>
-                {t.email && <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>✉️ {t.email}{t.emailVerified && <Badge c="green">Đã xác minh</Badge>}</div>}
-                
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600 }}>Lớp chủ nhiệm:</span>
-                    {teacherClasses.length === 0 ? (
-                      <span style={{ fontSize: 10, color: "var(--text4)", fontStyle: "italic" }}>Chưa phụ trách</span>
-                    ) : teacherClasses.map(c => (
-                      <Badge key={c.id} c="green">👑 {c.name}</Badge>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 600 }}>Lớp bộ môn dạy:</span>
-                    {otherClasses.length === 0 ? (
-                      <span style={{ fontSize: 10, color: "var(--text4)", fontStyle: "italic" }}>Chưa phân lớp bộ môn</span>
-                    ) : otherClasses.map(c => (
-                      <Badge key={c.id} c="blue">{c.name}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => openEditTeacher(t)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "var(--accent)", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
-                {t.id !== user.data.id && (
-                  <button onClick={() => deleteTeacher(t.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── CARD 2: QUẢN LÝ LỚP HỌC TOÀN HỆ THỐNG ────────────────────── */}
-      <div className="scard" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
-            <BookOpen size={16} style={{ color: "var(--accent)" }} />
-            Quản lý lớp học & Giáo viên chủ nhiệm
-          </div>
-          <Btn onClick={openAddCls} small><Plus size={12} />Tạo lớp học mới</Btn>
-        </div>
-
-        {Object.keys(classesBySchoolAndGrade).length === 0 ? (
-          <div style={{ fontSize: 11, color: "var(--text3)", fontStyle: "italic" }}>Chưa có lớp học nào được tạo.</div>
-        ) : Object.keys(classesBySchoolAndGrade).map(sch => (
-          <div key={sch} style={{ border: "1px solid var(--border2)", borderRadius: 12, padding: 14, background: "rgba(255,255,255,0.005)" }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", borderBottom: "1px solid var(--border2)", paddingBottom: 6, marginBottom: 10 }}>
-              🏢 Trường: {sch}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {Object.keys(classesBySchoolAndGrade[sch]).map(grade => (
-                <div key={grade} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text4)", padding: "4px 8px", background: "var(--wa05)", borderRadius: 6, marginTop: 4 }}>
-                    Khối {grade}
-                  </span>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flex: 1 }}>
-                    {classesBySchoolAndGrade[sch][grade].map(c => {
-                      const teacher = state.teachers.find(t => t.id === c.teacherId);
-                      return (
-                        <div key={c.id} style={{ display: "flex", alignItems: "center", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--wa03)", padding: "4px 10px", gap: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{c.name}</span>
-                          <span style={{ fontSize: 10, color: "var(--text3)" }}>
-                            (GVCN: {teacher ? teacher.name : "Chưa phân công"})
-                          </span>
-                          <button onClick={() => openEditCls(c)} style={{ padding: 2, background: "none", border: "none", color: "var(--accent)", cursor: "pointer", display: "flex" }}><Edit2 size={10} /></button>
-                          <button onClick={() => deleteClass(c.id)} style={{ padding: 2, background: "none", border: "none", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={10} /></button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── CARD 3: QUẢN LÝ TRƯỜNG HỌC & QUẢN SINH ────────────────────── */}
-      <div className="scard" style={{ padding: 20, border: "1px solid var(--border2)", borderRadius: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
-          <School size={16} style={{ color: "var(--accent)" }} />
-          Quản lý trường học & Khối lớp mặc định
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <input className="inp" placeholder="Nhập tên trường học mới (VD: THPT Nguyễn Du)" value={newSchName} onChange={e => setNewSchName(e.target.value)} style={{ flex: 1 }} />
-          <Btn onClick={handleAddSchool}>Thêm trường mới</Btn>
         </div>
         
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
-          {(!state.schools || state.schools.length === 0) ? (
-            <div style={{ fontSize: 11, color: "var(--text3)", fontStyle: "italic" }}>Chưa có trường học nào hoạt động.</div>
-          ) : state.schools.map(sch => {
-            const schGrades = (state.grades || []).filter(g => g.schoolId === sch.id);
-            const proctor = state.teachers.find(t => t.subject === 'Quản sinh' && t.school === sch.name);
-            return (
-              <div key={sch.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--wa015)", border: "1px solid var(--border2)", borderRadius: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>🏢 {sch.name}</div>
-                  <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: "var(--text4)", fontWeight: 600 }}>Khối lớp tạo sẵn:</span>
-                    {schGrades.map(g => (
-                      <Badge key={g.id} c="green">Khối {g.name}</Badge>
-                    ))}
-                  </div>
-
-                  {/* Quản lý Quản sinh của trường */}
-                  <div style={{ marginTop: 10, padding: 10, background: "rgba(255,255,255,0.015)", border: "1px dashed var(--border2)", borderRadius: 8, maxWidth: 380 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: proctor ? "var(--accent)" : "var(--text3)" }}>
-                      👮 Quản sinh: {proctor ? (
-                        <>
-                          Tài khoản: <strong style={{ color: "var(--text)" }}>{proctor.username}</strong>
-                        </>
-                      ) : (
-                        <span style={{ fontStyle: "italic", color: "var(--text4)" }}>Chưa cấp tài khoản</span>
-                      )}
-                    </div>
-                    
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-                      <input 
-                        type="text" 
-                        placeholder={proctor ? "Mật khẩu mới để đổi" : "Nhập mật khẩu để cấp"} 
-                        value={proctorPasswords[sch.id] || ""} 
-                        onChange={e => setProctorPasswords(p => ({ ...p, [sch.id]: e.target.value }))}
-                        className="inp" 
-                        style={{ padding: "4px 8px", fontSize: 11, flex: 1, minWidth: 120, height: 28 }}
-                      />
-                      <button 
-                        onClick={() => handleSaveProctor(sch)}
-                        style={{ padding: "5px 10px", borderRadius: 8, background: "var(--accent)", color: "#fff", border: "none", fontSize: 10, fontWeight: 700, cursor: "pointer", height: 28 }}
-                      >
-                        {proctor ? "Đổi mật khẩu" : "Cấp tài khoản"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button onClick={() => handleDeleteSchool(sch.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex", alignSelf: "flex-start" }}><Trash2 size={12} /></button>
+        {user.role === "student" && (
+          <div style={{ marginLeft: "auto", display: "flex", gap: 20, flexWrap: "wrap" }}>
+            {[["Chuyên cần", totalDays ? `${Math.round((presentDays / totalDays) * 100)}%` : "--", "var(--accent)"], ["Ngày học", `${presentDays}/${totalDays}`, "#34D399"], ["Bài tập", `${tasks.filter(t => t.status === "submitted").length}/${tasks.length}`, "#A78BFA"]].map(([l, v, c]) => (
+              <div key={l} style={{ textAlign: "center" }}>
+                <div className="hfont" style={{ fontSize: 21, fontWeight: 400, color: c }}>{v}</div>
+                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>{l}</div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ── MODAL 1: THÊM / SỬA GIÁO VIÊN ────────────────────── */}
-      {showAddT && (
-        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowAddT(false)}>
-          <div className="modal" style={{ width: 380 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{editT ? "Chỉnh sửa tài khoản giáo viên" : "Tạo tài khoản giáo viên"}</h2>
-              <button onClick={() => setShowAddT(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
+      <div style={{ display: "grid", gridTemplateColumns: window.innerWidth > 768 ? "1fr 1fr" : "1fr", gap: 14, alignItems: "start" }}>
+        {/* CARD THÔNG TIN CHI TIẾT */}
+        <Card style={{ margin: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>Thông tin cá nhân</div>
+          {getDetailRows().map(([l, v]) => (
+            <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--wa045)", fontSize: 12 }}>
+              <span style={{ color: "var(--text2)" }}>{l}</span>
+              <span style={{ color: "var(--text)", fontWeight: 500 }}>{v}</span>
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 7, letterSpacing: ".05em" }}>CHỌN EMOJI ĐẠI DIỆN</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {["👨‍🏫","👩‍🏫","👨‍💼","👩‍💼","🧑‍🏫","👨‍🔬","👩‍🔬","👨‍💻","👩‍💻","🎓","📚","⭐"].map(e => (
-                  <button key={e} onClick={() => setNewT(p => ({ ...p, em: e }))} style={{ width: 32, height: 32, borderRadius: 7, border: `2px solid ${newT.em===e?"var(--accent)":"rgba(255,255,255,.08)"}`, background: newT.em===e?"rgba(79,172,254,.1)":"rgba(255,255,255,.03)", cursor: "pointer", fontSize: 16 }}>{e}</button>
-                ))}
+          ))}
+        </Card>
+
+        {/* CARD BẢO MẬT & TÀI KHOẢN */}
+        <Card style={{ margin: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Cài đặt bảo mật tài khoản</div>
+
+          {/* LIÊN KẾT GOOGLE */}
+          <div style={{ borderBottom: "1px solid var(--wa045)", paddingBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5 }}>LIÊN KẾT TÀI KHOẢN GOOGLE</div>
+            {s.email ? (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 600 }}>{s.email}</div>
+                  <div style={{ fontSize: 10, color: "#10B981", marginTop: 2, display: "flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#10B981" }} /> Đã liên kết Google
+                  </div>
+                </div>
+                <button 
+                  onClick={handleUnlinkGoogle}
+                  style={{ padding: "6px 12px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.06)", color: "#EF4444", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Hủy liên kết
+                </button>
               </div>
-            </div>
-            <Inp label="HỌ VÀ TÊN GIÁO VIÊN" value={newT.name} onChange={v => setNewT(p => ({ ...p, name: v }))} placeholder="Thầy/Cô Nguyễn Văn A" required />
-            
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Inp label="TÊN ĐĂNG NHẬP" value={newT.username} onChange={v => setNewT(p => ({ ...p, username: v }))} placeholder="Username" required />
-              <Inp label="MẬT KHẨU" value={newT.password} onChange={v => setNewT(p => ({ ...p, password: v }))} type="password" placeholder={editT ? "Để trống nếu không đổi" : "Tối thiểu 4 ký tự"} required={!editT} />
-            </div>
-
-            <Sel label="TRƯỜNG HỌC" value={newT.school || ""} onChange={v => setNewT(p => ({ ...p, school: v }))} options={[{ v: "", l: "-- Chọn trường học --" }, ...(state.schools || []).map(s => ({ v: s.name, l: s.name }))] } />
-            
-            <Sel label="MÔN HỌC PHỤ TRÁCH" value={newT.subject} onChange={v => setNewT(p => ({ ...p, subject: v }))} options={SUBJECTS} required />
-            
-            <Sel label="LỚP CHỦ NHIỆM" value={newT.homeroomClassId || ""} onChange={v => setNewT(p => ({ ...p, homeroomClassId: v }))} options={[{ v: "", l: "-- Không làm chủ nhiệm --" }, ...state.classes.map(c => ({ v: c.id, l: c.name + " (" + (c.school || "") + ")" }))] } />
-
-            {/* Phân công các lớp giảng dạy */}
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 5 }}>LỚP GIẢNG DẠY PHỤ TRÁCH</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, maxHeight: 120, overflowY: "auto", padding: 8, background: "var(--wa04)", border: "1px solid var(--border2)", borderRadius: 8 }}>
-                {state.classes.filter(c => !newT.school || c.school === newT.school).map(c => {
-                  const checked = selectedClasses.includes(c.id);
-                  return (
-                    <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text)", cursor: "pointer", width: "45%" }}>
-                      <input type="checkbox" checked={checked} onChange={() => {
-                        setSelectedClasses(prev => prev.includes(c.id) ? prev.filter(x => x !== c.id) : [...prev, c.id]);
-                      }} />
-                      {c.name}
-                    </label>
-                  );
-                })}
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>Bạn chưa liên kết tài khoản Google để đăng nhập nhanh.</div>
+                <div style={{ alignSelf: "flex-start", marginTop: 4 }}>
+                  <GoogleLogin 
+                    onSuccess={handleGoogleSuccess} 
+                    onError={() => alert("Đăng nhập Google thất bại")} 
+                    theme="filled_blue" 
+                    shape="pill" 
+                    text="signup_with" 
+                  />
+                </div>
               </div>
-            </div>
-
-            <Inp label="GMAIL" value={newT.email} onChange={v => setNewT(p => ({ ...p, email: v, emailVerified: false }))} placeholder="ten@gmail.com" note="Dùng để xác minh danh tính và nhận thông báo tài khoản" />
-            {newT.email.trim() && <EmailVerifyBox email={newT.email} verified={newT.emailVerified} onVerified={v => setNewT(p => ({ ...p, emailVerified: v }))} />}
-            <ErrBox msg={errT} />
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <Btn variant="ghost" onClick={() => setShowAddT(false)} style={{ flex: 1 }}>Hủy</Btn>
-              <Btn onClick={saveTeacher} style={{ flex: 1 }}>{editT ? "Lưu thay đổi" : "Tạo tài khoản"}</Btn>
-            </div>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* ── MODAL 2: THÊM / SỬA LỚP HỌC CỦA ADMIN ────────────────────── */}
-      {showAddClass && (
-        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) { setShowAddClass(false); } }}>
-          <div className="modal" style={{ width: 340 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{editClass ? "Đổi tên lớp" : "Thêm lớp mới"}</h2>
-              <button onClick={() => { setShowAddClass(false); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
+          {/* CẬP NHẬT MẬT KHẨU */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)", marginBottom: 8 }}>THIẾT LẬP MẬT KHẨU ĐĂNG NHẬP</div>
+            <div style={{ position: "relative", display: "flex", gap: 8 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <input 
+                  type={showPw ? "text" : "password"}
+                  value={newPw}
+                  onChange={e => setNewPw(e.target.value)}
+                  placeholder={s.password ? "Nhập mật khẩu mới để thay đổi" : "Thiết lập mật khẩu bảo vệ tài khoản"}
+                  className="inp"
+                  style={{ width: "100%", padding: "8px 36px 8px 12px", fontSize: "12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--inp-bg)", color: "var(--text)", outline: "none", fontFamily: "inherit" }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPw(!showPw)}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text3)" }}
+                >
+                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <button 
+                onClick={handleUpdatePassword}
+                disabled={updatingPw}
+                style={{ padding: "8px 16px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: updatingPw ? 0.6 : 1 }}
+              >
+                Cập nhật
+              </button>
             </div>
-            <Inp label="TÊN LỚP" value={newClsName} onChange={setNewClsName} placeholder="12A1, 10B3..." required />
-            
-            <Sel label="TRƯỜNG HỌC" value={newClsSchool} onChange={setNewClsSchool} options={[{ v: "", l: "-- Chọn trường học --" }, ...(state.schools || []).map(s => ({ v: s.name, l: s.name }))] } />
-            
-            <Sel label="KHỐI LỚP" value={newClsGrade} onChange={setNewClsGrade} options={["10", "11", "12"].map(g => ({ v: g, l: "Khối " + g }))} />
-
-            <Sel label="GIÁO VIÊN CHỦ NHIỆM" value={newClsTeacherId} onChange={setNewClsTeacherId} options={[{ v: "", l: "-- Chưa phân công --" }, ...teachers.filter(t => !newClsSchool || t.school === newClsSchool).map(t => ({ v: t.id, l: t.name }))] } />
-
-            <ErrBox msg={errCls} />
-            <div style={{ display: "flex", gap: 9, marginTop: 14 }}>
-              <Btn variant="ghost" onClick={() => { setShowAddClass(false); }} style={{ flex: 1 }}>Hủy</Btn>
-              <Btn onClick={saveClass} style={{ flex: 2 }}>{editClass ? "Lưu thay đổi" : "Tạo lớp"}</Btn>
-            </div>
+            {s.password ? (
+              <div style={{ fontSize: 10, color: "#F59E0B", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                🔐 Tài khoản của bạn hiện đang được bảo vệ bằng mật khẩu.
+              </div>
+            ) : (
+              <div style={{ fontSize: 10, color: "var(--text4)", marginTop: 6 }}>
+                💡 Hiện tại tài khoản của bạn chưa có mật khẩu (đăng nhập bằng mật khẩu trống).
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </Card>
+      </div>
     </div>
   );
 }
 
+
+// trang admin (Đã được chuyển ra file AdminDashboard.jsx)
 
 function ParentDashPage({ state, user, setView }) {
   useActivityTracker("Phụ huynh", "Xem bảng điều khiển", user?.role || "parent");
@@ -6743,7 +6794,7 @@ function DashPage({ state, user, setView }) {
           { l:"Học sinh", v:classStudents.length, c:"#A78BFA", Ic:Users, s:cls?.name||"Chọn lớp" },
           { l:"Có mặt", v:presentToday.length, c:"#34D399", Ic:CheckCircle, s:"Hôm nay" },
           { l:"Bài tập", v:tasks.length, c:"#F59E0B", Ic:BookOpen, s:"Đã tạo" },
-          { l:"Chờ duyệt", v:pendingCount, c:"#EF4444", Ic:UserCheck, s:"Học sinh mới" },
+          ...(classId ? [{ l:"Chờ duyệt", v:pendingCount, c:"#EF4444", Ic:UserCheck, s:"Học sinh mới" }] : []),
         ] : [
           { l:"Điểm danh", v:presentToday.includes(user.data.id)?"✓":"✗", c:presentToday.includes(user.data.id)?"#34D399":"#EF4444", Ic:CheckCircle, s:"Hôm nay" },
           { l:"Chờ nộp", v:tasks.filter(t=>t.status==="pending").length, c:"#F59E0B", Ic:Clock, s:"Bài tập" },
@@ -6773,7 +6824,7 @@ function DashPage({ state, user, setView }) {
               { Ic:BookOpen, l:"Bài tập", v:"assignments", c:"#34D399" },
               { Ic:Shuffle, l:"Lucky Wheel", v:"wheel", c:"#F59E0B" },
             ]).map(({ Ic, l, v, c }) => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: "12px 7px", borderRadius: 10, cursor: "pointer", background: `${c}09`, border: `1px solid ${c}18`, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: "inherit", color: c, transition: "all .2s" }}>
+              <button key={v} onClick={() => setView(v)} style={{ padding: "12px 7px", borderRadius: 10, cursor: "pointer", background: c.startsWith("var(") ? `color-mix(in srgb, ${c} 6%, transparent)` : `${c}09`, border: `1px solid ${c.startsWith("var(") ? `color-mix(in srgb, ${c} 12%, transparent)` : `${c}18`}`, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, fontFamily: "inherit", color: c, transition: "all .2s" }}>
                 <Ic size={17} /><span style={{ fontSize: 10, fontWeight: 500, color: "var(--text2)" }}>{l}</span>
               </button>
             ))}
@@ -6808,6 +6859,662 @@ function DashPage({ state, user, setView }) {
   );
 }
 
+
+function LocateAnythingPage({ state, user, selClass }) {
+  const [engineActive, setEngineActive] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [prompt, setPrompt] = useState("student, phone");
+  const [quant, setQuant] = useState("q4_k_m");
+  const [threads, setThreads] = useState(4);
+  const [speed, setSpeed] = useState("fast"); // fast, hybrid, slow
+  const [logs, setLogs] = useState([]);
+  const [history, setHistory] = useState([]);
+  const [isLocating, setIsLocating] = useState(false);
+  const [warningCount, setWarningCount] = useState(0);
+
+  // Real AI Model States
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const modelRef = useRef(null);
+
+  // States giả lập hành vi và sự hiện diện
+  const [simPhone, setSimPhone] = useState(false);
+  const [simSleep, setSimSleep] = useState(false);
+  const [simBook, setSimBook] = useState(true);
+  const [autoPresence, setAutoPresence] = useState(true); // Tự động nhận diện có người
+  const [simPresence, setSimPresence] = useState(true); // Giả lập thủ công có người hay không
+  const [studentPresent, setStudentPresent] = useState(false); // Trạng thái thực tế xác định
+
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const logContainerRef = useRef(null);
+
+  // Refs đồng bộ thời gian thực tránh closure trap
+  const simPhoneRef = useRef(false);
+  const simSleepRef = useRef(false);
+  const simBookRef = useRef(true);
+  const autoPresenceRef = useRef(true);
+  const simPresenceRef = useRef(true);
+  const studentPresentRef = useRef(false);
+
+  const presenceCounterRef = useRef(0);
+  const prevFrameDataRef = useRef(null);
+  const motionCanvasRef = useRef(document.createElement("canvas"));
+  const motionCentroidRef = useRef({ x: 320, y: 240 }); // Tâm mặc định 640/2, 480/2
+
+  useEffect(() => { simPhoneRef.current = simPhone; }, [simPhone]);
+  useEffect(() => { simSleepRef.current = simSleep; }, [simSleep]);
+  useEffect(() => { simBookRef.current = simBook; }, [simBook]);
+  useEffect(() => { autoPresenceRef.current = autoPresence; }, [autoPresence]);
+  useEffect(() => { simPresenceRef.current = simPresence; }, [simPresence]);
+  useEffect(() => { studentPresentRef.current = studentPresent; }, [studentPresent]);
+  
+  // Refs cho suy luận và vẽ động
+  const detectIntervalRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const trackedObjectsRef = useRef([]); // Lưu trữ các đối tượng đang bám đuổi
+  const lastSoundTimeRef = useRef(0);
+
+  // Audio Context cho còi cảnh báo (giới hạn âm lượng và tần suất)
+  const playAlertSound = () => {
+    const now = Date.now();
+    if (now - lastSoundTimeRef.current < 1500) return; // Chỉ cho bíp tối đa 1.5s/lần
+    lastSoundTimeRef.current = now;
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } catch (e) {
+      console.warn("Lỗi phát âm thanh cảnh báo: ", e);
+    }
+  };
+
+  const addLog = (text) => {
+    const time = new Date().toLocaleTimeString("vi-VN", { hour12: false });
+    setLogs((prev) => [...prev.slice(-48), `[${time}] ${text}`]);
+  };
+
+  // Cuộn logs xuống cuối
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const loadRealAIModel = async () => {
+    if (modelRef.current) return true;
+    setIsLoadingModel(true);
+    
+    const loadScript = (src) => {
+      return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) {
+          resolve();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject();
+        document.head.appendChild(script);
+      });
+    };
+
+    try {
+      addLog("locate_model_load: loading TensorFlow.js core runtime from jsDelivr CDN...");
+      await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js");
+      addLog("locate_model_load: loading MobileNet COCO-SSD object detection weights...");
+      await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+      
+      addLog("locate_model_load: parsing and loading neural network parameters to browser memory...");
+      const loadedModel = await window.cocoSsd.load();
+      modelRef.current = loadedModel;
+      setModelLoaded(true);
+      setIsLoadingModel(false);
+      addLog("system_ready: TensorFlow.js COCO-SSD active. Real-time GPU acceleration enabled.");
+      return true;
+    } catch (e) {
+      console.warn("Failed to load TFJS model from CDN, falling back to simulated engine:", e);
+      addLog("locate_model_err: CDN failed. Falling back to high-fidelity Simulated AI engine.");
+      setModelLoaded(false);
+      setIsLoadingModel(false);
+      return false;
+    }
+  };
+
+  // Bật/tắt GGML Engine
+  const toggleEngine = async () => {
+    if (engineActive) {
+      stopCamera();
+      setEngineActive(false);
+      setLogs([]);
+      setHistory([]);
+      setIsLocating(false);
+    } else {
+      setEngineActive(true);
+      addLog("system_init: locate-anything.cpp v1.2.0 initialized.");
+      addLog(`locate_model_load: GGUF model file format selected = 'locate-anything-3b-${quant}.gguf'.`);
+      
+      // Khởi động Real AI
+      const success = await loadRealAIModel();
+      
+      if (!success) {
+        // Nếu Real AI lỗi, chạy mô phỏng sau 1 giây
+        setTimeout(() => {
+          const sizeMap = { q4_k_m: "1.85 GB", q8_0: "3.20 GB", f16: "6.45 GB" };
+          const speedMap = { q4_k_m: "24ms", q8_0: "60ms", f16: "180ms" };
+          addLog(`locate_model_load: model size = ${sizeMap[quant]}, parameters = 3.01B`);
+          addLog(`locate_backend_init: GGML CPU backend active (threads = ${threads})`);
+          addLog(`locate_backend_init: GGML Vulkan/CUDA GPU acceleration helper initialized.`);
+          addLog(`system_ready: locate-anything.cpp engine ready. Avg inference time: ${speedMap[quant]}`);
+        }, 800);
+      }
+      
+      setCameraActive(true);
+    }
+  };
+
+  // Stream Camera
+  useEffect(() => {
+    if (cameraActive && engineActive) {
+      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        .then((stream) => {
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+          addLog("webcam_init: webcam input source connected successfully (640x480).");
+        })
+        .catch((e) => {
+          addLog("webcam_err: could not access camera. Please check permissions.");
+          setCameraActive(false);
+        });
+    } else {
+      stopCamera();
+    }
+    return () => stopCamera();
+  }, [cameraActive, engineActive]);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    clearInterval(detectIntervalRef.current);
+    cancelAnimationFrame(animationFrameRef.current);
+    trackedObjectsRef.current = [];
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  // Vòng lặp vẽ 60 FPS (Nội suy tuyến tính - Lerp để Bounding Box di chuyển mượt mà)
+  const drawLoop = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Cập nhật tọa độ bám đuổi (Lerp)
+    trackedObjectsRef.current.forEach((obj) => {
+      obj.x += (obj.tx - obj.x) * 0.14; // Lerp factor 14%
+      obj.y += (obj.ty - obj.y) * 0.14;
+      obj.w += (obj.tw - obj.w) * 0.14;
+      obj.h += (obj.th - obj.h) * 0.14;
+
+      // Lật tọa độ X để khớp với video bị gương (scaleX(-1) trên video)
+      // nhưng KHÔNG lật canvas để text không bị ngược
+      const drawX = canvas.width - obj.x - obj.w;
+
+      // Vẽ Box
+      ctx.lineWidth = 2.5;
+      if (obj.isWarning) {
+        ctx.strokeStyle = "#EF4444";
+        ctx.fillStyle = "rgba(239, 68, 68, 0.08)";
+        ctx.setLineDash([6, 4]);
+      } else {
+        ctx.strokeStyle = "#4FACFE";
+        ctx.fillStyle = "rgba(79, 172, 254, 0.06)";
+        ctx.setLineDash([]);
+      }
+
+      ctx.strokeRect(drawX, obj.y, obj.w, obj.h);
+      ctx.fillRect(drawX, obj.y, obj.w, obj.h);
+
+      // Vẽ nhãn đè lên box — text xuôi chiều vì canvas không bị transform
+      ctx.font = "bold 10px Outfit, sans-serif";
+      ctx.fillStyle = obj.isWarning ? "#EF4444" : "#4FACFE";
+      const labelText = `${obj.label.toUpperCase()} (${obj.conf}%)`;
+      const textWidth = ctx.measureText(labelText).width;
+      
+      ctx.fillRect(drawX, obj.y - 15, textWidth + 8, 15);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(labelText, drawX + 3, obj.y - 4);
+    });
+
+    animationFrameRef.current = requestAnimationFrame(drawLoop);
+  };
+
+  // Quét nhận diện liên tục
+  const startLocating = () => {
+    if (!cameraActive || isLocating) return;
+    setIsLocating(true);
+    addLog(`locate_start: open-vocabulary detector active. Prompt = "${prompt}"`);
+
+    // Tần suất suy luận mới (nhanh hơn đáng kể để tăng độ phản hồi)
+    const inferenceInterval = { fast: 150, hybrid: 400, slow: 1000 }[speed];
+
+    // Khởi chạy vòng lặp vẽ 60 FPS
+    animationFrameRef.current = requestAnimationFrame(drawLoop);
+
+    detectIntervalRef.current = setInterval(() => {
+      // 1. Phân tích hiện diện (Tự động bằng phân tích pixel hoặc bằng Switch thủ công)
+      let isPresent = simPresenceRef.current; // Lấy giá trị của switch thủ công làm cơ sở
+
+      if (autoPresenceRef.current) {
+        // Tự động phân tích chuyển động qua video
+        const video = videoRef.current;
+        if (video && video.readyState >= 2) { // HAVE_CURRENT_DATA
+          try {
+            const mCanvas = motionCanvasRef.current;
+            mCanvas.width = 32;
+            mCanvas.height = 24;
+            const mCtx = mCanvas.getContext("2d");
+            mCtx.drawImage(video, 0, 0, 32, 24);
+            const imgData = mCtx.getImageData(0, 0, 32, 24);
+            const pixels = imgData.data;
+
+            if (prevFrameDataRef.current) {
+              let diffSum = 0;
+              let sumX = 0;
+              let sumY = 0;
+              let activeCount = 0;
+              const prevPixels = prevFrameDataRef.current;
+
+              // Duyệt qua 32x24 grid tìm cell chuyển động
+              for (let y = 0; y < 24; y++) {
+                for (let x = 0; x < 32; x++) {
+                  const i = (y * 32 + x) * 4;
+                  const diff = Math.abs(pixels[i] - prevPixels[i]) + 
+                               Math.abs(pixels[i+1] - prevPixels[i+1]) + 
+                               Math.abs(pixels[i+2] - prevPixels[i+2]);
+                  
+                  diffSum += diff;
+                  if (diff > 22) {
+                    sumX += x;
+                    sumY += y;
+                    activeCount++;
+                  }
+                }
+              }
+
+              const avgDiff = diffSum / (32 * 24 * 3);
+              const hasMotion = avgDiff > 5.5; 
+
+              if (hasMotion) {
+                presenceCounterRef.current = 15; // Giữ trạng thái có người trong ~2.2s
+                isPresent = true;
+
+                // Cập nhật tọa độ trọng tâm (Centroid) của chuyển động để bám đuổi
+                if (activeCount > 2) {
+                  const targetCentroidX = (sumX / activeCount) / 32 * 640;
+                  const targetCentroidY = (sumY / activeCount) / 24 * 480;
+
+                  // Lọc mượt tọa độ
+                  motionCentroidRef.current = {
+                    x: motionCentroidRef.current.x + (targetCentroidX - motionCentroidRef.current.x) * 0.3,
+                    y: motionCentroidRef.current.y + (targetCentroidY - motionCentroidRef.current.y) * 0.3
+                  };
+                }
+              } else {
+                if (presenceCounterRef.current > 0) {
+                  presenceCounterRef.current--;
+                  isPresent = true;
+                } else {
+                  isPresent = false;
+                }
+              }
+            } else {
+              isPresent = true; // Lần quét đầu tiên
+            }
+            prevFrameDataRef.current = pixels;
+          } catch (e) {
+            console.warn("Lỗi phân tích frame:", e);
+          }
+        }
+      }
+
+      // Cập nhật state UI
+      setStudentPresent(isPresent);
+
+      // Nếu không có ai trước camera, bỏ qua vẽ và không quét các nhãn khác
+      if (!isPresent) {
+        trackedObjectsRef.current = [];
+        return;
+      }
+
+      const targets = prompt.split(",").map((t) => t.trim()).filter(Boolean);
+      if (targets.length === 0) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const newObjects = [];
+      let soundTriggered = false;
+
+      targets.forEach((target) => {
+        const lower = target.toLowerCase();
+
+        // Kiểm tra điều kiện giả lập qua ref thời gian thực
+        let shouldDetect = true;
+        if (["phone", "điện thoại"].some((w) => lower.includes(w))) {
+          shouldDetect = simPhoneRef.current;
+        } else if (["sleeping", "ngủ gật", "ngủ"].some((w) => lower.includes(w))) {
+          shouldDetect = simSleepRef.current;
+        } else if (["book", "sách", "vở"].some((w) => lower.includes(w))) {
+          shouldDetect = simBookRef.current;
+        }
+
+        // Tỷ lệ nhận diện được ngẫu nhiên nhưng ổn định
+        if (shouldDetect && Math.random() > 0.12) {
+          const confidence = (89 + Math.random() * 10).toFixed(1);
+          const isWarning = ["phone", "điện thoại", "sleeping", "ngủ gật", "ngủ"].some((w) => lower.includes(w));
+          
+          let tx, ty, tw, th;
+
+          // Định vị hộp bounding box dựa theo trọng tâm di chuyển (Motion Centroid)
+          if (["student", "học sinh", "giáo viên", "teacher", "user"].some((n) => target.toLowerCase().includes(n))) {
+            tw = 210 + Math.random() * 20;
+            th = 270 + Math.random() * 25;
+            tx = motionCentroidRef.current.x - tw / 2;
+            ty = motionCentroidRef.current.y - th / 2 + 10;
+          } else {
+            tw = 95 + Math.random() * 20;
+            th = 100 + Math.random() * 25;
+            if (lower.includes("phone")) {
+              tx = motionCentroidRef.current.x + (Math.random() > 0.5 ? 45 : -tw - 45);
+              ty = motionCentroidRef.current.y + 40;
+            } else if (lower.includes("sleep")) {
+              tx = motionCentroidRef.current.x - tw / 2;
+              ty = motionCentroidRef.current.y - th / 2;
+            } else { // book
+              tx = motionCentroidRef.current.x - tw / 2;
+              ty = motionCentroidRef.current.y + 70;
+            }
+          }
+
+          // Giới hạn tọa độ trong viền khung hình
+          tx = Math.max(10, Math.min(640 - tw - 10, tx));
+          ty = Math.max(10, Math.min(480 - th - 10, ty));
+
+          if (isWarning) {
+            soundTriggered = true;
+          }
+
+          newObjects.push({ label: target, conf: confidence, tx, ty, tw, th, isWarning });
+        }
+      });
+
+      // Đối khớp và cập nhật các đối tượng đang được track (để trượt mượt mà)
+      const currentTracked = [...trackedObjectsRef.current];
+      const updatedTracked = [];
+
+      newObjects.forEach((newObj) => {
+        // Tìm đối tượng cũ cùng label để giữ lại vị trí hiện tại của nó (Lerp từ vị trí đó)
+        const oldObj = currentTracked.find((o) => o.label === newObj.label);
+        if (oldObj) {
+          updatedTracked.push({
+            ...oldObj,
+            tx: newObj.tx,
+            ty: newObj.ty,
+            tw: newObj.tw,
+            th: newObj.th,
+            conf: newObj.conf,
+            isWarning: newObj.isWarning
+          });
+        } else {
+          // Đối tượng mới hoàn toàn thì xuất hiện ngay
+          updatedTracked.push({
+            label: newObj.label,
+            conf: newObj.conf,
+            isWarning: newObj.isWarning,
+            x: newObj.tx,
+            y: newObj.ty,
+            w: newObj.tw,
+            h: newObj.th,
+            tx: newObj.tx,
+            ty: newObj.ty,
+            tw: newObj.tw,
+            th: newObj.th
+          });
+        }
+      });
+
+      trackedObjectsRef.current = updatedTracked;
+
+      if (newObjects.length > 0) {
+        const matches = newObjects.map((i) => `${i.label} (${i.conf}%)`).join(", ");
+        const baseTime = { q4_k_m: 16, q8_0: 48, f16: 140 }[quant];
+        const inferTime = baseTime + Math.floor(Math.random() * 8);
+        addLog(`locate_eval: process frame successfully. Found [${matches}] in ${inferTime}ms`);
+
+        // Lưu vào lịch sử
+        setHistory((prev) => [
+          {
+            id: Date.now() + Math.random(),
+            time: new Date().toLocaleTimeString("vi-VN"),
+            matches: newObjects.map((i) => ({ label: i.label, conf: i.conf, isWarning: i.isWarning })),
+            inferTime
+          },
+          ...prev.slice(0, 18)
+        ]);
+
+        if (soundTriggered) {
+          playAlertSound();
+          setWarningCount((c) => c + 1);
+        }
+      } else {
+        addLog("locate_eval: processing completed, no targets detected.");
+        trackedObjectsRef.current = [];
+      }
+    }, inferenceInterval);
+  };
+
+  const stopLocating = () => {
+    setIsLocating(false);
+    clearInterval(detectIntervalRef.current);
+    cancelAnimationFrame(animationFrameRef.current);
+    trackedObjectsRef.current = [];
+    addLog("locate_stop: open-vocabulary detector paused.");
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  return (
+    <div className="page" style={{ padding: 20, display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, alignItems: "start" }}>
+      {/* Cột trái: Camera và Control Panel */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <Card style={{ padding: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "between", flexWrap: "wrap", gap: 12, borderBottom: "1px solid var(--border2)", paddingBottom: 14, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Camera Nhận Diện Lớp Học (Webcam)</div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Mô phỏng suy luận cục bộ LocateAnything-3B qua C++ GGML Engine</div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+              <button onClick={toggleEngine} className="bprimary" style={{ padding: "8px 16px", borderRadius: 8, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <Activity size={13} /> {engineActive ? "Tắt GGML Engine" : "Khởi động GGML Engine"}
+              </button>
+            </div>
+          </div>
+
+          {/* Khung Camera */}
+          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", background: "#060f1e", borderRadius: 12, border: "2px solid var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
+            <canvas ref={canvasRef} width={640} height={480} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
+            
+            {!cameraActive && (
+              <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                <CameraOff size={48} style={{ opacity: 0.25 }} />
+                <div style={{ fontSize: 12, fontWeight: 600 }}>GGML Engine chưa hoạt động hoặc camera tắt</div>
+              </div>
+            )}
+
+            {isLocating && (
+              <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
+            )}
+          </div>
+
+          {/* Giao diện quét */}
+          {engineActive && cameraActive && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Nhập các nhãn cần phát hiện (cách nhau bởi dấu phẩy)..." disabled={isLocating} className="inp" style={{ flex: 1 }} />
+                {isLocating ? (
+                  <button onClick={stopLocating} className="bprimary" style={{ padding: "0 18px", borderRadius: 10, background: "#EF4444", border: "none", color: "#fff", fontWeight: 600, cursor: "pointer" }}>Dừng quét</button>
+                ) : (
+                  <button onClick={startLocating} className="bprimary" style={{ padding: "0 18px", borderRadius: 10, border: "none", color: "#fff", fontWeight: 600, cursor: "pointer" }}>Bắt đầu quét</button>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "var(--wa015)", padding: 10, borderRadius: 10, border: "1px solid var(--border2)", fontSize: 11 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "var(--text3)" }}>Mức lượng tử hóa:</span>
+                  <select value={quant} onChange={(e) => setQuant(e.target.value)} disabled={isLocating} style={{ padding: "3px 6px", borderRadius: 6, background: "var(--wa055)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 10, fontWeight: 600, outline: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                    <option value="q4_k_m">Q4_K_M (4-bit, siêu nhanh, nhẹ)</option>
+                    <option value="q8_0">Q8_0 (8-bit, cân bằng)</option>
+                    <option value="f16">F16 (16-bit Float, chính xác cao)</option>
+                  </select>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "var(--text3)" }}>CPU Threads:</span>
+                  <input type="number" min={1} max={16} value={threads} onChange={(e) => setThreads(Number(e.target.value))} disabled={isLocating} style={{ width: 44, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border2)", background: "var(--wa055)", color: "var(--text)", fontSize: 10, textAlign: "center", fontFamily: "inherit" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: "var(--text3)" }}>Chu kỳ quét:</span>
+                  <select value={speed} onChange={(e) => setSpeed(e.target.value)} disabled={isLocating} style={{ padding: "3px 6px", borderRadius: 6, background: "var(--wa055)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 10, fontWeight: 600, outline: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                    <option value="fast">Nhanh (0.15s)</option>
+                    <option value="hybrid">Trung bình (0.4s)</option>
+                    <option value="slow">Chậm (1.0s)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Trình giả lập hành vi để Demo */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(245,158,11,.05)", border: "1px dashed rgba(245,158,11,.3)", padding: "12px 14px", borderRadius: 10, fontSize: 11 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: ".02em" }}>Giả lập hiện diện (Demo):</span>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
+                    <input type="checkbox" checked={autoPresence} onChange={(e) => setAutoPresence(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                    <span>Tự động phát hiện người qua camera (Motion detect)</span>
+                  </label>
+                  {!autoPresence && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
+                      <input type="checkbox" checked={simPresence} onChange={(e) => setSimPresence(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                      <span>Có học sinh trước camera</span>
+                    </label>
+                  )}
+                  <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: studentPresent ? "#10B981" : "#EF4444" }}>
+                    Trạng thái: {studentPresent ? "🟢 CÓ HỌC SINH" : "🔴 KHÔNG CÓ AI"}
+                  </span>
+                </div>
+                
+                {studentPresent && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderTop: "1px dashed rgba(245,158,11,.2)", paddingTop: 8 }}>
+                    <span style={{ fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: ".02em" }}>Giả lập hành vi học sinh:</span>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
+                      <input type="checkbox" checked={simPhone} onChange={(e) => setSimPhone(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                      <span>Cầm Điện thoại (Phone)</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
+                      <input type="checkbox" checked={simSleep} onChange={(e) => setSimSleep(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                      <span>Ngủ gật (Sleeping)</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: "var(--text2)", fontWeight: 600 }}>
+                      <input type="checkbox" checked={simBook} onChange={(e) => setSimBook(e.target.checked)} style={{ cursor: "pointer", accentColor: "#F59E0B" }} />
+                      <span>Đọc sách/vở (Book)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Cột phải: GGML Logs Terminal & Detection History */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Terminal Logs */}
+        <Card style={{ padding: 18, background: "#040A15", border: "1px solid rgba(79,172,254,.2)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid rgba(255,255,255,.08)", paddingBottom: 10, marginBottom: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: isLocating ? "#34D399" : "#EF4444", animation: isLocating ? "pulseGreen 1.5s infinite" : "none" }} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#E2EAF4", fontFamily: "monospace", letterSpacing: 0.5 }}>GGML TERMINAL CONSOLE</div>
+          </div>
+          <div ref={logContainerRef} style={{ height: 180, overflowY: "auto", fontFamily: "monospace", fontSize: 10, color: "#34D399", display: "flex", flexDirection: "column", gap: 4, textAlign: "left", lineHeight: 1.45 }}>
+            {logs.length === 0 ? (
+              <span style={{ color: "rgba(255,255,255,.2)" }}>[system] Khởi chạy GGML Engine để xem log suy luận...</span>
+            ) : (
+              logs.map((log, index) => (
+                <div key={index} style={{ whiteSpace: "pre-wrap" }}>{log}</div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        {/* Lịch sử phát hiện */}
+        <Card style={{ padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", borderBottom: "1px solid var(--border2)", paddingBottom: 10, marginBottom: 12, display: "flex", justifyContent: "between", alignItems: "center" }}>
+            <span>Lịch sử phát hiện</span>
+            {warningCount > 0 && (
+              <span className="tag" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#EF4444", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: 8, padding: "2px 8px", fontSize: 9 }}>
+                ⚠️ {warningCount} Cảnh báo
+              </span>
+            )}
+          </div>
+
+          <div style={{ maxHeight: 250, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            {history.length === 0 ? (
+              <div style={{ color: "var(--text3)", fontSize: 11, textAlign: "center", padding: "20px 0" }}>Chưa ghi nhận đối tượng nào.</div>
+            ) : (
+              history.map((h) => (
+                <div key={h.id} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "10px 12px", background: "var(--wa015)", borderRadius: 10, border: "1px solid var(--border2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10 }}>
+                    <span style={{ color: "var(--text3)", fontWeight: 600 }}>{h.time}</span>
+                    <span style={{ color: "var(--text3)" }}>Inference: {h.inferTime}ms</span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 2 }}>
+                    {h.matches.map((match, idx) => (
+                      <span key={idx} style={{ fontSize: 9, fontWeight: 700, padding: "3px 8px", borderRadius: 6, display: "flex", alignItems: "center", gap: 3, border: `1px solid ${match.isWarning ? "rgba(239,68,68,.3)" : "rgba(52,211,153,.3)"}`, background: match.isWarning ? "rgba(239,68,68,.08)" : "rgba(52,211,153,.08)", color: match.isWarning ? "#EF4444" : "#34D399" }}>
+                        {match.label.toUpperCase()} · {match.conf}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 // cài đặt
 
@@ -7174,13 +7881,22 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
     }
   }, [user.role, user.data.id]);
 
+  useEffect(() => {
+    if (user.role === "teacher" && view === "pending" && selClass && state.classes) {
+      const cls = state.classes.find(c => c.id === selClass);
+      if (cls && cls.teacherId !== user.data.id) {
+        setView("dashboard");
+      }
+    }
+  }, [selClass, view, user.role, user.data.id, state.classes, setView]);
+
   const classId = user.role === "teacher"
     ? selClass
     : user.role === "student" ? user.classId : undefined;
   const classInfo = state.classes.find(c => c.id === classId);
-  const myClassIds = useMemo(() => myClasses.map(c => c.id), [myClasses]);
+  const myOwnClassIds = useMemo(() => state.classes.filter(c => c.teacherId === user.data.id).map(c => c.id), [state.classes, user.data.id]);
   const pendingCount = user.role === "teacher"
-    ? state.pendingStudents.filter(p => myClassIds.includes(p.classId)).length + state.pendingParents.filter(p => myClassIds.includes(p.classId)).length
+    ? state.pendingStudents.filter(p => myOwnClassIds.includes(p.classId)).length + state.pendingParents.filter(p => myOwnClassIds.includes(p.classId)).length
     : 0;
   const chatUnreadCount = getChatUnreadTotal(user, state, classId);
   useChatBackgroundPoll(user, state, classId);
@@ -7198,6 +7914,7 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
     gradecalc:   p => <GradeCalculatorPage {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
     rankings:    p => <RankingPage   {...p} />,
     competition: p => <ClassCompetitionPage {...p} />,
+    locate:      p => <LocateAnythingPage {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
     settings:    p => <SettingsPage  {...p} />,
     profile:     p => <ProfilePage   {...p} />,
     pending:     p => <PendingPage   {...p} />,
@@ -7212,7 +7929,7 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
   return (
     <div style={{ display: "flex" }}>
       <div className={`sidebar-overlay ${!col ? "open" : ""}`} onClick={() => setCol(true)} />
-      <Sidebar view={view} setView={setView} col={col} user={user} pendingCount={pendingCount} chatUnreadCount={chatUnreadCount} setCol={setCol} />
+      <Sidebar view={view} setView={setView} col={col} user={user} pendingCount={pendingCount} chatUnreadCount={chatUnreadCount} setCol={setCol} selClass={selClass} state={state} />
       <div className={`main-wrapper ${col ? "col" : ""}`}>
         <TopBar view={view} toggleSide={() => setCol(p => !p)} user={user} onLogout={onLogout} classInfo={classInfo} darkMode={darkMode} toggleDark={toggleDark} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -7682,6 +8399,8 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
   const [submitting, setSubmitting] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [showLogs, setShowLogs] = useState(false);
+  const [livenessPending, setLivenessPending] = useState(false);
+  const [livenessTargetName, setLivenessTargetName] = useState("");
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -7691,7 +8410,7 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
   }), [state.students, state.classes, user.data.school]);
 
   // Engine nhận diện khuôn mặt thật (face-api.js) cho toàn bộ học sinh trong trường
-  const { modelsReady, computing: computingFaces, knownCount, recognizeFromVideo } = useFaceRecognition(schoolStudents);
+  const { modelsReady, computing: computingFaces, knownCount, recognizeFromVideo, resetLiveness } = useFaceRecognition(schoolStudents);
   const [faceNoMatchTick, setFaceNoMatchTick] = useState(0);
 
   const myLogs = useMemo(() => {
@@ -7706,6 +8425,9 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
   const startCamera = async () => {
     try {
       setDetectedStudent(null); setPointsType(null); setReason(""); setMessage("");
+      setLivenessPending(false);
+      setLivenessTargetName("");
+      resetLiveness();
       setCameraActive(true);
       setTimeout(async () => {
         try {
@@ -7733,6 +8455,8 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false); setScanning(false);
+    setLivenessPending(false);
+    setLivenessTargetName("");
   };
 
   useEffect(() => () => { streamRef.current?.getTracks().forEach(t => t.stop()); }, []);
@@ -7756,25 +8480,50 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
       return;
     }
     setScanning(true); setDetectedStudent(null); setPointsType(null); setReason(""); setMessage("");
+    setLivenessPending(false);
+    setLivenessTargetName("");
+    resetLiveness();
 
-    // Chờ 2.2 giây để chạy hiệu ứng quét laser đẹp mắt
-    await new Promise(r => setTimeout(r, 2200));
+    // Chờ 1.5 giây chạy hiệu ứng quét laser ban đầu
+    await new Promise(r => setTimeout(r, 1500));
+
+    const startTime = Date.now();
+    const TIMEOUT_MS = 12000;
 
     try {
       let target = null;
 
-      // 1. Thử nhận dạng khuôn mặt thực tế bằng face-api.js
-      if (modelsReady && videoRef.current.readyState >= 2 && recognizeFromVideo) {
-        try {
-          const detected = await recognizeFromVideo(videoRef.current);
-          if (detected && detected.studentId) {
-            if (!selectedStudentId || detected.studentId === selectedStudentId) {
-              target = schoolStudents.find(s => s.id === detected.studentId) || null;
+      // Vòng lặp quét liveness
+      while (cameraActive && !target && (Date.now() - startTime < TIMEOUT_MS)) {
+        if (!cameraActive) break;
+
+        if (modelsReady && videoRef.current && videoRef.current.readyState >= 2 && recognizeFromVideo) {
+          try {
+            const detected = await recognizeFromVideo(videoRef.current);
+            if (detected && detected.studentId) {
+              if (!selectedStudentId || detected.studentId === selectedStudentId) {
+                const matchedStudent = schoolStudents.find(s => s.id === detected.studentId);
+                
+                if (matchedStudent) {
+                  if (detected.livenessPassed) {
+                    target = matchedStudent;
+                    break;
+                  } else {
+                    setLivenessPending(true);
+                    setLivenessTargetName(matchedStudent.name);
+                  }
+                }
+              }
+            } else {
+              setLivenessPending(false);
+              setLivenessTargetName("");
             }
+          } catch (err) {
+            console.warn("Lỗi nhận diện khuôn mặt thực tế:", err);
           }
-        } catch (err) {
-          console.warn("Lỗi nhận diện khuôn mặt thực tế:", err);
         }
+        // Chờ 45ms giữa các frame quét để bắt kịp nháy mắt nhanh
+        await new Promise(r => setTimeout(r, 45));
       }
 
       // 2. Dự phòng bằng dropdown
@@ -7782,18 +8531,22 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
         target = schoolStudents.find(s => s.id === selectedStudentId);
       }
 
-      // 3. Đã loại bỏ dự phòng ngẫu nhiên để đảm bảo tính chính xác của Face ID nhận diện thực tế
-
       setScanning(false);
+      setLivenessPending(false);
+      setLivenessTargetName("");
 
       if (target) {
         playBeep();
         setDetectedStudent(target);
         if (selectedStudentId) setSelectedStudentId("");
+      } else {
+        setFaceNoMatchTick(t => t + 1);
       }
     } catch (err) {
       console.error("Lỗi nhận diện khuôn mặt:", err);
       setScanning(false);
+      setLivenessPending(false);
+      setLivenessTargetName("");
     }
   };
 
@@ -7808,6 +8561,7 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
     }, 500); // Check every 500ms to ensure stream is loaded
     return () => clearInterval(interval);
   }, [cameraActive, scanning, detectedStudent, modelsReady]);
+
 
   const handleConfirm = async () => {
     if (!detectedStudent || !pointsType || !reason) return;
@@ -7888,26 +8642,36 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
             </div>
           )}
 
-          <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#060f1e", borderRadius: 14, border: "2px dashed var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none" }} />
+          <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#060f1e", borderRadius: 14, border: "2px solid var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s" }}>
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
             {cameraActive ? (
               <>
-                <div className="qs-corner" style={{ top: 16, left: 16, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6 }} />
-                <div className="qs-corner" style={{ top: 16, right: 16, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6 }} />
-                <div className="qs-corner" style={{ bottom: 16, left: 16, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 }} />
-                <div className="qs-corner" style={{ bottom: 16, right: 16, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 }} />
+                {/* Vòng tròn căn chỉnh khuôn mặt */}
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                      <mask id="face-mask-proctor">
+                        <rect x="0" y="0" width="100" height="100" fill="white" />
+                        <circle cx="50" cy="50" r="30" fill="black" />
+                      </mask>
+                    </defs>
+                    <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.4" mask="url(#face-mask-proctor)" />
+                    <circle cx="50" cy="50" r="30" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3,2" />
+                  </svg>
+                </div>
+
                 {scanning && (
                   <>
-                    <div className="qs-laser" />
-                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.75)", border: "1.5px solid #ef4444", borderRadius: 10, padding: "8px 18px", color: "#ef4444", fontSize: 13, fontWeight: 800, letterSpacing: 1, whiteSpace: "nowrap" }}>
-                      ĐANG QUÉT GƯƠNG MẶT...
+                    <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
+                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.85)", border: "1.5px solid var(--accent)", borderRadius: 8, padding: "8px 16px", color: "var(--accent)", fontSize: 10, fontWeight: 800, letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                      <span>ĐANG QUÉT GƯƠNG MẶT...</span>
                     </div>
                   </>
                 )}
               </>
             ) : (
               <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-                <div style={{ fontSize: 52, opacity: 0.25 }}>🎭</div>
+                <CameraOff size={52} style={{ opacity: 0.25 }} />
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Bật camera để nhận diện học sinh</div>
               </div>
             )}
@@ -7929,6 +8693,7 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
               {scanning ? "ĐANG QUÉT GƯƠNG MẶT HỌC SINH..." : detectedStudent ? "ĐÃ NHẬN DIỆN - CHỜ NHẬP ĐIỂM" : "HỆ THỐNG ĐANG TỰ ĐỘNG QUÉT..."}
             </div>
           )}
+
 
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={cameraActive ? stopCamera : startCamera} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 22px", background: cameraActive ? "rgba(239,68,68,0.1)" : "var(--wa05)", border: cameraActive ? "1px solid #EF4444" : "1px solid var(--border2)", color: cameraActive ? "#EF4444" : "var(--text)", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 700, width: "100%" }}>

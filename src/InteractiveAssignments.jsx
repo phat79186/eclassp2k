@@ -951,6 +951,11 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
   const [cheatWarning, setCheatWarning] = useState("");
   const studentPhoto = user?.data?.photo || null;
 
+  // States for look-down drafting notes algorithm
+  const [draftingMode, setDraftingMode] = useState(false);
+  const [draftCountdown, setDraftCountdown] = useState(30);
+  const lookDownStartRef = useRef(null);
+
   const [studentFile, setStudentFile] = useState(null);
   const studentFileInputRef = useRef(null);
 
@@ -1109,10 +1114,16 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
 
         if (!liveDetection) {
           warning = "Không phát hiện khuôn mặt!";
+          lookDownStartRef.current = null;
+          setDraftingMode(false);
+          setDraftCountdown(30);
         } else {
           const distance = fapi.euclideanDistance(avatarDesc, liveDetection.descriptor);
           if (distance > 0.55) {
             warning = "Khuôn mặt người thi thay đổi (Nghi vấn thi hộ)!";
+            lookDownStartRef.current = null;
+            setDraftingMode(false);
+            setDraftCountdown(30);
           } else {
             const landmarks = liveDetection.landmarks;
             const nose = landmarks.getNose()[3];
@@ -1132,10 +1143,41 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
 
             if (yawRatio > 2.2 || yawRatio < 0.45) {
               warning = "Liếc/quay đầu sang hai bên!";
+              lookDownStartRef.current = null;
+              setDraftingMode(false);
+              setDraftCountdown(30);
             } else if (pitchRatio < 0.7) {
-              warning = "Cúi đầu (nghi vấn xem tài liệu/điện thoại)!";
+              // Phát hiện cúi đầu
+              if (pitchRatio < 0.40) {
+                // Cúi đầu quá sâu (vượt quá góc -35 độ, ví dụ cúi dưới gầm bàn)
+                warning = "Cúi đầu quá sâu (vượt quá -35 độ)!";
+                lookDownStartRef.current = null;
+                setDraftingMode(false);
+                setDraftCountdown(30);
+              } else {
+                // Nháp bài (cúi đầu vừa phải từ -15 đến -35 độ)
+                setDraftingMode(true);
+                if (lookDownStartRef.current === null) {
+                  lookDownStartRef.current = Date.now();
+                }
+                const elapsed = (Date.now() - lookDownStartRef.current) / 1000;
+                const remaining = Math.max(0, Math.ceil(30 - elapsed));
+                setDraftCountdown(remaining);
+
+                if (elapsed > 30) {
+                  warning = "Thời gian cúi đầu làm nháp vượt quá 30 giây!";
+                }
+              }
             } else if (pitchRatio > 2.0) {
               warning = "Ngẩng đầu lên trên!";
+              lookDownStartRef.current = null;
+              setDraftingMode(false);
+              setDraftCountdown(30);
+            } else {
+              // Trạng thái bình thường
+              lookDownStartRef.current = null;
+              setDraftingMode(false);
+              setDraftCountdown(30);
             }
           }
         }
@@ -1151,7 +1193,12 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
       }
     }, 1500);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      lookDownStartRef.current = null;
+      setDraftingMode(false);
+      setDraftCountdown(30);
+    };
   }, [started, task.strictFullscreen, faceApiReady, avatarDesc, submitting]);
 
   // Handle fails threshold
@@ -1418,12 +1465,60 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
               </div>
               <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 15 }}>
                 <div style={{ background: "rgba(10,20,40,.95)", border: "1px solid var(--border)", borderRadius: 12, padding: 12, position: "sticky", top: 20 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: cheatWarning ? "#EF4444" : "var(--accent)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: cheatWarning ? "#EF4444" : "#10B981", display: "inline-block", boxShadow: cheatWarning ? "0 0 10px #EF4444" : "0 0 10px #10B981" }} />
-                    {cheatWarning ? "PHÁT HIỆN GIAN LẬN!" : "ĐANG GIÁM SÁT..."}
+                  <div style={{ 
+                    fontSize: 11, 
+                    fontWeight: 700, 
+                    color: cheatWarning ? "#EF4444" : (draftingMode ? "#F59E0B" : "#10B981"), 
+                    marginBottom: 8, 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 6,
+                    transition: "color .2s"
+                  }}>
+                    <span style={{ 
+                      width: 8, 
+                      height: 8, 
+                      borderRadius: "50%", 
+                      background: cheatWarning ? "#EF4444" : (draftingMode ? "#F59E0B" : "#10B981"), 
+                      display: "inline-block", 
+                      boxShadow: cheatWarning ? "0 0 10px #EF4444" : (draftingMode ? "0 0 10px #F59E0B" : "0 0 10px #10B981"),
+                      transition: "all .2s"
+                    }} />
+                    {cheatWarning ? "PHÁT HIỆN GIAN LẬN!" : (draftingMode ? "ĐANG NHÁP BÀI..." : "ĐANG GIÁM SÁT...")}
                   </div>
-                  <div style={{ borderRadius: 8, overflow: "hidden", background: "#000", border: `2px solid ${cheatWarning ? "#EF4444" : "rgba(16,185,129,.5)"}`, transition: "all .3s" }}>
+                  
+                  <div style={{ 
+                    position: "relative",
+                    borderRadius: 8, 
+                    overflow: "hidden", 
+                    background: "#000", 
+                    border: `2px solid ${cheatWarning ? "#EF4444" : (draftingMode ? "#F59E0B" : "#10B981")}`, 
+                    transition: "border-color .3s" 
+                  }}>
                     <video ref={proctorVideoRef} autoPlay playsInline muted style={{ width: "100%", height: 180, objectFit: "cover", transform: "scaleX(-1)", display: "block" }} />
+                    
+                    {/* Vòng tròn căn chỉnh khuôn mặt guide line */}
+                    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
+                        <defs>
+                          <mask id="proctor-face-mask">
+                            <rect x="0" y="0" width="100" height="100" fill="white" />
+                            <circle cx="50" cy="50" r="28" fill="black" />
+                          </mask>
+                        </defs>
+                        <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.4" mask="url(#proctor-face-mask)" />
+                        <circle 
+                          cx="50" 
+                          cy="50" 
+                          r="28" 
+                          fill="none" 
+                          stroke={cheatWarning ? "#EF4444" : (draftingMode ? "#F59E0B" : "#10B981")} 
+                          strokeWidth="0.8" 
+                          strokeDasharray="3,2"
+                          style={{ transition: "stroke .3s" }}
+                        />
+                      </svg>
+                    </div>
                   </div>
                   
                   {cheatWarning && (
@@ -1435,7 +1530,27 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
                     </div>
                   )}
                   
-                  {!cheatWarning && (
+                  {!cheatWarning && draftingMode && (
+                    <div style={{ 
+                      marginTop: 12, 
+                      padding: 10, 
+                      background: "rgba(245,158,11,.12)", 
+                      border: "1px solid rgba(245,158,11,.25)", 
+                      borderRadius: 8, 
+                      color: "#F59E0B", 
+                      fontSize: 12, 
+                      fontWeight: 700, 
+                      textAlign: "center",
+                      animation: "vqPulse 1.5s infinite"
+                    }}>
+                      ✍️ ĐANG LÀM NHÁP ({draftCountdown}s)
+                      <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 400, marginTop: 4 }}>
+                        Hệ thống cho phép bạn cúi đầu viết nháp.
+                      </div>
+                    </div>
+                  )}
+
+                  {!cheatWarning && !draftingMode && (
                     <div style={{ marginTop: 12, fontSize: 11, color: "var(--text4)", textAlign: "center" }}>
                       AI đang giám sát tư thế khuôn mặt. Vui lòng nhìn thẳng và tập trung làm bài.
                     </div>

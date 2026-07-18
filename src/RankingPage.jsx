@@ -107,7 +107,7 @@ const getWeekStreak = weeks => {
   return best;
 };
 
-export default function RankingPage({ state, user }) {
+export default function RankingPage({ state, user, selClass, setSelClass, myClasses }) {
   const isTeacher = user.role === 'teacher';
   const isParent = user.role === 'parent';
   const isStudent = user.role === 'student';
@@ -132,7 +132,8 @@ export default function RankingPage({ state, user }) {
     return [];
   }, [state.classes, isTeacher, isParent, isStudent, parentChildren, user.classId, user.data.id]);
 
-  const [selectedClassId, setSelectedClassId] = useState(classOptions[0]?.value || '');
+  const [parentSelectedClassId, setParentSelectedClassId] = useState('');
+  const selectedClassId = isTeacher ? selClass : (isStudent ? user.classId : (parentSelectedClassId || classOptions[0]?.value || ''));
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedSemester, setSelectedSemester] = useState('all');
@@ -141,11 +142,10 @@ export default function RankingPage({ state, user }) {
   const [weeklyReportStatus, setWeeklyReportStatus] = useState('');
 
   useEffect(() => {
-    if (!selectedClassId && classOptions.length) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedClassId(classOptions[0].value);
+    if (!isTeacher && !isStudent && !parentSelectedClassId && classOptions.length) {
+      setParentSelectedClassId(classOptions[0].value);
     }
-  }, [classOptions, selectedClassId]);
+  }, [classOptions, parentSelectedClassId, isTeacher, isStudent]);
 
   useEffect(() => {
     if (!selectedStudentId) {
@@ -395,7 +395,7 @@ export default function RankingPage({ state, user }) {
                 {isTeacher && (
                   <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text2)' }}>
                     Chọn lớp
-                    <select className="inp" value={selectedClassId} onChange={e => { setSelectedClassId(e.target.value); setSelectedStudentId(null); }}>
+                    <select className="inp" value={selectedClassId} onChange={e => { setSelClass(e.target.value); setSelectedStudentId(null); }}>
                       {classOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </label>
