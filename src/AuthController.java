@@ -77,7 +77,7 @@ public class AuthController {
             if (userInfo == null) {
                 // Email này chưa được đăng ký trong Database
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(createErrorResponse("Tài khoản email (" + email + ") chưa được đăng ký trên hệ thống E-Class P2K. Vui lòng liên hệ Admin."));
+                        .body(createErrorResponse("Tài khoản email (" + email + ") chưa được đăng ký trên hệ thống S-Class P2K. Vui lòng liên hệ Admin."));
             }
 
             // Đồng bộ/cập nhật ảnh đại diện từ Google nếu DB chưa có

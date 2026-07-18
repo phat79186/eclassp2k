@@ -143,7 +143,7 @@ export default function Login({ onLoginSuccess }) {
           }}>
             <LogIn size={32} color="#fff" />
           </div>
-          <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#fff", margin: "0 0 6px" }}>E-Class P2K</h2>
+          <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#fff", margin: "0 0 6px" }}>S-Class P2K</h2>
           <p style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.45)", margin: 0 }}>
             Hệ Thống Quản Lý & Giám Sát Học Tập Toàn Diện
           </p>
@@ -210,7 +210,7 @@ export default function Login({ onLoginSuccess }) {
 
         {/* Footer */}
         <div style={{ marginTop: "32px", fontSize: "11px", color: "rgba(255, 255, 255, 0.3)" }}>
-          Bảo mật bởi Google OAuth 2.0 & E-Class P2K Security Engine.
+          Bảo mật bởi Google OAuth 2.0 & S-Class P2K Security Engine.
         </div>
       </div>
     </div>

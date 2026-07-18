@@ -1,4 +1,4 @@
-# Quy tắc Agent — E-Class P2K
+# Quy tắc Agent — S-Class P2K
 
 ## QUY TẮC BỐI CẢNH (BẮT BUỘC)
 
