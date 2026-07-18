@@ -3,7 +3,7 @@ import api, { setToken, clearToken, getToken } from "./api.js";
 import { StudentAssignmentModal, InteractiveVideoPlayer } from "./InteractiveAssignments";
 import {
   Home, BookOpen, MessageSquare, MessageCircle, QrCode, Grid, Shuffle,Library, User, Search, Send, Menu,CheckCircle, Clock, Plus, Upload, Download,FileText, Hash, Paperclip,RefreshCw, Trophy,GraduationCap, LogOut, X, Edit2, Trash2, Save,UserPlus, Settings, Eye, EyeOff,AlertTriangle, Check, GripVertical,Users, School, Key, Phone, Calendar, ChevronLeft, ChevronRight,BarChart2, Bell, UserCheck, UserX, LayoutGrid, Sun, Moon, Camera, CameraOff, ExternalLink, Play, Pause, RotateCcw, Link2, Activity, Bot, Sparkles, FolderOpen, FileCode, Code2, Terminal, Info,
-  HelpCircle, ListChecks, CircleDot, PenLine, ClipboardList, Volume2, Video
+  HelpCircle, ListChecks, CircleDot, PenLine, ClipboardList, Volume2, Video, Maximize, Minimize
 } from "lucide-react";
 import { GoogleLogin } from '@react-oauth/google';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -6863,7 +6863,7 @@ function DashPage({ state, user, setView }) {
 function LocateAnythingPage({ state, user, selClass }) {
   const [engineActive, setEngineActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
-  const [prompt, setPrompt] = useState("student, phone");
+  const [prompt, setPrompt] = useState("student, phone, book, bottle, cup, laptop, chair");
   const [quant, setQuant] = useState("q4_k_m");
   const [threads, setThreads] = useState(4);
   const [speed, setSpeed] = useState("fast"); // fast, hybrid, slow
@@ -6871,6 +6871,77 @@ function LocateAnythingPage({ state, user, selClass }) {
   const [history, setHistory] = useState([]);
   const [isLocating, setIsLocating] = useState(false);
   const [warningCount, setWarningCount] = useState(0);
+
+  // Cấu hình Nguồn Video/Webcam tải lên
+  const [sourceType, setSourceType] = useState("webcam"); // webcam, file
+  const [videoFileUrl, setVideoFileUrl] = useState("");
+  const sourceTypeRef = useRef("webcam");
+  useEffect(() => { sourceTypeRef.current = sourceType; }, [sourceType]);
+
+  // States và hàm điều khiển trình phát video (tua, play/pause)
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+
+  const handleSeekChange = (e) => {
+    const time = Number(e.target.value);
+    setVideoCurrentTime(time);
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (videoRef.current) {
+      if (videoPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play().catch(() => {});
+      }
+    }
+  };
+
+  const formatVideoTime = (seconds) => {
+    if (isNaN(seconds)) return "00:00";
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = Math.floor(seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  // Cấu hình Phóng to Toàn màn hình (Fullscreen)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const videoContainerRef = useRef(null);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement || !!document.webkitFullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  const handleFullscreen = () => {
+    const container = videoContainerRef.current;
+    if (!container) return;
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
 
   // Real AI Model States
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -7030,33 +7101,81 @@ function LocateAnythingPage({ state, user, selClass }) {
     }
   };
 
-  // Stream Camera
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (videoFileUrl) {
+        URL.revokeObjectURL(videoFileUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setVideoFileUrl(url);
+      addLog(`video_select: loaded file '${file.name}' (${(file.size / 1024 / 1024).toFixed(2)} MB).`);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        videoRef.current.src = url;
+        videoRef.current.loop = true;
+        if (cameraActive && engineActive) {
+          videoRef.current.play().catch(() => {});
+        }
+      }
+    }
+  };
+
+  // Stream Camera hoặc File Video
   useEffect(() => {
     if (cameraActive && engineActive) {
-      navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-        .then((stream) => {
-          streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+      if (sourceType === "webcam") {
+        if (videoRef.current) {
+          videoRef.current.src = "";
+          videoRef.current.srcObject = null;
+        }
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+          .then((stream) => {
+            streamRef.current = stream;
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+            }
+            addLog("webcam_init: webcam input source connected successfully (640x480).");
+          })
+          .catch((e) => {
+            addLog("webcam_err: could not access camera. Please check permissions.");
+            setCameraActive(false);
+          });
+      } else if (sourceType === "file") {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+          if (videoFileUrl) {
+            videoRef.current.src = videoFileUrl;
+            videoRef.current.loop = true;
+            videoRef.current.play().catch(err => {
+              console.warn("Video playback error or blocked:", err);
+            });
+            addLog(`video_init: video file source connected. Ready for analysis.`);
+          } else {
+            addLog("video_warn: no video file selected yet. Please select a video file.");
           }
-          addLog("webcam_init: webcam input source connected successfully (640x480).");
-        })
-        .catch((e) => {
-          addLog("webcam_err: could not access camera. Please check permissions.");
-          setCameraActive(false);
-        });
+        }
+      }
     } else {
       stopCamera();
     }
     return () => stopCamera();
-  }, [cameraActive, engineActive]);
+  }, [cameraActive, engineActive, sourceType, videoFileUrl]);
 
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (videoRef.current) videoRef.current.srcObject = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+      videoRef.current.src = "";
+    }
     clearInterval(detectIntervalRef.current);
     cancelAnimationFrame(animationFrameRef.current);
     trackedObjectsRef.current = [];
@@ -7085,9 +7204,9 @@ function LocateAnythingPage({ state, user, selClass }) {
       obj.w += (obj.tw - obj.w) * lerpFactor;
       obj.h += (obj.th - obj.h) * lerpFactor;
 
-      // Lật tọa độ X để khớp với video bị gương (scaleX(-1) trên video)
+      // Lật tọa độ X để khớp với video bị gương (scaleX(-1) trên video) nếu là webcam,
       // nhưng KHÔNG lật canvas để text không bị ngược
-      const drawX = canvas.width - obj.x - obj.w;
+      const drawX = sourceTypeRef.current === "webcam" ? (canvas.width - obj.x - obj.w) : obj.x;
 
       // Vẽ Box
       ctx.lineWidth = 2.5;
@@ -7098,7 +7217,7 @@ function LocateAnythingPage({ state, user, selClass }) {
       // Xác định nhãn hiển thị và màu sắc nếu là học sinh
       let finalLabel = obj.label;
       if (isStudent) {
-        const curState = studentStateRef.current;
+        const curState = obj.state || studentStateRef.current;
         const prefix = obj.isFaceOnly ? "Khuôn mặt" : "Học sinh";
         if (curState === "focused") {
           strokeColor = "#10B981"; // Xanh lá
@@ -7179,11 +7298,11 @@ function LocateAnythingPage({ state, user, selClass }) {
       // ----------------------------------------------------
       if (modelRef.current && video.readyState >= 2) {
         try {
-          // Thực hiện nhận diện vật thể thực tế
-          const predictions = await modelRef.current.detect(video);
+          // Thực hiện nhận diện vật thể thực tế (Mở rộng số hộp tối đa thành 45, hạ minScore xuống 0.20)
+          const predictions = await modelRef.current.detect(video, 45, 0.20);
           
-          // Kiểm tra xem có người (person) trong khung hình không
-          let personPred = predictions.find(p => p.class === "person" && p.score > 0.45);
+          // Kiểm tra xem có người (person) trong khung hình không (Hạ xuống 0.22 để bắt người trong điều kiện ngược sáng cực đoan)
+          let personPred = predictions.find(p => p.class === "person" && p.score > 0.22);
           
           // NÂNG CẤP: Nếu không thấy người, kiểm tra xem có khuôn mặt ngồi sát camera không (Skin Color Face Detection)
           let isFaceOnly = false;
@@ -7207,10 +7326,9 @@ function LocateAnythingPage({ state, user, selClass }) {
                   const g = pixels[idx+1];
                   const b = pixels[idx+2];
                   
-                  // Nhận diện vùng màu da người RGB chuẩn
-                  const isSkin = r > 80 && g > 40 && b > 25 && 
-                                 r > g && r > b && 
-                                 Math.abs(r - g) > 10;
+                  // Nhận diện vùng màu da người RGB thích ứng (hỗ trợ cả bóng tối và ngược sáng)
+                  const isSkin = (r > 45 && g > 25 && b > 15 && r > g && r > b) ||
+                                 (r > 75 && g > 45 && b > 30 && r > g && Math.abs(r - g) > 8);
                   
                   if (isSkin) {
                     skinCount++;
@@ -7222,8 +7340,8 @@ function LocateAnythingPage({ state, user, selClass }) {
                 }
               }
 
-              // Nếu có ít nhất 40 pixel màu da (đủ lớn) và có độ rộng nhất định -> Khẳng định có khuôn mặt học sinh cận cảnh
-              if (skinCount > 40 && (maxX - minX) > 3 && (maxY - minY) > 3) {
+              // Nếu có ít nhất 22 pixel màu da và kích thước hợp lý -> Khẳng định có khuôn mặt học sinh
+              if (skinCount > 22 && (maxX - minX) > 2 && (maxY - minY) > 2) {
                 isFaceOnly = true;
                 const bx = (minX / 32) * 640;
                 const by = (minY / 24) * 480;
@@ -7233,7 +7351,7 @@ function LocateAnythingPage({ state, user, selClass }) {
                 // Tạo đối tượng giả định personPred khớp với khuôn mặt phát hiện được
                 personPred = {
                   class: "person",
-                  score: 0.88,
+                  score: 0.85,
                   bbox: [
                     Math.max(10, bx - 10),
                     Math.max(10, by - 15),
@@ -7296,7 +7414,7 @@ function LocateAnythingPage({ state, user, selClass }) {
                 dirChanges++;
               }
             }
-            // Nếu đổi chiều ít nhất 3 lần và biên độ Y dao động nhịp nhàng (8px đến 45px)
+            // Nếu đổi chiều ít nhất 3 lần và biên độ Y dao động nhịp nhàng (8px đến 48px)
             const yValues = yHist.map(h => h.y);
             const amp = Math.max(...yValues) - Math.min(...yValues);
             if (dirChanges >= 3 && amp >= 8 && amp <= 48) {
@@ -7304,53 +7422,84 @@ function LocateAnythingPage({ state, user, selClass }) {
             }
           }
 
+          // Phân tích trạng thái tổng hợp (worst-case priority)
           if (hasPhone) {
             detectedState = "phone";
           } else if (isNodding) {
             detectedState = "sleepy";
-          } else if (personPred) {
-            const [px, py, pw, ph] = personPred.bbox;
-            // Cúi đầu quá thấp hoặc rạp xuống bàn
-            if (py > 165 || (pw / ph) > 1.25) {
-              detectedState = "sleepy";
-            } else {
-              // Đầu di chuyển lệch quá nhiều sang 2 bên (xao nhãng)
-              const centroidDev = Math.abs(motionCentroidRef.current.x - 320);
-              if (centroidDev > 160) {
-                detectedState = "distracted";
-              }
-            }
           }
-          setStudentState(detectedState);
+          
+          // Hàm phân tích trạng thái của từng người độc lập
+          const getIndividualPersonState = (pred) => {
+            const [bx, by, bw, bh] = pred.bbox;
+            if (isNodding) return "sleepy";
+            if (by > 165 || (bw / bh) > 1.25) return "sleepy";
+            const cx = bx + bw / 2;
+            if (Math.abs(cx - 320) > 160) return "distracted";
+            return "focused";
+          };
 
           // Duyệt qua các phát hiện được và ánh xạ về Target của người dùng
           predictions.forEach((pred) => {
-            if (pred.score < 0.45) return;
+            if (pred.score < 0.20) return;
             const className = pred.class.toLowerCase();
 
-            // Ánh xạ các class COCO-SSD sang nhãn của người dùng
+            // Tìm kiếm xem className có khớp với bất kỳ từ khóa nào trong danh sách targets không
             let matchedTarget = null;
             let isWarning = false;
 
-            if (className === "person" && (targets.includes("student") || targets.includes("học sinh") || targets.includes("person") || targets.includes("người"))) {
-              matchedTarget = targets.includes("student") ? "student" : targets.includes("học sinh") ? "học sinh" : pred.class;
-            } else if (className === "cell phone" && (targets.includes("phone") || targets.includes("điện thoại") || targets.includes("cell phone"))) {
-              matchedTarget = targets.includes("phone") ? "phone" : targets.includes("điện thoại") ? "điện thoại" : pred.class;
-              isWarning = true;
-            } else if (className === "book" && (targets.includes("book") || targets.includes("sách") || targets.includes("vở"))) {
-              matchedTarget = targets.includes("book") ? "book" : targets.includes("sách") ? "sách" : pred.class;
-            } else if (className === "laptop" || className === "keyboard") {
-              if (targets.includes("computer") || targets.includes("máy tính") || targets.includes("laptop")) {
-                matchedTarget = "computer";
+            const foundTarget = targets.find((t) => {
+              const keyword = t.trim().toLowerCase();
+              if (className === keyword) return true;
+              if (keyword.includes(className) || className.includes(keyword)) return true;
+              
+              // Ánh xạ các tên gọi tương đương và ngôn ngữ (Anh/Việt)
+              const equivalents = {
+                "person": ["student", "học sinh", "sinh viên", "người", "teacher", "giáo viên", "proctor", "giám thị"],
+                "cell phone": ["phone", "điện thoại", "máy thoại", "mobile"],
+                "book": ["sách", "vở", "tập", "notebook"],
+                "laptop": ["computer", "máy tính", "laptop"],
+                "keyboard": ["computer", "máy tính", "bàn phím"],
+                "mouse": ["computer", "máy tính", "chuột"],
+                "chair": ["ghế", "couch", "sofa"],
+                "couch": ["ghế", "couch", "sofa"],
+                "bottle": ["chai", "nước", "flacon"],
+                "cup": ["cốc", "tách", "ly", "chén"],
+                "dining table": ["bàn", "desk", "table"],
+                "backpack": ["ba lô", "cặp", "túi"],
+                "handbag": ["ba lô", "cặp", "túi", "ví"],
+                "scissors": ["kéo"],
+                "clock": ["đồng hồ"],
+                "pen": ["bút", "viết"]
+              };
+              
+              if (equivalents[className] && equivalents[className].includes(keyword)) return true;
+              return false;
+            });
+
+            if (foundTarget) {
+              matchedTarget = foundTarget;
+              if (["phone", "điện thoại", "cell phone"].some(w => matchedTarget.includes(w))) {
+                isWarning = true;
               }
-            } else if (className === "chair" && (targets.includes("chair") || targets.includes("ghế"))) {
-              matchedTarget = targets.includes("chair") ? "chair" : "ghế";
             }
 
-            // Nếu người dùng có yêu cầu quét nhãn này
+            // Nếu khớp với mục tiêu cần tìm
             if (matchedTarget) {
               const [bx, by, bw, bh] = pred.bbox;
               const confidence = (pred.score * 100).toFixed(1);
+              let individualState = undefined;
+
+              if (className === "person") {
+                individualState = getIndividualPersonState(pred);
+                
+                // Đồng bộ sang detectedState toàn cục
+                if (individualState === "sleepy" && detectedState !== "phone") {
+                  detectedState = "sleepy";
+                } else if (individualState === "distracted" && detectedState === "focused") {
+                  detectedState = "distracted";
+                }
+              }
 
               if (isWarning) {
                 soundTriggered = true;
@@ -7364,10 +7513,13 @@ function LocateAnythingPage({ state, user, selClass }) {
                 tw: bw,
                 th: bh,
                 isWarning,
-                isFaceOnly: className === "person" && isFaceOnly
+                isFaceOnly: className === "person" && isFaceOnly,
+                state: individualState
               });
             }
           });
+
+          setStudentState(detectedState);
 
         } catch (e) {
           console.warn("Lỗi suy luận Real AI, chuyển sang chế độ giả lập:", e);
@@ -7514,23 +7666,44 @@ function LocateAnythingPage({ state, user, selClass }) {
       }
 
       // ----------------------------------------------------
-      // ĐỒNG BỘ HIỂN THỊ VÀ LƯU LỊCH SỬ CHUNG
+      // ĐỒNG BỘ HIỂN THỊ DÙNG CENTROID TRACKING (ĐA MỤC TIÊU)
       // ----------------------------------------------------
       const currentTracked = [...trackedObjectsRef.current];
+      currentTracked.forEach((o) => { o.matchedThisFrame = false; });
       const updatedTracked = [];
 
       newObjects.forEach((newObj) => {
-        const oldObj = currentTracked.find((o) => o.label === newObj.label);
-        if (oldObj) {
+        let bestOldObj = null;
+        let minDistance = 99999;
+
+        // Bám đuổi theo khoảng cách tâm hình học (Centroid Distance)
+        currentTracked.forEach((oldObj) => {
+          if (oldObj.label === newObj.label && !oldObj.matchedThisFrame) {
+            const oldCenterX = oldObj.x + oldObj.w / 2;
+            const oldCenterY = oldObj.y + oldObj.h / 2;
+            const newCenterX = newObj.tx + newObj.tw / 2;
+            const newCenterY = newObj.ty + newObj.th / 2;
+            const dist = Math.hypot(oldCenterX - newCenterX, oldCenterY - newCenterY);
+
+            if (dist < minDistance && dist < 220) {
+              minDistance = dist;
+              bestOldObj = oldObj;
+            }
+          }
+        });
+
+        if (bestOldObj) {
+          bestOldObj.matchedThisFrame = true;
           updatedTracked.push({
-            ...oldObj,
+            ...bestOldObj,
             tx: newObj.tx,
             ty: newObj.ty,
             tw: newObj.tw,
             th: newObj.th,
             conf: newObj.conf,
             isWarning: newObj.isWarning,
-            isFaceOnly: newObj.isFaceOnly
+            isFaceOnly: newObj.isFaceOnly,
+            state: newObj.state
           });
         } else {
           updatedTracked.push({
@@ -7538,6 +7711,7 @@ function LocateAnythingPage({ state, user, selClass }) {
             conf: newObj.conf,
             isWarning: newObj.isWarning,
             isFaceOnly: newObj.isFaceOnly,
+            state: newObj.state,
             x: newObj.tx,
             y: newObj.ty,
             w: newObj.tw,
@@ -7547,6 +7721,19 @@ function LocateAnythingPage({ state, user, selClass }) {
             tw: newObj.tw,
             th: newObj.th
           });
+        }
+      });
+
+      // Giữ lại các đối tượng cũ chưa được match trong vòng 6 frames để tránh mất dấu
+      currentTracked.forEach((oldObj) => {
+        if (!oldObj.matchedThisFrame) {
+          if (!oldObj.missedFrames) oldObj.missedFrames = 0;
+          oldObj.missedFrames++;
+          if (oldObj.missedFrames < 7) {
+            updatedTracked.push(oldObj);
+          }
+        } else {
+          oldObj.missedFrames = 0;
         }
       });
 
@@ -7600,23 +7787,153 @@ function LocateAnythingPage({ state, user, selClass }) {
       {/* Cột trái: Camera và Control Panel */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Card style={{ padding: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "between", flexWrap: "wrap", gap: 12, borderBottom: "1px solid var(--border2)", paddingBottom: 14, marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Camera Nhận Diện Lớp Học (Webcam)</div>
-              <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Mô phỏng suy luận cục bộ LocateAnything-3B qua C++ GGML Engine</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--border2)", paddingBottom: 14, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "between", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Camera Nhận Diện Lớp Học ({sourceType === "webcam" ? "Webcam" : "Video File"})</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Mô phỏng suy luận cục bộ LocateAnything-3B qua C++ GGML Engine</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
+                {/* Segmented Control chọn nguồn */}
+                <div style={{ display: "flex", gap: 3, background: "rgba(255, 255, 255, 0.04)", padding: 3, borderRadius: 8, border: "1px solid var(--border2)" }}>
+                  <button 
+                    onClick={() => { setSourceType("webcam"); stopCamera(); }}
+                    disabled={isLocating}
+                    style={{ 
+                      padding: "5px 11px", 
+                      borderRadius: 6, 
+                      fontSize: 10, 
+                      fontWeight: 600, 
+                      cursor: isLocating ? "not-allowed" : "pointer", 
+                      border: "none",
+                      background: sourceType === "webcam" ? "var(--accent)" : "transparent",
+                      color: sourceType === "webcam" ? "#fff" : "var(--text3)",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    🎥 Webcam
+                  </button>
+                  <button 
+                    onClick={() => { setSourceType("file"); stopCamera(); }}
+                    disabled={isLocating}
+                    style={{ 
+                      padding: "5px 11px", 
+                      borderRadius: 6, 
+                      fontSize: 10, 
+                      fontWeight: 600, 
+                      cursor: isLocating ? "not-allowed" : "pointer", 
+                      border: "none",
+                      background: sourceType === "file" ? "var(--accent)" : "transparent",
+                      color: sourceType === "file" ? "#fff" : "var(--text3)",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    🎬 Video Cũ
+                  </button>
+                </div>
+
+                <button onClick={toggleEngine} className="bprimary" style={{ padding: "8px 16px", borderRadius: 8, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Activity size={13} /> {engineActive ? "Tắt GGML Engine" : "Khởi động GGML Engine"}
+                </button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-              <button onClick={toggleEngine} className="bprimary" style={{ padding: "8px 16px", borderRadius: 8, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                <Activity size={13} /> {engineActive ? "Tắt GGML Engine" : "Khởi động GGML Engine"}
-              </button>
-            </div>
+
+            {/* Ô chọn file video nếu nguồn là File */}
+            {sourceType === "file" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255, 255, 255, 0.02)", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border2)" }}>
+                <span style={{ fontSize: 11, color: "var(--text3)" }}>Tải lên video ghi hình cũ của lớp học:</span>
+                <input 
+                  type="file" 
+                  accept="video/*" 
+                  onChange={handleVideoUpload} 
+                  disabled={isLocating}
+                  style={{ display: "none" }} 
+                  id="video-upload-input" 
+                />
+                <label 
+                  htmlFor="video-upload-input" 
+                  className="bprimary" 
+                  style={{ 
+                    padding: "6px 12px", 
+                    borderRadius: 8, 
+                    fontSize: 10, 
+                    cursor: isLocating ? "not-allowed" : "pointer", 
+                    display: "inline-block",
+                    opacity: isLocating ? 0.6 : 1
+                  }}
+                >
+                  📁 Chọn Tệp Video (.mp4, .mov, .avi...)
+                </label>
+                {videoFileUrl ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>
+                    <span>✓ Đã liên kết video cũ. Nhấn "Bắt đầu quét" để bắt đầu phân tích.</span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 11, color: "rgba(239, 68, 68, 0.8)", fontWeight: 600 }}>⚠️ Chưa chọn tệp video nào</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Khung Camera */}
-          <div style={{ position: "relative", width: "100%", aspectRatio: "4/3", background: "#060f1e", borderRadius: 12, border: "2px solid var(--wa1)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
+          <div 
+            ref={videoContainerRef} 
+            className="video-container"
+            style={{ 
+              position: "relative", 
+              width: "100%", 
+              aspectRatio: isFullscreen ? "auto" : "4/3", 
+              height: isFullscreen ? "100vh" : "auto",
+              background: "#000", 
+              borderRadius: isFullscreen ? 0 : 12, 
+              border: isFullscreen ? "none" : "2px solid var(--wa1)", 
+              overflow: "hidden", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center" 
+            }}
+          >
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              playsInline 
+              muted 
+              onPlay={() => setVideoPlaying(true)}
+              onPause={() => setVideoPlaying(false)}
+              onTimeUpdate={(e) => setVideoCurrentTime(e.target.currentTime)}
+              onDurationChange={(e) => setVideoDuration(e.target.duration)}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: sourceType === "webcam" ? "scaleX(-1)" : "none" }} 
+            />
             <canvas ref={canvasRef} width={640} height={480} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
             
+            {/* Nút Phóng to toàn màn hình */}
+            {cameraActive && (
+              <button 
+                onClick={handleFullscreen}
+                title={isFullscreen ? "Thu nhỏ" : "Phóng to toàn màn hình"}
+                style={{ 
+                  position: "absolute", 
+                  top: 12, 
+                  right: 12, 
+                  zIndex: 20, 
+                  background: "rgba(6, 15, 30, 0.75)", 
+                  border: "1px solid var(--border2)", 
+                  color: "#fff", 
+                  padding: 8, 
+                  borderRadius: 8, 
+                  cursor: "pointer", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  transition: "all 0.2s"
+                }}
+              >
+                {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+              </button>
+            )}
+
             {!cameraActive && (
               <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                 <CameraOff size={48} style={{ opacity: 0.25 }} />
@@ -7628,6 +7945,56 @@ function LocateAnythingPage({ state, user, selClass }) {
               <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
             )}
           </div>
+
+          {/* Thanh điều khiển video (Tua) khi chạy nguồn File */}
+          {sourceType === "file" && cameraActive && engineActive && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255, 255, 255, 0.04)", padding: "10px 14px", borderRadius: 10, marginTop: 8, border: "1px solid var(--border2)" }}>
+              <button 
+                onClick={handlePlayPause}
+                style={{ 
+                  background: "rgba(79, 172, 254, 0.1)", 
+                  border: "none", 
+                  color: "var(--accent)", 
+                  cursor: "pointer", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  padding: 8,
+                  borderRadius: "50%",
+                  width: 32,
+                  height: 32,
+                  transition: "all 0.2s"
+                }}
+              >
+                {videoPlaying ? <Pause size={14} /> : <Play size={14} />}
+              </button>
+
+              <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "monospace", minWidth: 38 }}>
+                {formatVideoTime(videoCurrentTime)}
+              </span>
+
+              <input 
+                type="range" 
+                min={0} 
+                max={videoDuration || 100} 
+                step={0.05}
+                value={videoCurrentTime} 
+                onChange={handleSeekChange} 
+                style={{ 
+                  flex: 1, 
+                  accentColor: "var(--accent)", 
+                  height: 5, 
+                  borderRadius: 3, 
+                  cursor: "pointer",
+                  background: "rgba(255, 255, 255, 0.1)"
+                }} 
+              />
+
+              <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "monospace", minWidth: 38 }}>
+                {formatVideoTime(videoDuration)}
+              </span>
+            </div>
+          )}
 
           {/* Giao diện quét */}
           {engineActive && cameraActive && (
