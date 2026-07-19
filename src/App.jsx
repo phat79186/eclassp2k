@@ -14,6 +14,43 @@ import RankingPage from './RankingPage';
 import AdminDashPage from './AdminDashboard';
 import confetti from 'canvas-confetti';
 
+async function getBestCameraStream(baseConstraints = {}) {
+  try {
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let hasLabels = devices.some(d => d.label);
+    if (!hasLabels) {
+      try {
+        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
+        temp.getTracks().forEach(track => track.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch (e) {
+        console.warn("Xin quyền camera thất bại:", e);
+      }
+    }
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const nvDevice = videoDevices.find(d => 
+      d.label && (
+        d.label.toLowerCase().includes('nvidia') || 
+        d.label.toLowerCase().includes('broadcast')
+      )
+    );
+    const optimal = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 }
+    };
+    let constraints = { video: { ...optimal, ...baseConstraints } };
+    if (nvDevice) {
+      console.log("Ưu tiên chọn camera NVIDIA:", nvDevice.label);
+      constraints.video.deviceId = { exact: nvDevice.deviceId };
+    }
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (err) {
+    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình dự phòng:", err);
+    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...baseConstraints } });
+  }
+}
+
 const compressImage = (file, maxWidth = 400, maxHeight = 400) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -625,15 +662,52 @@ function normalizeAssignmentsFromServer(assignmentsByClass) {
   if (!assignmentsByClass) return assignmentsByClass;
   const out = {};
   for (const classId of Object.keys(assignmentsByClass)) {
-    out[classId] = (assignmentsByClass[classId] || []).map(t => ({
-      ...t,
-      mode: t.mode || t.type || (t.questions && t.questions.length > 0 ? "quiz" : "file"),
-    }));
+    out[classId] = (assignmentsByClass[classId] || []).map(t => {
+      const mode = t.mode || t.type || (t.questions && t.questions.length > 0 ? "quiz" : "file");
+      const submissions = {};
+      const quizResults = {};
+      if (t.submissions) {
+        for (const [studentId, sub] of Object.entries(t.submissions)) {
+          if (sub && typeof sub === 'object' && 'answers' in sub) {
+            submissions[studentId] = sub.submittedAt;
+            const answers = sub.answers || {};
+            const score = sub.score !== null ? parseFloat(sub.score) : null;
+            const maxTotal = t.questions ? t.questions.length : 0;
+            const maxAutoScore = t.questions ? t.questions.filter(q => q.type === 'multiple_choice' || q.type === 'true_false').length : 0;
+            const essayQs = t.questions ? t.questions.filter(q => q.type === 'essay') : [];
+            const hasEssay = essayQs.length > 0;
+            const essayScores = {};
+            if (hasEssay && answers._essayScores) {
+              Object.assign(essayScores, answers._essayScores);
+            }
+            quizResults[studentId] = {
+              answers,
+              autoScore: score !== null ? score : undefined,
+              maxAutoScore,
+              maxTotal,
+              detail: null,
+              essayScores,
+              submittedAt: sub.submittedAt,
+              graded: score !== null,
+              score: score,
+            };
+          } else {
+            submissions[studentId] = sub;
+          }
+        }
+      }
+      return {
+        ...t,
+        mode,
+        submissions,
+        quizResults: { ...(t.quizResults || {}), ...quizResults }
+      };
+    });
   }
   return out;
 }
 
-async function syncToAPI(key, oldVal, newVal) {
+async function syncToAPI(key, oldVal, newVal, session) {
   try {
     if (key === "session") return; // session managed by login/logout
 
@@ -716,17 +790,58 @@ async function syncToAPI(key, oldVal, newVal) {
       return;
     }
     if (key === "assignments") {
+      const studentId = session && session.role === "student" ? session.data.id : null;
+      const isTeacher = session && (session.role === "teacher" || session.role === "admin");
       for (const classId of allKeys) {
         const oldTasks = oldObj[classId] || [];
         const newTasks = newObj[classId] || [];
         const { added, removed, updated } = diffArray(oldTasks, newTasks);
-        // Backend/DB dùng field "type" ("quiz"/"video"/"standard"), còn form tạo bài tập
-        // ở TaskPage lại dùng field nội bộ "mode". Map "mode" -> "type" ở đây để đảm bảo
-        // cột type trong DB được lưu đúng, không bị mặc định thành 'standard' cho mọi bài
-        // (bug: trắc nghiệm hiển thị nhầm thành tự luận sau khi tải lại trang).
-        for (const t of added)   await api.createAssignment({ ...t, classId, type: t.type || t.mode || 'standard' });
-        for (const t of removed) await api.deleteAssignment(t.id);
-        for (const t of updated) await api.updateAssignment(t.id, { ...t, type: t.type || t.mode || 'standard' });
+        for (const t of added) {
+          if (isTeacher) {
+            await api.createAssignment({ ...t, classId, type: t.type || t.mode || 'standard' });
+          }
+        }
+        for (const t of removed) {
+          if (isTeacher) {
+            await api.deleteAssignment(t.id);
+          }
+        }
+        for (const t of updated) {
+          const oldT = oldTasks.find(o => o.id === t.id);
+          if (studentId) {
+            const oldSubmitted = oldT?.submissions?.[studentId];
+            const newSubmitted = t.submissions?.[studentId];
+            const newResult = t.quizResults?.[studentId];
+            if (newSubmitted && !oldSubmitted) {
+              const answers = newResult ? newResult.answers : {};
+              await api.submitAssignment(t.id, { studentId, answers });
+            }
+          }
+          if (isTeacher) {
+            if (oldT && t.quizResults) {
+              for (const sid of Object.keys(t.quizResults)) {
+                const oldRes = oldT.quizResults?.[sid];
+                const newRes = t.quizResults[sid];
+                if (newRes && (!oldRes || oldRes.score !== newRes.score || JSON.stringify(oldRes.essayScores) !== JSON.stringify(newRes.essayScores))) {
+                  let finalScore = newRes.score;
+                  if (newRes.autoScore !== undefined) {
+                    const essaySum = Object.values(newRes.essayScores || {}).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+                    const maxPossible = newRes.maxTotal || (t.questions ? t.questions.length : 1);
+                    const essayCount = t.questions ? t.questions.filter(q => q.type === 'essay').length : 0;
+                    if (essayCount > 0) {
+                      finalScore = ((newRes.autoScore + essaySum) / maxPossible) * 10;
+                    } else {
+                      finalScore = newRes.autoScore;
+                    }
+                  }
+                  await api.gradeAssignment(t.id, { studentId: sid, score: finalScore });
+                  await api.submitAssignment(t.id, { studentId: sid, answers: { ...newRes.answers, _essayScores: newRes.essayScores } });
+                }
+              }
+            }
+            await api.updateAssignment(t.id, { ...t, type: t.type || t.mode || 'standard' });
+          }
+        }
       }
       return;
     }
@@ -997,7 +1112,7 @@ function useAppState() {
       const oldVal = prev[key];
       const newVal = typeof val === "function" ? val(oldVal) : val;
       if (oldVal !== newVal) {
-        Promise.resolve().then(() => syncToAPI(key, oldVal, newVal));
+        Promise.resolve().then(() => syncToAPI(key, oldVal, newVal, prev.session));
       }
       return { ...prev, [key]: newVal };
     });
@@ -1911,7 +2026,7 @@ const NAV_TEACHER = [
   { id: "rankings",    Ic: Trophy,        l: "Xếp hạng" },
   { id: "competition", Ic: Trophy,        l: "Thi đua lớp" },
   { id: "locate",      Ic: Eye,           l: "Giám sát AI" },
-  { id: "pending",     Ic: UserCheck,     l: "Duyệt HS" },
+  { id: "pending",     Ic: UserCheck,     l: "Duyệt PH" },
   { id: "settings",    Ic: Settings,      l: "Cài đặt" },
   { id: "profile",     Ic: User,          l: "Hồ sơ" },
 ];
@@ -2003,7 +2118,7 @@ function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setC
 }
 
 function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleDark, selClass, setSelClass, myClasses }) {
-  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt học sinh", ai:"Trợ giảng AI", locate:"Giám sát AI (Locate)" };
+  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt phụ huynh", ai:"Trợ giảng AI", locate:"Giám sát AI (Locate)" };
   return (
     <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "var(--topbar)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border2)", position: "sticky", top: 0, zIndex: 40 }}>
       <button onClick={toggleSide} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "var(--inp-bg)", color: "var(--text4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Menu size={14} /></button>
@@ -2034,44 +2149,12 @@ function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleD
 }
 
 
-// duyệt hs
+// duyệt phụ huynh
 
 function PendingPage({ state, user }) {
   const myClassIds = useMemo(() => state.classes.filter(c => c.teacherId === user.data.id).map(c => c.id), [state.classes, user.data.id]);
-  const pending = useMemo(() => state.pendingStudents.filter(p => myClassIds.includes(p.classId)), [state.pendingStudents, myClassIds]);
   const pendingP = useMemo(() => state.pendingParents.filter(p => myClassIds.includes(p.classId)), [state.pendingParents, myClassIds]);
-  const [codeMap, setCodeMap] = useState({});
-  const [err, setErr] = useState({});
   const { confirm, ConfirmUI } = useConfirm();
-
-  const approve = (pend) => {
-    const code = (codeMap[pend.id] || "").trim().toUpperCase();
-    if (!code) { setErr(e => ({ ...e, [pend.id]: "Nhập mã học sinh" })); return; }
-    const dup = state.students.find(s => s.classId === pend.classId && s.code.toUpperCase() === code);
-    if (dup) { setErr(e => ({ ...e, [pend.id]: "Mã đã tồn tại" })); return; }
-    state.setStudents(prev => [...prev, {
-      id: "st_" + Date.now() + Math.random(),
-      classId: pend.classId,
-      name: pend.name,
-      code,
-      photo: pend.photo || null,
-      phone: pend.phone || "",
-      dob: pend.dob || "",
-      email: pend.email || "",
-      emailVerified: !!pend.emailVerified,
-      score: 0,
-      createdAt: Date.now(),
-    }]);
-    state.setPendingStudents(prev => prev.filter(p => p.id !== pend.id));
-    confetti({ particleCount: 70, spread: 60, colors: ['#34D399', '#4FACFE', '#A78BFA'] });
-    setErr(e => { const n = { ...e }; delete n[pend.id]; return n; });
-  };
-
-  const reject = async (id) => {
-    const ok = await confirm("Từ chối đăng ký này?");
-    if (!ok) return;
-    state.setPendingStudents(prev => prev.filter(p => p.id !== id));
-  };
 
   const matchedStudent = (req) => state.students.find(s => s.classId === req.classId && s.code.toUpperCase() === req.studentCode.toUpperCase());
 
@@ -2094,49 +2177,14 @@ function PendingPage({ state, user }) {
       {ConfirmUI}
       <div className="scard" style={{ overflow: "hidden" }}>
         <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--wa06)", display: "flex", alignItems: "center", gap: 10 }}>
-          <UserCheck size={16} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Đăng ký học sinh đang chờ duyệt</span>
-          {pending.length > 0 && <Badge c="red">{pending.length} mới</Badge>}
-        </div>
-        {pending.length === 0 ? (
-          <div style={{ padding: 48, textAlign: "center", color: "var(--text4)" }}>
-            <UserCheck size={36} style={{ margin: "0 auto 14px", opacity: .25 }} />
-            <div style={{ fontSize: 13 }}>Không có đăng ký nào đang chờ</div>
-          </div>
-        ) : pending.map(p => {
-          const cls = state.classes.find(c => c.id === p.classId);
-          return (
-            <div key={p.id} style={{ padding: "14px 18px", borderBottom: "1px solid var(--wa04)", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <Av photo={p.photo} sz={44} />
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 2 }}>Lớp: <span style={{ color: "var(--accent)" }}>{cls?.name}</span> · {p.phone && `📞 ${p.phone}`}</div>
-                {p.email && <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>✉️ {p.email}{p.emailVerified && <Badge c="green">Đã xác minh</Badge>}</div>}
-                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1 }}>Đăng ký: {new Date(p.submittedAt).toLocaleDateString("vi-VN")}</div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <div>
-                  <input className="inp" placeholder="Cấp mã HS (VD: HS001)" value={codeMap[p.id] || ""} onChange={e => { setCodeMap(m => ({ ...m, [p.id]: e.target.value })); setErr(e2 => { const n = { ...e2 }; delete n[p.id]; return n; }); }} style={{ width: 170, fontSize: 12 }} />
-                  {err[p.id] && <div style={{ fontSize: 10, color: "#EF4444", marginTop: 3 }}>{err[p.id]}</div>}
-                </div>
-                <Btn onClick={() => approve(p)} small variant="success"><UserCheck size={12} />Duyệt</Btn>
-                <Btn onClick={() => reject(p.id)} small variant="danger"><UserX size={12} />Từ chối</Btn>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="scard" style={{ overflow: "hidden" }}>
-        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--wa06)", display: "flex", alignItems: "center", gap: 10 }}>
           <Users size={16} style={{ color: "#A78BFA" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Yêu cầu liên kết phụ huynh</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Yêu cầu liên kết phụ huynh đang chờ duyệt</span>
           {pendingP.length > 0 && <Badge c="red">{pendingP.length} mới</Badge>}
         </div>
         {pendingP.length === 0 ? (
           <div style={{ padding: 48, textAlign: "center", color: "var(--text4)" }}>
             <Users size={36} style={{ margin: "0 auto 14px", opacity: .25 }} />
-            <div style={{ fontSize: 13 }}>Không có yêu cầu nào đang chờ</div>
+            <div style={{ fontSize: 13 }}>Không có yêu cầu liên kết nào đang chờ</div>
           </div>
         ) : pendingP.map(req => {
           const cls = state.classes.find(c => c.id === req.classId);
@@ -5016,7 +5064,7 @@ function QuizTakeModal({ task, onClose, onSubmit }) {
 
   return (
     <div className="modal-bg" onClick={e => e.target === e.currentTarget && !timeUp && onClose()}>
-      <div className="modal" style={{ width: 560, maxHeight: "85vh", overflowY: "auto", position: "relative" }}>
+      <div className="modal" style={{ width: "85vw", maxHeight: "90vh", overflowY: "auto", position: "relative" }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div style={{ flex: 1 }}>
@@ -5138,7 +5186,7 @@ function QuizTakeModal({ task, onClose, onSubmit }) {
 function VideoQuizTakeModal({ task, onClose, onSubmit }) {
   return (
     <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ width: 680, maxHeight: "90vh", overflowY: "auto", padding: 20 }}>
+      <div className="modal" style={{ width: "85vw", maxHeight: "95vh", overflowY: "auto", padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{task.title}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text4)" }}><X size={18} /></button>
@@ -5165,7 +5213,7 @@ function QuizReviewModal({ task, user, classStudents, onClose, onSaveEssay }) {
 
   return (
     <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ width: 600, maxHeight: "85vh", overflowY: "auto" }}>
+      <div className="modal" style={{ width: "85vw", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{task.title}</h2>
@@ -5266,6 +5314,33 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
   const [errTask, setErrTask] = useState("");
   const [takingTaskId, setTakingTaskId] = useState(null);
   const [reviewTaskId, setReviewTaskId] = useState(null);
+
+  const lastActiveTaskRef = useRef(null);
+  const activeTask = useMemo(() => {
+    if (!takingTaskId) {
+      lastActiveTaskRef.current = null;
+      return null;
+    }
+    const found = tasks.find(x => x.id === takingTaskId);
+    if (found) {
+      lastActiveTaskRef.current = found;
+    }
+    return lastActiveTaskRef.current;
+  }, [takingTaskId, tasks]);
+
+  const lastReviewTaskRef = useRef(null);
+  const activeReviewTask = useMemo(() => {
+    if (!reviewTaskId) {
+      lastReviewTaskRef.current = null;
+      return null;
+    }
+    const found = tasks.find(x => x.id === reviewTaskId);
+    if (found) {
+      lastReviewTaskRef.current = found;
+    }
+    return lastReviewTaskRef.current;
+  }, [reviewTaskId, tasks]);
+
   const fileRef = useRef();
   const { confirm, ConfirmUI } = useConfirm();
 
@@ -5618,7 +5693,7 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
         </div>
       )}
       {takingTaskId && (() => {
-        const t = tasks.find(x => x.id === takingTaskId);
+        const t = activeTask;
         if (!t) return null;
         if (t.mode === "video") {
           return t.strictFullscreen ? (
@@ -5634,7 +5709,7 @@ function TaskPage({ state, user, selClass, setSelClass, myClasses }) {
         );
       })()}
       {reviewTaskId && (() => {
-        const t = tasks.find(x => x.id === reviewTaskId);
+        const t = activeReviewTask;
         return t ? <QuizReviewModal task={t} user={user} classStudents={classStudents} onClose={() => setReviewTaskId(null)} onSaveEssay={saveEssayScore} /> : null;
       })()}
     </div>
@@ -6760,7 +6835,7 @@ function DashPage({ state, user, setView }) {
   const tasks = state.assignments[classId] || [];
   const todayDate = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const myClasses = useMemo(() => state.classes.filter(c => c.teacherId === user.data.id), [state.classes, user.data.id]);
-  const pendingCount = useMemo(() => state.pendingStudents.filter(p => myClasses.map(c => c.id).includes(p.classId)).length, [state.pendingStudents, myClasses]);
+  const pendingCount = useMemo(() => state.pendingParents.filter(p => myClasses.map(c => c.id).includes(p.classId)).length, [state.pendingParents, myClasses]);
 
   return (
     <div className="page" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -6772,7 +6847,7 @@ function DashPage({ state, user, setView }) {
             {isT ? (
               <>
                 <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(79,172,254,.1)", color: "var(--accent)", fontWeight: 500 }}>{myClasses.length} lớp · {classStudents.length} học sinh</span>
-                {pendingCount > 0 && <span onClick={() => setView("pending")} style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(239,68,68,.1)", color: "#EF4444", fontWeight: 600, cursor: "pointer" }}>⚠ {pendingCount} đăng ký chờ duyệt</span>}
+                {pendingCount > 0 && <span onClick={() => setView("pending")} style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(239,68,68,.1)", color: "#EF4444", fontWeight: 600, cursor: "pointer" }}>⚠ {pendingCount} phụ huynh chờ duyệt</span>}
               </>
             ) : (
               <>
@@ -6790,7 +6865,7 @@ function DashPage({ state, user, setView }) {
           { l:"Học sinh", v:classStudents.length, c:"#A78BFA", Ic:Users, s:cls?.name||"Chọn lớp" },
           { l:"Có mặt", v:presentToday.length, c:"#34D399", Ic:CheckCircle, s:"Hôm nay" },
           { l:"Bài tập", v:tasks.length, c:"#F59E0B", Ic:BookOpen, s:"Đã tạo" },
-          ...(classId ? [{ l:"Chờ duyệt", v:pendingCount, c:"#EF4444", Ic:UserCheck, s:"Học sinh mới" }] : []),
+          ...(classId ? [{ l:"Duyệt PH", v:pendingCount, c:"#EF4444", Ic:UserCheck, s:"Liên kết PH" }] : []),
         ] : [
           { l:"Điểm danh", v:presentToday.includes(user.data.id)?"✓":"✗", c:presentToday.includes(user.data.id)?"#34D399":"#EF4444", Ic:CheckCircle, s:"Hôm nay" },
           { l:"Chờ nộp", v:tasks.filter(t=>t.status==="pending").length, c:"#F59E0B", Ic:Clock, s:"Bài tập" },
@@ -7126,13 +7201,13 @@ function LocateAnythingPage({ state, user, selClass }) {
           videoRef.current.src = "";
           videoRef.current.srcObject = null;
         }
-        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+        getBestCameraStream()
           .then((stream) => {
             streamRef.current = stream;
             if (videoRef.current) {
               videoRef.current.srcObject = stream;
             }
-            addLog("webcam_init: webcam input source connected successfully (640x480).");
+            addLog("webcam_init: webcam input source connected successfully (optimal/NVIDIA).");
           })
           .catch((e) => {
             addLog("webcam_err: could not access camera. Please check permissions.");
@@ -8141,7 +8216,7 @@ function LocateAnythingPage({ state, user, selClass }) {
 
 // cài đặt
 
-function SettingsPage({ state, user }) {
+function SettingsPage({ state, user, setUser }) {
   const t = user.data;
   const [tab, setTab] = useState("profile");
   const [name, setName] = useState(t.name);
@@ -8226,6 +8301,16 @@ function SettingsPage({ state, user }) {
       state.setStudents(p => p.map(x => x.id === t.id ? { ...x, name: name.trim(), photo } : x));
     } else if (user.role === "parent") {
       state.setParents(p => p.map(x => x.id === t.id ? { ...x, name: name.trim(), photo, ...(pw ? { password: pw } : {}) } : x));
+    }
+
+    // Đồng bộ tức thì lên session đang hoạt động
+    if (setUser) {
+      setUser(prev => {
+        if (!prev) return prev;
+        const updatedData = { ...prev.data, name: name.trim(), photo };
+        if (pw) updatedData.password = pw;
+        return { ...prev, data: updatedData };
+      });
     }
 
     setSaved(true); setPw(""); setPwOld("");
@@ -8402,7 +8487,7 @@ function SettingsPage({ state, user }) {
 
 
 
-function App({ user, state, onLogout, darkMode, toggleDark }) {
+function App({ user, state, onLogout, darkMode, toggleDark, setUser }) {
   const [view, setView] = useState("dashboard");
   const [achievements, setAchievements] = useState(() => {
     try {
@@ -8437,6 +8522,15 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
       }
     }
   }, [myClasses, user, selClass]);
+
+  // Chạy nền định kỳ reload lại state để đồng bộ hóa bài tập, điểm danh, đăng ký với server
+  useEffect(() => {
+    if (!state.loaded) return;
+    const interval = setInterval(() => {
+      state.reload();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [state.loaded, state.reload]);
 
   const unlockAchievement = useCallback((id, name, desc, icon) => {
     setAchievements(prev => {
@@ -8519,35 +8613,58 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
   const classInfo = state.classes.find(c => c.id === classId);
   const myOwnClassIds = useMemo(() => state.classes.filter(c => c.teacherId === user.data.id).map(c => c.id), [state.classes, user.data.id]);
   const pendingCount = user.role === "teacher"
-    ? state.pendingStudents.filter(p => myOwnClassIds.includes(p.classId)).length + state.pendingParents.filter(p => myOwnClassIds.includes(p.classId)).length
+    ? state.pendingParents.filter(p => myOwnClassIds.includes(p.classId)).length
     : 0;
   const chatUnreadCount = getChatUnreadTotal(user, state, classId);
   useChatBackgroundPoll(user, state, classId);
 
-  const PAGES = useMemo(() => ({
-    dashboard:   p => user.role === "parent" ? <ParentDashPage {...p} setView={setView} /> : user.role === "admin" ? <AdminDashPage {...p} /> : <DashPage {...p} setView={setView} />,
-    students:    p => <StudentsPage  {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    seating:     p => <SeatingPage   {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    attendance:  p => <AttPage       {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    chat:        p => <ChatPage      {...p} classId={p.selClass} />,
-    parentchat:  p => <ParentTeacherChatPage {...p} />,
-    assignments: p => <TaskPage      {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    wheel:       p => <WheelPage     {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    library:     p => <LibPage       {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    gradecalc:   p => <GradeCalculatorPage {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    rankings:    p => <RankingPage   {...p} />,
-    competition: p => <ClassCompetitionPage {...p} />,
-    locate:      p => <LocateAnythingPage {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    settings:    p => <SettingsPage  {...p} />,
-    profile:     p => <ProfilePage   {...p} />,
-    pending:     p => <PendingPage   {...p} />,
-    pomodoro:    p => <PomodoroPage  {...p} />,
-    ai:          p => <AITutorPage   {...p} />,
-    schedule:    p => <SchedulePage  {...p} selClass={p.selClass} setSelClass={p.setSelClass} myClasses={p.myClasses} />,
-    lab:         p => <LabPage       {...p} />,
-  }), [user.role, user.data, myClasses, selClass]);
-
-  const PageFn = PAGES[view] || PAGES.dashboard;
+  const renderPage = () => {
+    const p = { state, user, setUser, selClass, setSelClass, myClasses, achievements, setShowAchModal, unlockAchievement, ranLangs, setRanLangs };
+    switch (view) {
+      case "dashboard":
+        return user.role === "parent" ? <ParentDashPage {...p} setView={setView} /> : user.role === "admin" ? <AdminDashPage {...p} /> : <DashPage {...p} setView={setView} />;
+      case "students":
+        return <StudentsPage  {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "seating":
+        return <SeatingPage   {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "attendance":
+        return <AttPage       {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "chat":
+        return <ChatPage      {...p} classId={selClass} />;
+      case "parentchat":
+        return <ParentTeacherChatPage {...p} />;
+      case "assignments":
+        return <TaskPage      {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "wheel":
+        return <WheelPage     {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "library":
+        return <LibPage       {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "gradecalc":
+        return <GradeCalculatorPage {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "rankings":
+        return <RankingPage   {...p} />;
+      case "competition":
+        return <ClassCompetitionPage {...p} />;
+      case "locate":
+        return <LocateAnythingPage {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "settings":
+        return <SettingsPage  {...p} />;
+      case "profile":
+        return <ProfilePage   {...p} />;
+      case "pending":
+        return <PendingPage   {...p} />;
+      case "pomodoro":
+        return <PomodoroPage  {...p} />;
+      case "ai":
+        return <AITutorPage   {...p} />;
+      case "schedule":
+        return <SchedulePage  {...p} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />;
+      case "lab":
+        return <LabPage       {...p} />;
+      default:
+        return user.role === "parent" ? <ParentDashPage {...p} setView={setView} /> : user.role === "admin" ? <AdminDashPage {...p} /> : <DashPage {...p} setView={setView} />;
+    }
+  };
 
   return (
     <div style={{ display: "flex" }}>
@@ -8556,7 +8673,7 @@ function App({ user, state, onLogout, darkMode, toggleDark }) {
       <div className={`main-wrapper ${col ? "col" : ""}`}>
         <TopBar view={view} toggleSide={() => setCol(p => !p)} user={user} onLogout={onLogout} classInfo={classInfo} darkMode={darkMode} toggleDark={toggleDark} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <PageFn state={state} user={user} selClass={selClass} setSelClass={setSelClass} myClasses={myClasses} achievements={achievements} setShowAchModal={setShowAchModal} unlockAchievement={unlockAchievement} ranLangs={ranLangs} setRanLangs={setRanLangs} />
+          {renderPage()}
         </div>
 
       {/* Achievement Toast */}
@@ -9483,22 +9600,14 @@ export default function SClassP2K() {
     }
   }, [state.parents]);
 
+  // Đồng bộ thông tin Giáo viên / Quản lý / Quản sinh khi danh sách giáo viên thay đổi
   useEffect(() => {
-    if (!user || user.role !== "admin") return;
-    const updated = state.teachers.find(t => t.id === user.data.id && t.isAdmin);
+    if (!user || (user.role !== "teacher" && user.role !== "admin" && user.role !== "proctor")) return;
+    const updated = state.teachers.find(t => t.id === user.data.id);
     if (updated && JSON.stringify(updated) !== JSON.stringify(user.data)) {
       setUser(prev => ({ ...prev, data: updated }));
     }
-  }, [state.teachers]);
-
-  // Đồng bộ thông tin Quản sinh khi danh sách giáo viên thay đổi
-  useEffect(() => {
-    if (!user || user.role !== "proctor") return;
-    const updated = state.teachers.find(t => t.id === user.data.id && t.subject === 'Quản sinh');
-    if (updated && JSON.stringify(updated) !== JSON.stringify(user.data)) {
-      setUser(prev => ({ ...prev, data: updated }));
-    }
-  }, [state.teachers]);
+  }, [state.teachers, user?.role]);
 
   // Kiểm tra ngầm (silent login check) định kỳ để xem mật khẩu Quản sinh có bị thay đổi bởi Admin hay không
   useEffect(() => {
@@ -9570,7 +9679,7 @@ export default function SClassP2K() {
           ? <LoginPage state={state} onLogin={handleLogin} classes={publicClasses} darkMode={darkMode} toggleDark={toggleDark} />
           : user.role === "proctor"
             ? <ProctorDashboard state={state} user={user} onLogout={handleLogout} darkMode={darkMode} toggleDark={toggleDark} />
-            : <App user={user} state={state} onLogout={handleLogout} darkMode={darkMode} toggleDark={toggleDark} />
+            : <App user={user} state={state} onLogout={handleLogout} darkMode={darkMode} toggleDark={toggleDark} setUser={setUser} />
         }
       </div>
     </>

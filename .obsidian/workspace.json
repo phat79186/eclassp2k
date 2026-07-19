@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "54ed15b29fd1c0e5",
+        "id": "e70bf7435368a773",
         "type": "tabs",
         "children": [
           {
-            "id": "55eeae1a00a304cf",
+            "id": "416aa174ecf74556",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -176,19 +176,20 @@
       "bases:Create new base": false
     }
   },
-  "active": "55eeae1a00a304cf",
+  "active": "416aa174ecf74556",
   "lastOpenFiles": [
+    "dist/assets/index-wbwPj7tv.js",
+    "dist/assets/index-dW0jo0qI.css",
+    "dist/assets",
+    "dist/assets/index-BTTEphZk.js",
+    "dist/assets/index-BkdV4bVu.js",
+    "dist/assets/index-DeaD0r8I.js",
+    "dist/assets/index-BK2hJoTd.js",
+    "dist/assets/index-DFIaqmty.js",
+    "dist/assets/index-DYt4U5_f.js",
+    "dist/assets/index-1q4ZrS31.js",
     "Master-Elearning-Proctoring.md",
     "sag/apps/web/app/(app)/chat/[[...id]]/page.tsx",
-    "sag/apps/web/app/(app)/knowledge/[id]/page.tsx",
-    "sag/apps/api/sag_api/db/models/__init__.py",
-    "sag/apps/web/app/(app)/chat/[[...id]]",
-    "sag/apps/api/sag_api/db/models/user.py",
-    "sag/apps/api/sag_api/db/models/universe.py",
-    "sag/apps/api/sag_api/db/models/source.py",
-    "sag/apps/api/sag_api/db/models/setting.py",
-    "sag/apps/api/sag_api/api/v1/attachments.py",
-    "sag/apps/api/sag_api/db/models/document.py",
     "sag/apps/web/app/icon.svg",
     "docs/references/public-apis.md",
     "rfc-cutler-httpbis-partitioned-cookies.md",

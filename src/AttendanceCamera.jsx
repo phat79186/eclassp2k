@@ -1,6 +1,43 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Camera, AlertCircle, RefreshCw, Eye, CornerDownRight, CheckCircle2 } from 'lucide-react';
 
+async function getBestCameraStream(baseConstraints = {}) {
+  try {
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let hasLabels = devices.some(d => d.label);
+    if (!hasLabels) {
+      try {
+        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
+        temp.getTracks().forEach(track => track.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch (e) {
+        console.warn("Xin quyền camera thất bại:", e);
+      }
+    }
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const nvDevice = videoDevices.find(d => 
+      d.label && (
+        d.label.toLowerCase().includes('nvidia') || 
+        d.label.toLowerCase().includes('broadcast')
+      )
+    );
+    const optimal = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 }
+    };
+    let constraints = { video: { ...optimal, ...baseConstraints } };
+    if (nvDevice) {
+      console.log("Ưu tiên chọn camera NVIDIA:", nvDevice.label);
+      constraints.video.deviceId = { exact: nvDevice.deviceId };
+    }
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (err) {
+    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình dự phòng:", err);
+    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...baseConstraints } });
+  }
+}
+
 const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model";
 
 export default function AttendanceCamera({ 
@@ -58,9 +95,7 @@ export default function AttendanceCamera({
       streamRef.current.getTracks().forEach(track => track.stop());
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" }
-      });
+      const stream = await getBestCameraStream({ facingMode: "user" });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;

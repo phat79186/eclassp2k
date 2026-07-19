@@ -3,6 +3,43 @@ import { createPortal } from 'react-dom';
 import { X, Upload, Plus, Trash2, Play, Pause, Save, CheckCircle, Circle } from 'lucide-react';
 import api from './api';
 
+async function getBestCameraStream(baseConstraints = {}) {
+  try {
+    let devices = await navigator.mediaDevices.enumerateDevices();
+    let hasLabels = devices.some(d => d.label);
+    if (!hasLabels) {
+      try {
+        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
+        temp.getTracks().forEach(track => track.stop());
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch (e) {
+        console.warn("Xin quyền camera thất bại:", e);
+      }
+    }
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const nvDevice = videoDevices.find(d => 
+      d.label && (
+        d.label.toLowerCase().includes('nvidia') || 
+        d.label.toLowerCase().includes('broadcast')
+      )
+    );
+    const optimal = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 }
+    };
+    let constraints = { video: { ...optimal, ...baseConstraints } };
+    if (nvDevice) {
+      console.log("Ưu tiên chọn camera NVIDIA:", nvDevice.label);
+      constraints.video.deviceId = { exact: nvDevice.deviceId };
+    }
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (err) {
+    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình dự phòng:", err);
+    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...baseConstraints } });
+  }
+}
+
 const FILE_ICONS = { pdf:"📄",docx:"📝",pptx:"📊",xlsx:"📈",mp4:"🎬",mp3:"🎵",jpg:"🖼️",png:"🖼️",zip:"📦",txt:"📃",youtube:"▶️",link:"🔗",other:"📁" };
 const SUBJECTS = ["Toán", "Ngữ văn", "Ngoại ngữ", "Vật lý", "Hóa học", "Sinh học", "Lịch sử", "Địa lý", "Giáo dục công dân", "Kinh tế pháp luật", "Tin học", "Công nghệ", "Giáo dục quốc phòng – An ninh", "Thể dục", "Giáo dục địa phương"];
 
@@ -715,7 +752,7 @@ export function ProctorCameraPanel({ onViolate, isCalibrating = false, onFaceSta
   // Request webcam stream
   useEffect(() => {
     let activeStream = null;
-    navigator.mediaDevices.getUserMedia({ video: true })
+    getBestCameraStream()
       .then(s => {
         activeStream = s;
         setStream(s);
@@ -1039,13 +1076,21 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
       }
       setAvatarDesc(avatarDetection.descriptor);
 
-      // Detect face from live camera
+      // Detect face from live camera with up to 5 automatic retries (600ms delay) to allow camera startup/focus
       const video = verifyVideoRef.current;
       if (!video) { setFaceVerifying(false); return; }
 
-      const liveDetection = await fapi.detectSingleFace(video, new fapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks(true)
-        .withFaceDescriptor();
+      let liveDetection = null;
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        if (attempt > 1) {
+          setFaceVerifyMsg(`Đang phân tích khuôn mặt (lần thử ${attempt}/5)...`);
+        }
+        liveDetection = await fapi.detectSingleFace(video, new fapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks(true)
+          .withFaceDescriptor();
+        if (liveDetection) break;
+        await new Promise(r => setTimeout(r, 600));
+      }
 
       if (!liveDetection) {
         setFaceVerifyMsg("⚠️ Không phát hiện được khuôn mặt qua camera. Hãy đảm bảo đủ ánh sáng và nhìn thẳng.");
@@ -1073,9 +1118,9 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
 
   // Start camera for verification panel & continuous proctoring
   useEffect(() => {
-    if (!task.strictFullscreen || !studentPhoto) return;
+    if (!task.strictFullscreen) return;
     let activeStream = null;
-    navigator.mediaDevices.getUserMedia({ video: true })
+    getBestCameraStream()
       .then(s => {
         activeStream = s;
         verifyStreamRef.current = s;
@@ -1087,7 +1132,7 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
     return () => {
       if (activeStream) activeStream.getTracks().forEach(t => t.stop());
     };
-  }, [task.strictFullscreen, studentPhoto]);
+  }, [task.strictFullscreen]);
 
   // Connect active stream to proctor video ref when it becomes available
   useEffect(() => {
@@ -1141,16 +1186,16 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
             const dyBottom = bottomJaw.y - nose.y;
             const pitchRatio = dyBottom / dyTop;
 
-            if (yawRatio > 2.2 || yawRatio < 0.45) {
-              warning = "Liếc/quay đầu sang hai bên!";
+            if (yawRatio > 3.6 || yawRatio < 0.28) {
+              warning = "Quay đầu quá xa màn hình!";
               lookDownStartRef.current = null;
               setDraftingMode(false);
               setDraftCountdown(30);
-            } else if (pitchRatio < 0.7) {
+            } else if (pitchRatio < 0.55) {
               // Phát hiện cúi đầu
-              if (pitchRatio < 0.40) {
+              if (pitchRatio < 0.28) {
                 // Cúi đầu quá sâu (vượt quá góc -35 độ, ví dụ cúi dưới gầm bàn)
-                warning = "Cúi đầu quá sâu (vượt quá -35 độ)!";
+                warning = "Cúi đầu quá sâu!";
                 lookDownStartRef.current = null;
                 setDraftingMode(false);
                 setDraftCountdown(30);
@@ -1168,8 +1213,8 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
                   warning = "Thời gian cúi đầu làm nháp vượt quá 30 giây!";
                 }
               }
-            } else if (pitchRatio > 2.0) {
-              warning = "Ngẩng đầu lên trên!";
+            } else if (pitchRatio > 2.8) {
+              warning = "Ngẩng đầu quá cao lên trên!";
               lookDownStartRef.current = null;
               setDraftingMode(false);
               setDraftCountdown(30);
@@ -1435,7 +1480,7 @@ export function StudentAssignmentModal({ task, user, onComplete, onCancel }) {
         </div>
       )}
 
-      <div className="modal" style={{ width: (task.strictFullscreen && started) ? 1000 : ((task.type === "video" || task.mode === "video") ? 800 : 700), maxHeight: "90vh", display: "flex", flexDirection: "column", padding: 0, overflow: "hidden", background: "var(--bg)", border: "1.5px solid var(--modal-bd)", boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)" }}>
+      <div className="modal" style={{ width: started ? "95vw" : ((task.type === "video" || task.mode === "video") ? 800 : 700), maxHeight: started ? "95vh" : "90vh", height: started ? "95vh" : "auto", display: "flex", flexDirection: "column", padding: 0, overflow: "hidden", background: "var(--bg)", border: "1.5px solid var(--modal-bd)", boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)" }}>
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Badge c={(task.type === "video" || task.mode === "video") ? "purple" : "blue"}>{(task.type === "video" || task.mode === "video") ? "Video Tương tác" : (task.type === "quiz" || task.mode === "quiz" || (task.questions && task.questions.length > 0)) ? "Trắc nghiệm" : "Tự luận"}</Badge>
