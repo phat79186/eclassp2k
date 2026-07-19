@@ -562,6 +562,7 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 .sidebar-wrapper { width: 224px; height: 100vh; background: var(--sidebar); border-right: 1px solid var(--border2); display: flex; flex-direction: column; transition: width .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1); position: fixed; left: 0; top: 0; z-index: 50; overflow: hidden; }
 .sidebar-wrapper.col { width: 58px; }
 .sidebar-overlay { display: none; }
+.login-card { background: var(--surface); border: 1px solid var(--wa09); border-radius: 22px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
 
 @media (max-width: 1024px) {
   .main-wrapper, .main-wrapper.col { margin-left: 0 !important; }
@@ -573,6 +574,13 @@ select option{background:#0D1E38;color:#E2EAF4;padding:8px}
 @media (max-width: 768px) {
   .page { padding: 12px !important; gap: 12px !important; }
   .scard { padding: 16px !important; }
+  .modal, .modal-flex { padding: 16px !important; min-width: 280px !important; max-width: 95vw !important; }
+  .topbar-logout-text { display: none !important; }
+  .topbar-title { font-size: 13px !important; }
+  .topbar-select-wrapper { max-width: 125px !important; gap: 4px !important; padding: 4px 6px !important; }
+  .topbar-select-wrapper span { display: none !important; }
+  .topbar-select-wrapper select { font-size: 10px !important; padding: 2px 4px !important; }
+  .login-card { padding: 18px !important; }
 }
 @media (max-width: 477px) {
   .vidcall-btn { padding: 7px !important; gap: 0 !important; border-radius: 50% !important; width: 28px; height: 28px; justify-content: center; }
@@ -1885,7 +1893,7 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
       <div style={{ position: "absolute", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle,rgba(29,108,245,.14),transparent 70%)", top: -150, left: -100, filter: "blur(60px)", pointerEvents: "none" }} />
       <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle,var(--wa022) 1px,transparent 1px)", backgroundSize: "30px 30px", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 10, width: "100%", maxWidth: 440, padding: "0 20px" }}>
-        <div style={{ background: "var(--surface)", border: "1px solid var(--wa09)", borderRadius: 22, padding: 28, boxShadow: "0 30px 80px rgba(0,0,0,.6)" }}>
+        <div className="login-card">
           {registerMode === "google_role" ? (
             <GoogleRoleSelect state={state} user={googleUser} onBack={() => setRegisterMode(null)} classes={classes} />
           ) : registerMode === "student" ? (
@@ -1923,7 +1931,7 @@ function LoginPage({ state, onLogin, classes, darkMode, toggleDark }) {
           </h1>
           <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 5 }}>Nền tảng quản lý lớp học thông minh</p>
         </div>
-        <div style={{ background: "var(--surface)", border: "1px solid var(--wa09)", borderRadius: 22, padding: 28, boxShadow: "0 30px 80px rgba(0,0,0,.6)" }}>
+        <div className="login-card">
           <div style={{ display: "flex", borderRadius: 12, background: "var(--wa04)", border: "1px solid var(--wa07)", overflow: "hidden", marginBottom: 24 }}>
             {[["teacher", "👨‍🏫", "GV"], ["student", "👨‍🎓", "HS"], ["proctor", "👮", "QS"], ["parent", "👪", "PH"], ["admin", "🔑", "Admin"]].map(([r, ic, label]) => (
               <button key={r} onClick={() => { setRole(r); setErr(""); }} style={{ flex: 1, padding: "10px 2px", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 10, fontWeight: 600, background: role === r ? "rgba(79,172,254,.15)" : "transparent", color: role === r ? "var(--accent)" : "var(--text3)", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
@@ -2122,9 +2130,9 @@ function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleD
   return (
     <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "var(--topbar)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border2)", position: "sticky", top: 0, zIndex: 40 }}>
       <button onClick={toggleSide} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "var(--inp-bg)", color: "var(--text4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Menu size={14} /></button>
-      <h1 className="hfont" style={{ fontSize: 15, fontWeight: 400, color: "var(--text)" }}>{LBL[view] || view}</h1>
+      <h1 className="hfont topbar-title" style={{ fontSize: 15, fontWeight: 400, color: "var(--text)" }}>{LBL[view] || view}</h1>
       {user.role === "teacher" && myClasses && myClasses.length > 0 ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--wa015)", padding: "4px 10px", borderRadius: 8, border: "1px solid var(--border2)" }}>
+        <div className="topbar-select-wrapper" style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--wa015)", padding: "4px 10px", borderRadius: 8, border: "1px solid var(--border2)" }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: ".04em" }}>LỚP:</span>
           <select value={selClass} onChange={e => setSelClass(e.target.value)} style={{ padding: "4px 8px", borderRadius: 6, background: "var(--wa055)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 11, fontWeight: 600, outline: "none", cursor: "pointer", fontFamily: "inherit" }}>
             {myClasses.map(c => <option key={c.id} value={c.id}>{c.name} ({c.school || 'Không rõ trường'})</option>)}
@@ -2142,7 +2150,7 @@ function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleD
         {darkMode ? <Sun size={15} /> : <Moon size={15} />}
       </button>
       <button onClick={onLogout} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-        <LogOut size={11} />Đăng xuất
+        <LogOut size={11} /><span className="topbar-logout-text">Đăng xuất</span>
       </button>
     </div>
   );
@@ -6824,9 +6832,9 @@ function ParentDashPage({ state, user, setView }) {
 // trang 
 
 
-function DashPage({ state, user, setView }) {
+function DashPage({ state, user, setView, selClass }) {
   const isT = user.role === "teacher";
-  const classId = isT ? state.classes.find(c => c.teacherId === user.data.id)?.id : user.classId;
+  const classId = isT ? (selClass || state.classes.find(c => c.teacherId === user.data.id)?.id) : user.classId;
   const cls = state.classes.find(c => c.id === classId);
   const classStudents = useMemo(() => state.students.filter(s => s.classId === classId), [state.students, classId]);
   const today = (new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0') + '-' + String(new Date().getDate()).padStart(2, '0'));
@@ -6846,7 +6854,6 @@ function DashPage({ state, user, setView }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {isT ? (
               <>
-                <span style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(79,172,254,.1)", color: "var(--accent)", fontWeight: 500 }}>{myClasses.length} lớp · {classStudents.length} học sinh</span>
                 {pendingCount > 0 && <span onClick={() => setView("pending")} style={{ fontSize: 11, padding: "4px 11px", borderRadius: 8, background: "rgba(239,68,68,.1)", color: "#EF4444", fontWeight: 600, cursor: "pointer" }}>⚠ {pendingCount} phụ huynh chờ duyệt</span>}
               </>
             ) : (

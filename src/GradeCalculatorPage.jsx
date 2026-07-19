@@ -808,6 +808,14 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
         .gcb-dirty { box-shadow: inset 0 -2px 0 0 #F59E0B; }
         .gcb-fillrow td { padding: 4px; background: var(--surface2); }
         .gcb-table thead th { position: sticky; top: 0; z-index: 2; }
+        @media (max-width: 768px) {
+          .gc-title { font-size: 18px !important; margin-bottom: 6px !important; }
+          .scard { padding: 16px !important; gap: 12px !important; }
+          .gc-btn { width: 100% !important; text-align: center !important; display: inline-flex !important; justify-content: center !important; align-items: center !important; box-sizing: border-box !important; }
+          .gc-input { width: 44px !important; padding: 4px !important; font-size: 12px !important; }
+          .gc-table th { padding: 6px 4px !important; font-size: 10px !important; }
+          .gc-table td { padding: 6px 2px !important; }
+        }
       `}</style>
 
       {isTeacher && activeTab === 'detail' && (
@@ -862,7 +870,7 @@ export default function GradeCalculatorPage({ state, user, selClass, setSelClass
       {(!isTeacher || activeTab === 'detail') && (
         <>
           <div className="scard" style={{ padding: 24 }}>
-            <h1 style={{ fontSize: 24, fontWeight: 700, textAlign: 'center', marginBottom: 8, color: 'var(--text)' }}>🎓 Xếp Loại Học Lực THPT (Thông tư 22)</h1>
+            <h1 className="gc-title" style={{ fontSize: 24, fontWeight: 700, textAlign: 'center', marginBottom: 8, color: 'var(--text)' }}>🎓 Xếp Loại Học Lực THPT (Thông tư 22)</h1>
         <p style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 13, marginBottom: 24 }}>Hệ thống tính điểm và xếp loại học lực cả năm học</p>
 
         {!readOnly && (

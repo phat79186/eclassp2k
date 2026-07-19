@@ -374,6 +374,15 @@ const VQ_CSS = `
 @media(max-width:768px){
   .vq-layout{ flex-direction:column; height:auto; }
   .vq-sidebar{ width:100%; border-left:none; border-top:1px solid var(--border2,rgba(255,255,255,.05)); }
+  .vq-quiz-card { padding: 18px 20px !important; }
+  .vq-quiz-q { font-size: 13.5px !important; margin-bottom: 12px !important; }
+  .vq-quiz-opt { padding: 9px 12px !important; font-size: 12.5px !important; }
+  .vq-progress-track { height: 5px !important; }
+  .vq-progress-track:hover { height: 8px !important; }
+  .vq-progress-thumb { opacity: 1 !important; width: 13px !important; height: 13px !important; }
+}
+@media(max-width:500px){
+  .vq-vol-slider { display: none !important; }
 }
 `;
 

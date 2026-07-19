@@ -356,7 +356,7 @@ export default function RankingPage({ state, user, selClass, setSelClass, myClas
   return (
     <div className="page" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
-        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="scard" style={{ padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
               <Trophy size={22} style={{ color: '#FBBF24' }} />
@@ -449,7 +449,7 @@ export default function RankingPage({ state, user, selClass, setSelClass, myClas
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {personalStudent && (
             <div className="scard" style={{ padding: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
