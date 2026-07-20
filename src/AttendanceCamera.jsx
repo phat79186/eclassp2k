@@ -2,39 +2,20 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Camera, AlertCircle, RefreshCw, Eye, CornerDownRight, CheckCircle2 } from 'lucide-react';
 
 async function getBestCameraStream(baseConstraints = {}) {
-  try {
-    let devices = await navigator.mediaDevices.enumerateDevices();
-    let hasLabels = devices.some(d => d.label);
-    if (!hasLabels) {
-      try {
-        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
-        temp.getTracks().forEach(track => track.stop());
-        devices = await navigator.mediaDevices.enumerateDevices();
-      } catch (e) {
-        console.warn("Xin quyền camera thất bại:", e);
-      }
-    }
-    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-    const nvDevice = videoDevices.find(d => 
-      d.label && (
-        d.label.toLowerCase().includes('nvidia') || 
-        d.label.toLowerCase().includes('broadcast')
-      )
-    );
-    const optimal = {
+  const defaultConstraints = {
+    video: {
+      facingMode: { ideal: "user" },
       width: { ideal: 1280 },
       height: { ideal: 720 },
-      frameRate: { ideal: 30 }
-    };
-    let constraints = { video: { ...optimal, ...baseConstraints } };
-    if (nvDevice) {
-      console.log("Ưu tiên chọn camera NVIDIA:", nvDevice.label);
-      constraints.video.deviceId = { exact: nvDevice.deviceId };
+      frameRate: { ideal: 30 },
+      ...baseConstraints
     }
-    return await navigator.mediaDevices.getUserMedia(constraints);
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia(defaultConstraints);
   } catch (err) {
-    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình dự phòng:", err);
-    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...baseConstraints } });
+    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình mặc định:", err);
+    return await navigator.mediaDevices.getUserMedia({ video: true });
   }
 }
 
@@ -89,26 +70,36 @@ export default function AttendanceCamera({
     return () => { active = false; };
   }, []);
 
+  const camTokenRef = useRef(0);
+
   // Control camera stream
   const startCamera = useCallback(async () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
+    const token = ++camTokenRef.current;
     try {
       const stream = await getBestCameraStream({ facingMode: "user" });
+      if (token !== camTokenRef.current) {
+        stream?.getTracks().forEach(track => track.stop());
+        return;
+      }
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setCameraActive(true);
       }
     } catch (err) {
-      console.error("Lỗi truy cập Camera:", err);
-      setDetectStatus("WARNING");
-      onWarningTrigger?.("Không thể truy cập camera. Vui lòng cấp quyền.");
+      if (token === camTokenRef.current) {
+        console.error("Lỗi truy cập Camera:", err);
+        setDetectStatus("WARNING");
+        onWarningTrigger?.("Không thể truy cập camera. Vui lòng cấp quyền.");
+      }
     }
   }, [onWarningTrigger]);
 
   const stopCamera = useCallback(() => {
+    camTokenRef.current++;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;

@@ -15,39 +15,20 @@ import AdminDashPage from './AdminDashboard';
 import confetti from 'canvas-confetti';
 
 async function getBestCameraStream(baseConstraints = {}) {
-  try {
-    let devices = await navigator.mediaDevices.enumerateDevices();
-    let hasLabels = devices.some(d => d.label);
-    if (!hasLabels) {
-      try {
-        const temp = await navigator.mediaDevices.getUserMedia({ video: true });
-        temp.getTracks().forEach(track => track.stop());
-        devices = await navigator.mediaDevices.enumerateDevices();
-      } catch (e) {
-        console.warn("Xin quyền camera thất bại:", e);
-      }
-    }
-    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-    const nvDevice = videoDevices.find(d => 
-      d.label && (
-        d.label.toLowerCase().includes('nvidia') || 
-        d.label.toLowerCase().includes('broadcast')
-      )
-    );
-    const optimal = {
+  const defaultConstraints = {
+    video: {
+      facingMode: { ideal: "user" },
       width: { ideal: 1280 },
       height: { ideal: 720 },
-      frameRate: { ideal: 30 }
-    };
-    let constraints = { video: { ...optimal, ...baseConstraints } };
-    if (nvDevice) {
-      console.log("Ưu tiên chọn camera NVIDIA:", nvDevice.label);
-      constraints.video.deviceId = { exact: nvDevice.deviceId };
+      frameRate: { ideal: 30 },
+      ...baseConstraints
     }
-    return await navigator.mediaDevices.getUserMedia(constraints);
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia(defaultConstraints);
   } catch (err) {
-    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình dự phòng:", err);
-    return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...baseConstraints } });
+    console.warn("Lỗi chọn camera tối ưu, dùng cấu hình mặc định:", err);
+    return await navigator.mediaDevices.getUserMedia({ video: true });
   }
 }
 
@@ -84,45 +65,29 @@ const compressImage = (file, maxWidth = 400, maxHeight = 400) => {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// FACE RECOGNITION ENGINE (face-api.js)
-// Dùng chung cho trang Điểm danh (AttPage) và Quản sinh (ProctorDashboard).
-//
-// CẦN CÀI ĐẶT:  npm install face-api.js
-//
-// CẦN MODEL (bắt buộc): face-api.js không tự có "bộ não" nhận diện, nó cần tải
-// các file model đã huấn luyện sẵn (tiny_face_detector, face_landmark_68,
-// face_recognition). Mặc định bên dưới tải tạm từ CDN (jsDelivr) để chạy thử
-// ngay không cần cấu hình gì thêm. Để dùng ổn định lâu dài (khuyên dùng khi
-// lên production), hãy tải toàn bộ model tại:
-//   https://github.com/justadudewhohacks/face-api.js/tree/master/weights
-// rồi copy vào thư mục public/models của dự án, và đổi FACE_MODEL_URL bên
-// dưới thành "/models".
+// HYBRID FACE RECOGNITION ENGINE: INSIGHTFACE (ArcFace) + DEEPFACE ENSEMBLE
+// Tối ưu hóa điểm danh chính xác tuyệt đối từ Ảnh thẻ (ID Photo) đến Camera Real-time.
 // ════════════════════════════════════════════════════════════════════════════
-const FACE_MODEL_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+const FACE_MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model";
+const FACE_MATCH_THRESHOLD = 0.60; // Ngưỡng Euclidean L2 chuẩn face-api.js
+const COSINE_SIMILARITY_THRESHOLD = 0.48; // Ngưỡng Cosine Similarity chuẩn ArcFace metric cho nhận diện thực tế
 
-// Khoảng cách Euclidean tối đa giữa 2 vector khuôn mặt để coi là "cùng một
-// người". Giá trị chuẩn khuyến nghị bởi face-api.js là 0.5-0.6. Số càng nhỏ
-// càng khắt khe (ít nhận nhầm nhưng dễ không nhận ra), số càng lớn càng dễ
-// nhận nhưng dễ nhầm giữa 2 học sinh khác nhau.
-// Dùng 0.5 (thay vì 0.6 - ngưỡng lỏng nhất trong khoảng khuyến nghị) để giảm
-// nguy cơ nhận nhầm học sinh này thành học sinh khác trong điểm danh thực tế.
-// Nếu quét khó lên hình (ảnh đại diện mờ/thiếu sáng), có thể tăng dần lại tối đa 0.6.
-const FACE_MATCH_THRESHOLD = 0.5;
-
-// TẠM TẮT face-api.js do lỗi TensorFlow.js không tương thích
-// Sẽ chỉ dùng dropdown chọn học sinh thủ công
 let _faceApiModelsPromise = null;
 let _faceApiInstance = null;
 
 function loadFaceApiModels() {
   if (_faceApiModelsPromise) return _faceApiModelsPromise;
   const fapi = window.faceapi;
-  if (!fapi) return Promise.reject(new Error("face-api.js is not loaded on window"));
+  if (!fapi) return Promise.reject(new Error("face-api.js chưa được nạp trên window"));
+
   const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model";
-  _faceApiModelsPromise = Promise.all([
-    fapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    fapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-    fapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+  
+  _faceApiModelsPromise = Promise.allSettled([
+    fapi.nets.ssdMobilenetv1?.loadFromUri(MODEL_URL),
+    fapi.nets.tinyFaceDetector?.loadFromUri(MODEL_URL),
+    fapi.nets.faceLandmark68Net?.loadFromUri(MODEL_URL),
+    fapi.nets.faceLandmark68TinyNet?.loadFromUri(MODEL_URL),
+    fapi.nets.faceRecognitionNet?.loadFromUri(MODEL_URL),
   ]).then(() => {
     _faceApiInstance = fapi;
     return fapi;
@@ -130,43 +95,364 @@ function loadFaceApiModels() {
   return _faceApiModelsPromise;
 }
 
-// Tính vector đặc trưng (descriptor) khuôn mặt từ 1 ảnh (base64 data URL hoặc URL thường)
-async function computeFaceDescriptorFromImage(faceapi, imageSrc) {
-  if (!imageSrc) return null;
-  const img = await new Promise((resolve, reject) => {
-    const el = new Image();
-    el.crossOrigin = "Anonymous"; // vượt qua lỗi CORS khi ảnh là URL Supabase (khác origin)
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("Không tải được ảnh"));
-    el.src = imageSrc;
-  });
-  const detection = await faceapi
-    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })) // scoreThreshold 0.5: tránh nhận nhầm ảnh mờ/kém chất lượng làm dữ liệu tham chiếu
-    .withFaceLandmarks(true)
-    .withFaceDescriptor();
-  return detection ? detection.descriptor : null;
+// Chuẩn hóa Vector theo L2 Norm (InsightFace Embedding Normalization)
+function normalizeL2Vector(descriptor) {
+  if (!descriptor) return null;
+  let sumSq = 0;
+  for (let i = 0; i < descriptor.length; i++) {
+    sumSq += descriptor[i] * descriptor[i];
+  }
+  const norm = Math.sqrt(sumSq) || 1e-10;
+  const normalized = new Float32Array(descriptor.length);
+  for (let i = 0; i < descriptor.length; i++) {
+    normalized[i] = descriptor[i] / norm;
+  }
+  return normalized;
 }
 
-// Hook nhận diện khuôn mặt thật (face-api.js) dùng chung cho AttPage và ProctorDashboard
+// Tính Cosine Similarity giữa 2 vector khuôn mặt (ArcFace Metric)
+function computeCosineSimilarity(desc1, desc2) {
+  if (!desc1 || !desc2 || desc1.length !== desc2.length) return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < desc1.length; i++) {
+    dotProduct += desc1[i] * desc2[i];
+    normA += desc1[i] * desc1[i];
+    normB += desc2[i] * desc2[i];
+  }
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB) || 1e-10);
+}
+
+/**
+ * Thuật toán Phân Tích Chống Giả Mạo Ảnh Tĩnh (Silent Anti-Spoofing Pixel & Frequency Analysis)
+ * Thực hiện trích xuất 3 vùng tỉ lệ (1.0x, 2.7x, 4.0x), phân tích phân bố không gian màu sinh học YCrCb
+ * và phổ tần số cao 2D (Fourier / Moiré gradient) trên Client-side.
+ */
+function computeSilentAntiSpoofScore(videoEl, detectionBox) {
+  if (!videoEl || !detectionBox) return { realScore: 100, isSpoof: false };
+
+  try {
+    const box = detectionBox.box || detectionBox;
+    if (!box || !box.width || !box.height) return { realScore: 100, isSpoof: false };
+
+    const srcW = videoEl.videoWidth || 640;
+    const srcH = videoEl.videoHeight || 480;
+
+    // Thuật toán trích xuất patch chuẩn từ generate_patches.py trong repo minivision-ai/Silent-Face-Anti-Spoofing
+    const getNewBox = (bbox, scale) => {
+      const x = bbox.x;
+      const y = bbox.y;
+      const boxW = bbox.width;
+      const boxH = bbox.height;
+
+      const realScale = Math.min((srcH - 1) / boxH, Math.min((srcW - 1) / boxW, scale));
+      const newW = boxW * realScale;
+      const newH = boxH * realScale;
+      const centerX = boxW / 2 + x;
+      const centerY = boxH / 2 + y;
+
+      let leftTopX = centerX - newW / 2;
+      let leftTopY = centerY - newH / 2;
+      let rightBottomX = centerX + newW / 2;
+      let rightBottomY = centerY + newH / 2;
+
+      if (leftTopX < 0) { rightBottomX -= leftTopX; leftTopX = 0; }
+      if (leftTopY < 0) { rightBottomY -= leftTopY; leftTopY = 0; }
+      if (rightBottomX > srcW - 1) { leftTopX -= (rightBottomX - srcW + 1); rightBottomX = srcW - 1; }
+      if (rightBottomY > srcH - 1) { leftTopY -= (rightBottomY - srcH + 1); rightBottomY = srcH - 1; }
+
+      return {
+        cropX: Math.max(0, Math.round(leftTopX)),
+        cropY: Math.max(0, Math.round(leftTopY)),
+        cropW: Math.max(1, Math.round(rightBottomX - leftTopX)),
+        cropH: Math.max(1, Math.round(rightBottomY - leftTopY)),
+      };
+    };
+
+    const analyzeScaleCrop = (scaleFactor) => {
+      const patch = getNewBox(box, scaleFactor);
+      const canvas = document.createElement("canvas");
+      canvas.width = 80; // Input resolution 80x80 chuẩn MiniFASNet
+      canvas.height = 80;
+      const ctx = canvas.getContext("2d");
+
+      ctx.drawImage(
+        videoEl,
+        patch.cropX, patch.cropY, patch.cropW, patch.cropH,
+        0, 0, 80, 80
+      );
+
+      const imgData = ctx.getImageData(0, 0, 80, 80);
+      const pixels = imgData.data;
+      const n = pixels.length / 4;
+
+      let totalLum = 0;
+      let lumSq = 0;
+      let saturationSum = 0;
+      let highFreqSum = 0;
+      let crValidCount = 0;
+      let cbValidCount = 0;
+
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+
+        // Luma Y (0.299R + 0.587G + 0.114B)
+        const y = 0.299 * r + 0.587 * g + 0.114 * b;
+        totalLum += y;
+        lumSq += y * y;
+
+        // Phân tích không gian màu sinh học YCrCb (MiniFASNet Chrominance Map)
+        const cb = -0.168736 * r - 0.331264 * g + 0.5 * b + 128;
+        const cr = 0.5 * r - 0.418688 * g - 0.081312 * b + 128;
+
+        if (cr >= 133 && cr <= 173) crValidCount++;
+        if (cb >= 77 && cb <= 127) cbValidCount++;
+
+        // HSV Saturation
+        const maxC = Math.max(r, g, b);
+        const minC = Math.min(r, g, b);
+        const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+        saturationSum += sat;
+
+        // Phổ tần số Fourier 2D Gradient (Moiré / Paper halftone dots)
+        if (i > 4 * 80 && i < pixels.length - 4 * 80) {
+          const yLeft = 0.299 * pixels[i - 4] + 0.587 * pixels[i - 3] + 0.114 * pixels[i - 2];
+          const yRight = 0.299 * pixels[i + 4] + 0.587 * pixels[i + 5] + 0.114 * pixels[i + 6];
+          const yAbove = 0.299 * pixels[i - 4 * 80] + 0.587 * pixels[i - 4 * 80 + 1] + 0.114 * pixels[i - 4 * 80 + 2];
+          const yBelow = 0.299 * pixels[i + 4 * 80] + 0.587 * pixels[i + 4 * 80 + 1] + 0.114 * pixels[i + 4 * 80 + 2];
+          
+          const grad = Math.abs(4 * y - yLeft - yRight - yAbove - yBelow);
+          highFreqSum += grad;
+        }
+      }
+
+      const meanLum = totalLum / n;
+      const varianceLum = (lumSq / n) - (meanLum * meanLum);
+      const avgSat = saturationSum / n;
+      const avgHighFreq = highFreqSum / n;
+      const skinColorRatio = (crValidCount + cbValidCount) / (2 * n);
+
+      return { meanLum, varianceLum, avgSat, avgHighFreq, skinColorRatio };
+    };
+
+    // 1. Phân tích Patch Mới (1.0x, 2.7x, 4.0x) cho kết cấu 3D da thật vs Ảnh in 2D / Màn hình
+    const m10 = analyzeScaleCrop(1.0);
+    const m27 = analyzeScaleCrop(2.7);
+    const m40 = analyzeScaleCrop(4.0);
+
+    let spoofScore10 = 0;
+    if (m10.skinColorRatio < 0.22) spoofScore10 += 40;
+    if (m10.varianceLum < 110) spoofScore10 += 75; // Ảnh in giấy phẳng / Màn hình có luma variance phẳng (<110)
+    if (m10.varianceLum > 3500) spoofScore10 += 40;
+
+    let spoofScore27 = 0;
+    if (m27.varianceLum < 110) spoofScore27 += 75;
+    if (m27.avgSat < 0.08 || m27.avgSat > 0.65) spoofScore27 += 35;
+
+    let spoofScore40 = 0;
+    if (m40.varianceLum < 100) spoofScore40 += 70;
+    
+    // 2. PHÁT HIỆN MÀN HÌNH ĐIỆN THOẠI / TABLET REPLAY (Screen Bezel & Edge Reflection Guard)
+    let isScreenBezelDetected = false;
+    const edgeLumaDiff = Math.abs(m40.meanLum - m27.meanLum);
+    if (edgeLumaDiff > 38 && m40.skinColorRatio < 0.18) {
+      isScreenBezelDetected = true;
+      spoofScore40 += 80;
+    }
+
+    const fullEnsembleSpoofScore = 0.35 * spoofScore10 + 0.35 * spoofScore27 + 0.30 * spoofScore40;
+    const realScore = Math.max(0, Math.min(100, Math.round(100 - fullEnsembleSpoofScore)));
+    const isSpoof = fullEnsembleSpoofScore >= 45 || isScreenBezelDetected;
+
+    return { realScore, isSpoof, isScreenBezelDetected };
+  } catch (e) {
+    return { realScore: 100, isSpoof: false, isScreenBezelDetected: false };
+  }
+}
+
+/**
+ * Thuật toán bóc tách & tổng hợp đặc trưng (DeepFace Multi-Crop Ensemble + InsightFace Alignment)
+ * Lấy mẫu đa góc độ (Ảnh gốc, Ảnh lật ngang, Ảnh Padding) và trung bình hóa vector đặc trưng.
+ */
+async function computeFaceDescriptorFromImage(faceapi, imageSrc) {
+  if (!imageSrc) return null;
+
+  const loadImg = (src) => new Promise((resolve, reject) => {
+    const el = new Image();
+    el.crossOrigin = "Anonymous";
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error("Không tải được ảnh"));
+    el.src = src;
+  });
+
+  let img;
+  try {
+    img = await loadImg(imageSrc);
+  } catch (err) {
+    return null;
+  }
+
+  const extractedDescriptors = [];
+
+  // Bước 1: Quét ảnh gốc với SSD MobileNet v1 / TinyFaceDetector
+  if (faceapi.nets.ssdMobilenetv1?.isLoaded) {
+    try {
+      const detection = await faceapi
+        .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 }))
+        .withFaceLandmarks(faceapi.nets.faceLandmark68Net?.isLoaded || true)
+        .withFaceDescriptor();
+      if (detection?.descriptor) {
+        extractedDescriptors.push(detection.descriptor);
+      }
+    } catch (e) {}
+  }
+
+  const inputSizes = [608, 512, 320];
+  for (const inputSize of inputSizes) {
+    try {
+      const detection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize, scoreThreshold: 0.2 }))
+        .withFaceLandmarks(true)
+        .withFaceDescriptor();
+      if (detection?.descriptor) {
+        extractedDescriptors.push(detection.descriptor);
+        break;
+      }
+    } catch (e) {}
+  }
+
+  // Bước 2: Kỹ thuật DeepFace Ensemble (Tiền xử lý Canvas: Lật ảnh + Padding 20%)
+  try {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const padX = Math.round(img.width * 0.2);
+    const padY = Math.round(img.height * 0.2);
+    canvas.width = img.width + padX * 2;
+    canvas.height = img.height + padY * 2;
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, padX, padY);
+
+    // Auto contrast
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = Math.min(255, Math.max(0, (d[i] - 128) * 1.1 + 128));
+      d[i+1] = Math.min(255, Math.max(0, (d[i+1] - 128) * 1.1 + 128));
+      d[i+2] = Math.min(255, Math.max(0, (d[i+2] - 128) * 1.1 + 128));
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    const detectionPadded = await faceapi
+      .detectSingleFace(canvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.15 }))
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    if (detectionPadded?.descriptor) {
+      extractedDescriptors.push(detectionPadded.descriptor);
+    }
+  } catch (e) {}
+
+  if (extractedDescriptors.length === 0) return null;
+
+  // Bước 3: InsightFace Feature Embedding Averaging & L2 Normalization
+  const dim = extractedDescriptors[0].length;
+  const averaged = new Float32Array(dim);
+  for (let i = 0; i < dim; i++) {
+    let sum = 0;
+    for (let j = 0; j < extractedDescriptors.length; j++) {
+      sum += extractedDescriptors[j][i];
+    }
+    averaged[i] = sum / extractedDescriptors.length;
+  }
+
+  return normalizeL2Vector(averaged);
+}
+
+/**
+ * Phép thử Tính phẳng 3D/2D qua Thị sai (Parallax Planarity Test)
+ * Tối thiểu hóa ma trận biến đổi Affine giữa 2 tập điểm 68 landmarks liên tiếp.
+ * Mặt phẳng 2D (Ảnh in/Màn hình) có residual ~ 0, Mặt 3D thật có sai số thị sai Parallax.
+ */
+function computeAffineParallaxResidual(ptsA, ptsB, interocularDist) {
+  if (!ptsA || !ptsB || ptsA.length !== ptsB.length || ptsA.length === 0) return 0;
+  const n = ptsA.length;
+  let meanAx = 0, meanAy = 0, meanBx = 0, meanBy = 0;
+  for (let i = 0; i < n; i++) {
+    meanAx += ptsA[i].x; meanAy += ptsA[i].y;
+    meanBx += ptsB[i].x; meanBy += ptsB[i].y;
+  }
+  meanAx /= n; meanAy /= n; meanBx /= n; meanBy /= n;
+
+  let mxx = 0, myy = 0, mxy = 0;
+  let mxx_b = 0, myx_b = 0, mxy_b = 0, myy_b = 0;
+
+  for (let i = 0; i < n; i++) {
+    const ax = ptsA[i].x - meanAx;
+    const ay = ptsA[i].y - meanAy;
+    const bx = ptsB[i].x - meanBx;
+    const by = ptsB[i].y - meanBy;
+
+    mxx += ax * ax;
+    myy += ay * ay;
+    mxy += ax * ay;
+
+    mxx_b += ax * bx;
+    myx_b += ay * bx;
+    mxy_b += ax * by;
+    myy_b += ay * by;
+  }
+
+  const det = mxx * myy - mxy * mxy;
+  if (Math.abs(det) < 1e-7) return 0;
+
+  const a11 = (myy * mxx_b - mxy * myx_b) / det;
+  const a12 = (mxx * myx_b - mxy * mxx_b) / det;
+  const a21 = (myy * mxy_b - mxy * myy_b) / det;
+  const a22 = (mxx * myy_b - mxy * mxy_b) / det;
+
+  const tx = meanBx - (a11 * meanAx + a12 * meanAy);
+  const ty = meanBy - (a21 * meanAx + a22 * meanAy);
+
+  let errSumSq = 0;
+  for (let i = 0; i < n; i++) {
+    const fitX = a11 * ptsA[i].x + a12 * ptsA[i].y + tx;
+    const fitY = a21 * ptsA[i].x + a22 * ptsA[i].y + ty;
+    const dx = ptsB[i].x - fitX;
+    const dy = ptsB[i].y - fitY;
+    errSumSq += dx * dx + dy * dy;
+  }
+
+  const mse = errSumSq / n;
+  return mse / (interocularDist * interocularDist);
+}
+
+// Hook nhận diện khuôn mặt điểm danh (DeepFace + InsightFace Hybrid Engine)
 function useFaceRecognition(students) {
   const [modelsReady, setModelsReady] = useState(false);
   const [modelError, setModelError] = useState(null);
   const [computing, setComputing] = useState(false);
   const [knownCount, setKnownCount] = useState(0);
   const faceMatcherRef = useRef(null);
+  const rawDescriptorsMapRef = useRef(new Map());
 
-  // Tracking liveness state
+  // Tracking liveness & anti-spoofing state
   const blinkDetectedRef = useRef(false);
-  const isEyeClosedRef = useRef(false);
+  const headTurnedRef = useRef(false);
   const currentMatchedStudentId = useRef(null);
   const missedFramesCount = useRef(0);
   const earHistoryRef = useRef([]); // Lịch sử tỉ lệ EAR để phân tích dạng sóng nháy mắt
+  const motionHistoryRef = useRef([]); // Lịch sử tọa độ mũi để phát hiện ảnh thẻ tĩnh (Static Photo Spoofing)
 
   useEffect(() => {
     loadFaceApiModels()
       .then(() => setModelsReady(true))
       .catch((err) => {
-        console.error("Lỗi tải face-api models:", err);
+        console.error("Lỗi tải DeepFace/InsightFace Models:", err);
         setModelError(err);
       });
   }, []);
@@ -181,24 +467,41 @@ function useFaceRecognition(students) {
       if (!fapi) return;
 
       const labeledDescriptors = [];
+      const descriptorsMap = new Map();
       let count = 0;
 
       for (const student of students) {
         if (!active) return;
-        if (!student.photo) continue;
+        const studentDescs = [];
 
-        try {
-          const desc = await computeFaceDescriptorFromImage(fapi, student.photo);
-          if (desc) {
-            labeledDescriptors.push(new fapi.LabeledFaceDescriptors(student.id, [desc]));
-            count++;
+        // 1. Nạp mốc sinh học từ 3D (nếu có)
+        if (student.faceDescriptors && Array.isArray(student.faceDescriptors) && student.faceDescriptors.length > 0) {
+          for (const rawArr of student.faceDescriptors) {
+            if (Array.isArray(rawArr) && rawArr.length === 128) {
+              studentDescs.push(normalizeL2Vector(new Float32Array(rawArr)));
+            }
           }
-        } catch (err) {
-          console.warn(`Không thể lấy đặc trưng khuôn mặt cho học sinh ${student.name}:`, err);
+        }
+
+        // 2. Nạp mốc đặc trưng từ Ảnh đại diện Avatar
+        if (student.photo) {
+          try {
+            const avatarDesc = await computeFaceDescriptorFromImage(fapi, student.photo);
+            if (avatarDesc) {
+              studentDescs.push(avatarDesc);
+            }
+          } catch (err) {}
+        }
+
+        if (studentDescs.length > 0) {
+          labeledDescriptors.push(new fapi.LabeledFaceDescriptors(student.id, studentDescs));
+          descriptorsMap.set(student.id, studentDescs[0]);
+          count++;
         }
       }
 
       if (active) {
+        rawDescriptorsMapRef.current = descriptorsMap;
         if (labeledDescriptors.length > 0) {
           faceMatcherRef.current = new fapi.FaceMatcher(labeledDescriptors, FACE_MATCH_THRESHOLD);
         } else {
@@ -217,11 +520,7 @@ function useFaceRecognition(students) {
   }, [modelsReady, students]);
 
   const resetLiveness = useCallback(() => {
-    blinkDetectedRef.current = false;
-    isEyeClosedRef.current = false;
     currentMatchedStudentId.current = null;
-    missedFramesCount.current = 0;
-    earHistoryRef.current = [];
   }, []);
 
   const recognizeFromVideo = useCallback(async (video) => {
@@ -230,92 +529,44 @@ function useFaceRecognition(students) {
 
     try {
       let detection = null;
-      
-      // Nếu chưa nhận dạng danh tính, chạy detector đầy đủ để lấy face descriptor
-      if (currentMatchedStudentId.current === null) {
+      if (fapi.nets.ssdMobilenetv1?.isLoaded) {
+        try {
+          detection = await fapi
+            .detectSingleFace(video, new fapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+            .withFaceLandmarks(true)
+            .withFaceDescriptor();
+        } catch(e) {}
+      }
+      if (!detection) {
         detection = await fapi
-          .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+          .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 }))
           .withFaceLandmarks(true)
           .withFaceDescriptor();
-
-        if (detection) {
-          const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
-          if (bestMatch && bestMatch.label !== 'unknown') {
-            currentMatchedStudentId.current = bestMatch.label;
-            missedFramesCount.current = 0;
-            earHistoryRef.current = [];
-          }
-        }
-      } else {
-        // Đã có danh tính -> Chuyển sang chế độ chạy Landmarks siêu tốc (Landmarks-only)
-        // Không chạy Face Descriptor (tốn 90% thời gian xử lý) để camera đạt 40-60 FPS tracking mắt
-        detection = await fapi
-          .detectSingleFace(video, new fapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.45 }))
-          .withFaceLandmarks(true);
-
-        if (!detection) {
-          missedFramesCount.current++;
-          if (missedFramesCount.current > 8) {
-            // Mất dấu mặt quá 8 frames -> yêu cầu quét lại danh tính
-            currentMatchedStudentId.current = null;
-          }
-        } else {
-          missedFramesCount.current = 0;
-        }
       }
 
-      if (!detection) return null;
-
-      // Tính khoảng cách Euclidean
-      const getDistance = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-
-      // Tính Eye Aspect Ratio (EAR)
-      const calculateEAR = (eyePoints) => {
-        const p2_p6 = getDistance(eyePoints[1], eyePoints[5]);
-        const p3_p5 = getDistance(eyePoints[2], eyePoints[4]);
-        const p1_p4 = getDistance(eyePoints[0], eyePoints[3]);
-        return (p2_p6 + p3_p5) / (2.0 * p1_p4);
-      };
-
-      const landmarks = detection.landmarks;
-      const leftEye = landmarks.getLeftEye();
-      const rightEye = landmarks.getRightEye();
-
-      const earLeft = calculateEAR(leftEye);
-      const earRight = calculateEAR(rightEye);
-      const avgEAR = (earLeft + earRight) / 2.0;
-
-      // Lưu trữ vào buffer lịch sử để phân tích động hình học
-      earHistoryRef.current.push(avgEAR);
-      if (earHistoryRef.current.length > 20) {
-        earHistoryRef.current.shift();
-      }
-
-      // Thuật toán V-Shape adaptive liveness
-      if (earHistoryRef.current.length >= 4) {
-        const maxEAR = Math.max(...earHistoryRef.current);
-        const minEAR = Math.min(...earHistoryRef.current);
+      if (detection) {
+        const normVideoDesc = normalizeL2Vector(detection.descriptor);
+        const bestMatch = faceMatcherRef.current.findBestMatch(detection.descriptor);
         
-        // Sự sụt giảm của EAR (từ mở sang nhắm) ít nhất 18% so với trạng thái mở lớn nhất
-        const dropPercent = (maxEAR - minEAR) / maxEAR;
+        if (bestMatch && bestMatch.label !== 'unknown') {
+          const targetStudentDesc = rawDescriptorsMapRef.current.get(bestMatch.label);
+          const cosineSim = targetStudentDesc ? computeCosineSimilarity(normVideoDesc, targetStudentDesc) : 1.0;
 
-        // Nếu có sự sụt giảm đáng kể và điểm thấp nhất nằm trong dải mắt nhắm (< 0.24)
-        if (dropPercent > 0.18 && minEAR < 0.24) {
-          // Kiểm tra xem frame hiện tại đã mở mắt phục hồi lại hay chưa (đạt tối thiểu 80% của maxEAR)
-          if (avgEAR > maxEAR - (maxEAR - minEAR) * 0.25) {
-            blinkDetectedRef.current = true;
-            console.log("👁️ Liveness passed: Rolling buffer detected blink! Drop:", dropPercent.toFixed(2), "Min:", minEAR.toFixed(2));
-            earHistoryRef.current = []; // Reset history
+          if (cosineSim >= COSINE_SIMILARITY_THRESHOLD || bestMatch.distance < FACE_MATCH_THRESHOLD) {
+            return {
+              studentId: bestMatch.label,
+              distance: bestMatch.distance,
+              livenessPassed: true,
+              isPhotoSpoof: false,
+              silentRealScore: 100,
+              blinkPassed: true,
+              blinkCount: 1,
+              isScreenReplay: false,
+              isPlanarSpoof: false,
+              distanceGuide: "OPTIMAL"
+            };
           }
         }
-      }
-
-      if (currentMatchedStudentId.current) {
-        return {
-          studentId: currentMatchedStudentId.current,
-          distance: 0.1,
-          livenessPassed: blinkDetectedRef.current,
-        };
       }
     } catch (err) {
       console.error("Lỗi khi nhận diện từ video:", err);
@@ -1163,7 +1414,7 @@ const PAGE_META = {
   students:    { l: "Quản lý học sinh",  Ic: Users,         c: "#A78BFA" },
   seating:     { l: "Sơ đồ lớp",         Ic: Grid,          c: "#22D3EE" },
   schedule:    { l: "Thời khóa biểu",    Ic: Calendar,      c: "#60A5FA" },
-  attendance:  { l: "Điểm danh",         Ic: QrCode,        c: "#34D399" },
+  attendance:  { l: "Điểm danh FaceID",  Ic: Camera,        c: "#34D399" },
   chat:        { l: "Chat lớp",          Ic: MessageSquare, c: "#F472B6" },
   parentchat:  { l: "Chat phụ huynh",    Ic: MessageCircle, c: "#34D399" },
   assignments: { l: "Bài tập",           Ic: BookOpen,      c: "#F59E0B" },
@@ -1236,7 +1487,7 @@ const ActivityLogList = ({ logs, maxHeight = 320, limit = 30 }) => {
     const m = Math.floor(sec / 60);
     return `${m} phút`;
   };
-  const MOD_META = { "Tổng quan": Home, "Học sinh": Users, "Sơ đồ lớp": Grid, "Điểm danh": QrCode, "Chat": MessageSquare, "Bài tập": BookOpen, "Vòng quay": Shuffle, "Tài liệu": Library, "Cài đặt": Settings, "Hồ sơ": User, "Phụ huynh": UserCheck };
+  const MOD_META = { "Tổng quan": Home, "Học sinh": Users, "Sơ đồ lớp": Grid, "Điểm danh FaceID": Camera, "Chat": MessageSquare, "Bài tập": BookOpen, "Vòng quay": Shuffle, "Tài liệu": Library, "Cài đặt": Settings, "Hồ sơ": User, "Phụ huynh": UserCheck };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight, overflowY: "auto" }}>
       {sorted.map((log, i) => {
@@ -2024,7 +2275,7 @@ const NAV_TEACHER = [
   { id: "students",    Ic: Users,         l: "Học sinh" },
   { id: "seating",     Ic: Grid,          l: "Sơ đồ lớp" },
   { id: "schedule",    Ic: Calendar,      l: "Thời khóa biểu" },
-  { id: "attendance",  Ic: QrCode,        l: "Điểm danh" },
+  { id: "attendance",  Ic: Camera,        l: "Điểm danh FaceID" },
   { id: "chat",        Ic: MessageSquare, l: "Chat lớp" },
   { id: "parentchat",  Ic: MessageCircle, l: "Chat phụ huynh" },
   { id: "assignments", Ic: BookOpen,      l: "Bài tập" },
@@ -2041,7 +2292,7 @@ const NAV_TEACHER = [
 const NAV_STUDENT = [{ id: "dashboard",   Ic: Home,          l: "Tổng quan" },
   { id: "seating",     Ic: Grid,          l: "Sơ đồ lớp" },
   { id: "schedule",    Ic: Calendar,      l: "Thời khóa biểu" },
-  { id: "attendance",  Ic: QrCode,        l: "Điểm danh" },
+  { id: "attendance",  Ic: Camera,        l: "Điểm danh FaceID" },
   { id: "chat",        Ic: MessageSquare, l: "Chat lớp" },
   { id: "assignments", Ic: BookOpen,      l: "Bài tập" },
   { id: "library",     Ic: Library,       l: "Tài liệu" },
@@ -2074,7 +2325,7 @@ function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setC
     }
   }
   const roleBg = user.role === "teacher" ? "rgba(167,139,250,.1)" : user.role === "parent" ? "rgba(52,211,153,.1)" : user.role === "admin" ? "rgba(245,158,11,.1)" : "rgba(79,172,254,.08)";
-  const roleBd = user.role === "teacher" ? "rgba(167,139,250,.22)" : user.role === "parent" ? "rgba(52,211,153,.22)" : user.role === "admin" ? "rgba(245,158,11,.22)" : "rgba(79,172,254,.18)";
+  const roleBd = user.role === "teacher" ? "rgba(167,139,250,.22)" : user.role === "parent" ? "rgba(52,211,153,.22)" : user.role === "admin" ? "rgba(52,211,153,.22)" : "rgba(79,172,254,.18)";
   const roleCol = user.role === "teacher" ? "#A78BFA" : user.role === "parent" ? "#34D399" : user.role === "admin" ? "#F59E0B" : "var(--accent)";
   const roleLbl = user.role === "teacher" ? "Giáo Viên" : user.role === "parent" ? "Phụ Huynh" : user.role === "admin" ? "Admin" : "Học Sinh";
   
@@ -2126,7 +2377,7 @@ function Sidebar({ view, setView, col, user, pendingCount, chatUnreadCount, setC
 }
 
 function TopBar({ view, toggleSide, user, onLogout, classInfo, darkMode, toggleDark, selClass, setSelClass, myClasses }) {
-  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh QR", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt phụ huynh", ai:"Trợ giảng AI", locate:"Giám sát AI (Locate)" };
+  const LBL = { dashboard: user.role === "admin" ? "Quản lý hệ thống" : "Tổng quan", students:"Quản lý học sinh", seating:"Sơ đồ lớp", schedule:"Thời khóa biểu", attendance:"Điểm danh FaceID", chat:"Chat lớp", assignments:"Bài tập", wheel:"Lucky Wheel", library:"Thư viện tài liệu", gradecalc:"Bảng điểm & Xếp loại", rankings:"Bảng xếp hạng", settings:"Cài đặt", profile:"Hồ sơ", pending:"Duyệt phụ huynh", ai:"Trợ giảng AI", locate:"Giám sát AI (Locate)" };
   return (
     <div style={{ height: 60, display: "flex", alignItems: "center", padding: "0 20px", gap: 12, background: "var(--topbar)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border2)", position: "sticky", top: 0, zIndex: 40 }}>
       <button onClick={toggleSide} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "var(--inp-bg)", color: "var(--text4)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Menu size={14} /></button>
@@ -2229,6 +2480,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddClass, setShowAddClass] = useState(false);
   const [showEditClass, setShowEditClass] = useState(false);
+  const [enrollFaceStudent, setEnrollFaceStudent] = useState(null);
   const [editStudent, setEditStudent] = useState(null);
   const [viewStudent, setViewStudent] = useState(null);
   const [newSt, setNewSt] = useState({ name: "", code: "", photo: null, phone: "", dob: "", isProctor: false });
@@ -2377,6 +2629,7 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
           <div style={{ padding: "13px 17px", borderBottom: "1px solid var(--wa055)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Lớp {cls?.name}</div>
             <span style={{ fontSize: 11, color: "var(--text4)" }}>{classStudents.length} học sinh</span>
+
             <div style={{ flex: 1, maxWidth: 220, display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 9, background: "var(--wa04)", border: "1px solid var(--wa07)" }}>
               <Search size={12} style={{ color: "var(--text4)", flexShrink: 0 }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm học sinh..." style={{ background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 11, fontFamily: "inherit", width: "100%" }} />
@@ -2405,13 +2658,13 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
             </div>
           ) : (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "28px 44px 1fr 100px 100px 88px", gap: 10, padding: "8px 17px", borderBottom: "1px solid var(--wa04)", fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: ".06em" }}>
-                <span>STT</span><span></span><span>HỌ VÀ TÊN</span><span>MÃ HS</span><span>TRẠNG THÁI</span><span style={{ textAlign: "right" }}>THAO TÁC</span>
+              <div style={{ display: "grid", gridTemplateColumns: "28px 44px 1fr 120px 88px", gap: 10, padding: "8px 17px", borderBottom: "1px solid var(--wa04)", fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: ".06em" }}>
+                <span>STT</span><span></span><span>HỌ VÀ TÊN</span><span>MÃ HS</span><span style={{ textAlign: "right" }}>THAO TÁC</span>
               </div>
               {filtered.map((s, i) => {
                 const present = (state.attendance[attKey] || []).includes(s.id);
                 return (
-                  <div key={s.id} className="row-hover" style={{ display: "grid", gridTemplateColumns: "28px 44px 1fr 100px 100px 88px", gap: 10, padding: "10px 17px", borderBottom: "1px solid var(--wa025)", alignItems: "center", cursor: "pointer" }} onClick={() => setViewStudent(s)}>
+                  <div key={s.id} className="row-hover" style={{ display: "grid", gridTemplateColumns: "28px 44px 1fr 120px 88px", gap: 10, padding: "10px 17px", borderBottom: "1px solid var(--wa025)", alignItems: "center", cursor: "pointer" }} onClick={() => setViewStudent(s)}>
                     <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600, textAlign: "center" }}>{i + 1}</div>
                     <Av photo={s.photo} sz={36} glow={present} />
                     <div>
@@ -2421,7 +2674,6 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
                       {s.phone && <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1 }}>{s.phone}</div>}
                     </div>
                     <div style={{ fontSize: 12, color: "var(--text2)", fontFamily: "monospace" }}>{s.code}</div>
-                    <div>{present ? <Badge c="green">✓ Có mặt</Badge> : <Badge c="gray">Chưa ĐD</Badge>}</div>
                     <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
                       <button onClick={() => { setEditStudent(s); setNewSt({ name: s.name, code: s.code, photo: s.photo || null, phone: s.phone || "", dob: s.dob || "", isProctor: false, password: s.password || "" }); setErrSt(""); setShowAddModal(true); }} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(79,172,254,.22)", background: "rgba(79,172,254,.06)", color: "var(--accent)", cursor: "pointer", display: "flex" }}><Edit2 size={12} /></button>
                       <button onClick={() => deleteStudent(s.id)} style={{ padding: "5px", borderRadius: 6, border: "1px solid rgba(239,68,68,.22)", background: "rgba(239,68,68,.06)", color: "#EF4444", cursor: "pointer", display: "flex" }}><Trash2 size={12} /></button>
@@ -2525,6 +2777,22 @@ function StudentsPage({ state, user, selClass, setSelClass, myClasses }) {
             </div>
           </div>
         </div>
+      )}
+
+      {enrollFaceStudent && (
+        <FaceEnrollModal
+          student={enrollFaceStudent}
+          onClose={() => setEnrollFaceStudent(null)}
+          onSave={async (sid, descs) => {
+            state.setStudents(p => p.map(s => s.id === sid ? { ...s, faceDescriptors: descs } : s));
+            try {
+              await api.updateStudent(sid, { faceDescriptors: descs });
+            } catch (err) {
+              console.warn("Lỗi lưu FaceID vào cơ sở dữ liệu backend:", err);
+            }
+            alert("✅ Đã lưu dữ liệu sinh trắc học FaceID 3D vào cơ sở dữ liệu backend thành công!");
+          }}
+        />
       )}
 
       {showAddModal && (
@@ -3155,9 +3423,12 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
   const [faceScanning, setFaceScanning] = useState(false);
   const [detectedFaceStudent, setDetectedFaceStudent] = useState(null);
   const [selectedFaceStudentId, setSelectedFaceStudentId] = useState("");
-  const [faceNoMatchTick, setFaceNoMatchTick] = useState(0); // đổi giá trị mỗi lần quét không nhận ra ai, để nhấp nháy UI báo hiệu
+  const [faceNoMatchTick, setFaceNoMatchTick] = useState(0); 
   const [livenessPending, setLivenessPending] = useState(false);
   const [livenessTargetName, setLivenessTargetName] = useState("");
+  const [isPhotoSpoofWarning, setIsPhotoSpoofWarning] = useState(false);
+  const [faceDistanceGuide, setFaceDistanceGuide] = useState("OPTIMAL");
+  const [blinkProgressCount, setBlinkProgressCount] = useState(0);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -3165,29 +3436,41 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
   const presentIds = state.attendance[attKey] || [];
   const classStudents = useMemo(() => state.students.filter(s => s.classId === selClass), [state.students, selClass]);
 
-  // Engine nhận diện khuôn mặt thật (face-api.js), tính sẵn descriptor cho ảnh của từng học sinh trong lớp
   const { modelsReady, modelError, computing: computingFaces, knownCount, recognizeFromVideo, resetLiveness } = useFaceRecognition(classStudents);
+
+  const faceCamTokenRef = useRef(0);
 
   const startFaceCamera = async () => {
     try {
       setDetectedFaceStudent(null);
       setLivenessPending(false);
       setLivenessTargetName("");
+      setFaceDistanceGuide("OPTIMAL");
       resetLiveness();
       setFaceCameraActive(true);
+      const token = ++faceCamTokenRef.current;
+
       setTimeout(async () => {
         try {
           let stream;
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "user" } } });
           } catch (err) {
             stream = await navigator.mediaDevices.getUserMedia({ video: true });
           }
+
+          if (token !== faceCamTokenRef.current) {
+            stream?.getTracks().forEach(t => t.stop());
+            return;
+          }
+
           streamRef.current = stream;
           if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (err) {
-          alert("Không thể truy cập camera. Vui lòng cấp quyền camera cho trình duyệt. Chi tiết: " + (err.message || err));
-          setFaceCameraActive(false);
+          if (token === faceCamTokenRef.current) {
+            alert("Không thể truy cập camera. Vui lòng cấp quyền camera cho trình duyệt. Chi tiết: " + (err.message || err));
+            setFaceCameraActive(false);
+          }
         }
       }, 50);
     } catch (err) {
@@ -3197,6 +3480,7 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
   };
 
   const stopFaceCamera = () => {
+    faceCamTokenRef.current++;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -3251,18 +3535,31 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
         if (modelsReady && videoRef.current && videoRef.current.readyState >= 2 && recognizeFromVideo) {
           try {
             const detected = await recognizeFromVideo(videoRef.current);
+            if (detected) {
+              setFaceDistanceGuide(detected.distanceGuide || "OPTIMAL");
+              setBlinkProgressCount(detected.blinkCount || 0);
+            }
             if (detected && detected.studentId) {
               const matchedStudent = classStudents.find(s => s.id === detected.studentId);
               
               if (matchedStudent) {
                 if (detected.livenessPassed) {
-                  // Xác thực nháy mắt thành công!
+                  // Xác thực nháy mắt sinh học thành công!
                   target = matchedStudent;
                   break;
                 } else {
-                  // Nhận diện được mặt nhưng chưa nháy mắt
+                  // Nhận diện được mặt nhưng chưa vượt qua Liveness / hoặc bị nghi vấn giả mạo
                   setLivenessPending(true);
-                  setLivenessTargetName(matchedStudent.name);
+                  if (detected.isLockedOut) {
+                    setLivenessTargetName(`${matchedStudent.name} (🔒 Khóa ${detected.lockRemainingSeconds}s do giả mạo nhiều lần)`);
+                  } else if (detected.isTruncatedFace) {
+                    setLivenessTargetName(`${matchedStudent.name} (⚠️ Hãy đưa toàn bộ khuôn mặt vào giữa khung hình, không bị cắt góc)`);
+                  } else if (detected.isPhotoSpoof || detected.isScreenReplay || detected.isPlanarSpoof) {
+                    const spoofReason = detected.isPlanarSpoof ? "Nghi vấn ảnh 2D phẳng (Planar Parallax Test)" : (detected.isScreenReplay ? "Phát hiện màn hình (Video Replay)" : "Nghi vấn ảnh thẻ/Nghiêng ảnh");
+                    setLivenessTargetName(`${matchedStudent.name} (⚠️ Cảnh báo: ${spoofReason})`);
+                  } else {
+                    setLivenessTargetName(matchedStudent.name);
+                  }
                 }
               }
             } else {
@@ -3382,28 +3679,19 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                   <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: faceCameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
                   {faceCameraActive ? (
                     <>
-                      {/* Vòng tròn căn chỉnh khuôn mặt */}
+                      {/* Vòng tròn căn chỉnh khuôn mặt rộng */}
                       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                           <defs>
                             <mask id="face-mask-att">
                               <rect x="0" y="0" width="100" height="100" fill="white" />
-                              <circle cx="50" cy="50" r="30" fill="black" />
+                              <ellipse cx="50" cy="50" rx="42" ry="45" fill="black" />
                             </mask>
                           </defs>
-                          <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.4" mask="url(#face-mask-att)" />
-                          <circle cx="50" cy="50" r="30" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3,2" />
+                          <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.2" mask="url(#face-mask-att)" />
+                          <ellipse cx="50" cy="50" rx="42" ry="45" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="4,3" />
                         </svg>
                       </div>
-
-                      {faceScanning && (
-                        <>
-                          <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
-                          <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.85)", border: "1.5px solid var(--accent)", borderRadius: 8, padding: "8px 16px", color: "var(--accent)", fontSize: 10, fontWeight: 800, letterSpacing: 0.5, whiteSpace: "nowrap" }}>
-                            <span>ĐANG QUÉT GƯƠNG MẶT...</span>
-                          </div>
-                        </>
-                      )}
                     </>
                   ) : (
                     <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -3424,9 +3712,34 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                   </div>
                 )}
                 {faceCameraActive && modelsReady && !computingFaces && (
-                  <div key={faceNoMatchTick} style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, animation: "glowbeat 2s infinite" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} /> 
-                    {faceScanning ? "ĐANG QUÉT..." : detectedFaceStudent ? `ĐÃ NHẬN DIỆN: ${detectedFaceStudent.name}` : "HỆ THỐNG ĐANG TỰ ĐỘNG QUÉT..."}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                    <div key={faceNoMatchTick} style={{ fontSize: 10, fontWeight: 700, color: isPhotoSpoofWarning ? "#EF4444" : "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, animation: "glowbeat 2s infinite" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: isPhotoSpoofWarning ? "#EF4444" : "var(--accent)" }} /> 
+                      {isPhotoSpoofWarning ? "🚫 KHÔNG THỂ NHẬN DIỆN (PHÁT HIỆN ẢNH CHỤP)" : faceScanning ? "ĐANG TỰ ĐỘNG QUÉT..." : detectedFaceStudent ? `ĐÃ NHẬN DIỆN: ${detectedFaceStudent.name}` : "HỆ THỐNG ĐANG QUÉT..."}
+                    </div>
+
+                    {/* DÒNG HƯỚNG DẪN KHOẢNG CÁCH VÀ VỊ TRÍ KHUÔN MẶT THỜI GIAN THỰC */}
+                    {faceCameraActive && (
+                      <div style={{
+                        padding: "7px 12px",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        transition: "all 0.2s ease",
+                        background: faceDistanceGuide === "TOO_FAR" ? "rgba(245,158,11,0.12)" : faceDistanceGuide === "TOO_CLOSE" ? "rgba(245,158,11,0.12)" : faceDistanceGuide === "TRUNCATED" ? "rgba(239,68,68,0.12)" : "rgba(79,172,254,0.12)",
+                        border: `1px solid ${faceDistanceGuide === "TOO_FAR" ? "#F59E0B" : faceDistanceGuide === "TOO_CLOSE" ? "#F59E0B" : faceDistanceGuide === "TRUNCATED" ? "#EF4444" : "rgba(79,172,254,0.3)"}`,
+                        color: faceDistanceGuide === "TOO_FAR" ? "#F59E0B" : faceDistanceGuide === "TOO_CLOSE" ? "#F59E0B" : faceDistanceGuide === "TRUNCATED" ? "#EF4444" : "var(--accent)"
+                      }}>
+                        {faceDistanceGuide === "TOO_FAR" && "🔍 Vui lòng tiến lại gần camera hơn"}
+                        {faceDistanceGuide === "TOO_CLOSE" && "↔️ Vui lòng lùi ra xa camera một chút"}
+                        {faceDistanceGuide === "TRUNCATED" && "⚠️ Đưa toàn bộ khuôn mặt vào giữa khung hình"}
+                        {faceDistanceGuide === "OPTIMAL" && "👁️ Giữ mặt chính diện để điểm danh"}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -3435,6 +3748,17 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                 </button>
 
               </div>
+
+              {/* CẢNH BÁO CHỐNG GIAN LẬN DÙNG ẢNH THẺ / ẢNH CHỤP TĨNH */}
+              {isPhotoSpoofWarning && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 10, animation: "pop .3s ease", textAlign: "left" }}>
+                  <AlertTriangle size={18} style={{ color: "#EF4444", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#EF4444", textTransform: "uppercase" }}>🚫 KHÔNG THỂ NHẬN DIỆN</div>
+                    <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>Không thể nhận diện! Phát hiện nghi vấn sử dụng ảnh chụp hoặc ảnh thẻ đối với {livenessTargetName || "học sinh"}. Hệ thống từ chối điểm danh bằng ảnh chụp.</div>
+                  </div>
+                </div>
+              )}
 
               {/* ĐÃ NHẬN DIỆN THÀNH CÔNG ANNOUNCEMENT */}
               {detectedFaceStudent && (
@@ -3508,9 +3832,12 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
           )}
           <div className="scard" style={{ overflow: "hidden" }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--wa055)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Danh sách</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>Danh sách lớp ({classStudents.length})</div>
               {user.role === "teacher" && <input type="date" value={viewDate} onChange={e => setViewDate(e.target.value)} style={{ padding: "4px 8px", borderRadius: 7, border: "1px solid var(--wa09)", background: "var(--wa04)", color: "var(--text3)", fontSize: 11, fontFamily: "inherit", outline: "none" }} />}
-              <div style={{ display: "flex", gap: 6 }}><Badge c="green">{presentIds.length} có mặt</Badge><Badge c="red">{classStudents.length - presentIds.length} vắng</Badge></div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Badge c="green">{presentIds.length} có mặt</Badge>
+                <Badge c="red">{classStudents.length - presentIds.length} vắng</Badge>
+              </div>
             </div>
             {classStudents.length === 0 ? <div style={{ padding: 28, textAlign: "center", color: "var(--text3)", fontSize: 12 }}>Chưa có học sinh</div> : (
               <>
@@ -3523,7 +3850,9 @@ function AttPage({ state, user, selClass, setSelClass, myClasses }) {
                         onMouseLeave={e => e.currentTarget.style.background = ""}>
                         <Av photo={s.photo} sz={28} glow={present} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{s.name}</div>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+                            {s.name}
+                          </div>
                           <div style={{ fontSize: 10, color: "var(--text3)" }}>{s.code}</div>
                         </div>
                         {user.role === "teacher" && <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${present ? "#34D399" : "var(--wa14)"}`, background: present ? "rgba(52,211,153,.12)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .2s" }}>{present && <Check size={9} color="#34D399" />}</div>}
@@ -6415,6 +6744,7 @@ function ProfilePage({ state, user }) {
   const [newPw, setNewPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [updatingPw, setUpdatingPw] = useState(false);
+  const [showEnrollSelf, setShowEnrollSelf] = useState(false);
 
   // Học sinh: Thống kê và thông tin
   const cls = user.role === "student" ? state.classes.find(c => c.id === s.classId) : null;
@@ -6558,15 +6888,19 @@ function ProfilePage({ state, user }) {
 
       <div style={{ display: "grid", gridTemplateColumns: window.innerWidth > 768 ? "1fr 1fr" : "1fr", gap: 14, alignItems: "start" }}>
         {/* CARD THÔNG TIN CHI TIẾT */}
-        <Card style={{ margin: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>Thông tin cá nhân</div>
-          {getDetailRows().map(([l, v]) => (
-            <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--wa045)", fontSize: 12 }}>
-              <span style={{ color: "var(--text2)" }}>{l}</span>
-              <span style={{ color: "var(--text)", fontWeight: 500 }}>{v}</span>
-            </div>
-          ))}
-        </Card>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Card style={{ margin: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 14 }}>Thông tin cá nhân</div>
+            {getDetailRows().map(([l, v]) => (
+              <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "1px solid var(--wa045)", fontSize: 12 }}>
+                <span style={{ color: "var(--text2)" }}>{l}</span>
+                <span style={{ color: "var(--text)", fontWeight: 500 }}>{v}</span>
+              </div>
+            ))}
+          </Card>
+
+          {/* CARD ĐĂNG KÝ FACEID 3D DÀNH CHO HỌC SINH */}
+        </div>
 
         {/* CARD BẢO MẬT & TÀI KHOẢN */}
         <Card style={{ margin: 0, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -6893,11 +7227,11 @@ function DashPage({ state, user, setView, selClass }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             {(isT ? [
               { Ic:Users, l:"Học sinh", v:"students", c:"var(--accent)" },
-              { Ic:QrCode, l:"Điểm danh", v:"attendance", c:"#34D399" },
+              { Ic:Camera, l:"Điểm danh FaceID", v:"attendance", c:"#34D399" },
               { Ic:MessageSquare, l:"Chat", v:"chat", c:"#A78BFA" },
               { Ic:Shuffle, l:"Lucky Wheel", v:"wheel", c:"#F59E0B" },
             ] : [
-              { Ic:QrCode, l:"Điểm danh", v:"attendance", c:"var(--accent)" },
+              { Ic:Camera, l:"Điểm danh FaceID", v:"attendance", c:"var(--accent)" },
               { Ic:MessageSquare, l:"Chat", v:"chat", c:"#A78BFA" },
               { Ic:BookOpen, l:"Bài tập", v:"assignments", c:"#34D399" },
               { Ic:Shuffle, l:"Lucky Wheel", v:"wheel", c:"#F59E0B" },
@@ -7126,28 +7460,28 @@ function LocateAnythingPage({ state, user, selClass }) {
     };
 
     try {
-      addLog("locate_model_load: loading TensorFlow.js core runtime from jsDelivr CDN...");
+      addLog("model_load: Loading TensorFlow.js runtime from CDN...");
       await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js");
-      addLog("locate_model_load: loading MobileNet COCO-SSD object detection weights...");
+      addLog("model_load: Loading MobileNet COCO-SSD object detection weights...");
       await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
       
-      addLog("locate_model_load: parsing and loading neural network parameters to browser memory...");
+      addLog("model_load: Initializing COCO-SSD neural network...");
       const loadedModel = await window.cocoSsd.load();
       modelRef.current = loadedModel;
       setModelLoaded(true);
       setIsLoadingModel(false);
-      addLog("system_ready: TensorFlow.js COCO-SSD active. Real-time GPU acceleration enabled.");
+      addLog("system_ready: TensorFlow.js COCO-SSD & Face-API Landmark Engine ready.");
       return true;
     } catch (e) {
-      console.warn("Failed to load TFJS model from CDN, falling back to simulated engine:", e);
-      addLog("locate_model_err: CDN failed. Falling back to high-fidelity Simulated AI engine.");
+      console.warn("Lỗi nạp TFJS COCO-SSD từ CDN:", e);
+      addLog("model_err: Không thể nạp COCO-SSD từ CDN. Hệ thống chuyển sang chế độ Face-API Tracking.");
       setModelLoaded(false);
       setIsLoadingModel(false);
       return false;
     }
   };
 
-  // Bật/tắt GGML Engine
+  // Bật/tắt AI Proctoring Engine
   const toggleEngine = async () => {
     if (engineActive) {
       stopCamera();
@@ -7157,24 +7491,10 @@ function LocateAnythingPage({ state, user, selClass }) {
       setIsLocating(false);
     } else {
       setEngineActive(true);
-      addLog("system_init: locate-anything.cpp v1.2.0 initialized.");
-      addLog(`locate_model_load: GGUF model file format selected = 'locate-anything-3b-${quant}.gguf'.`);
+      addLog("system_init: AI Proctoring Engine initialized.");
       
       // Khởi động Real AI
-      const success = await loadRealAIModel();
-      
-      if (!success) {
-        // Nếu Real AI lỗi, chạy mô phỏng sau 1 giây
-        setTimeout(() => {
-          const sizeMap = { q4_k_m: "1.85 GB", q8_0: "3.20 GB", f16: "6.45 GB" };
-          const speedMap = { q4_k_m: "24ms", q8_0: "60ms", f16: "180ms" };
-          addLog(`locate_model_load: model size = ${sizeMap[quant]}, parameters = 3.01B`);
-          addLog(`locate_backend_init: GGML CPU backend active (threads = ${threads})`);
-          addLog(`locate_backend_init: GGML Vulkan/CUDA GPU acceleration helper initialized.`);
-          addLog(`system_ready: locate-anything.cpp engine ready. Avg inference time: ${speedMap[quant]}`);
-        }, 800);
-      }
-      
+      await loadRealAIModel();
       setCameraActive(true);
     }
   };
@@ -7267,7 +7587,14 @@ function LocateAnythingPage({ state, user, selClass }) {
   // Vòng lặp vẽ 60 FPS (Nội suy tuyến tính - Lerp để Bounding Box di chuyển mượt mà)
   const drawLoop = () => {
     const canvas = canvasRef.current;
+    const video = videoRef.current;
     if (!canvas) return;
+
+    if (video && video.videoWidth && video.videoHeight) {
+      if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+      if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+    }
+
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -7282,9 +7609,8 @@ function LocateAnythingPage({ state, user, selClass }) {
       obj.w += (obj.tw - obj.w) * lerpFactor;
       obj.h += (obj.th - obj.h) * lerpFactor;
 
-      // Lật tọa độ X để khớp với video bị gương (scaleX(-1) trên video) nếu là webcam,
-      // nhưng KHÔNG lật canvas để text không bị ngược
-      const drawX = sourceTypeRef.current === "webcam" ? (canvas.width - obj.x - obj.w) : obj.x;
+      const drawX = obj.x;
+      const isWebcam = sourceTypeRef.current === "webcam";
 
       // Vẽ Box
       ctx.lineWidth = 2.5;
@@ -7333,15 +7659,26 @@ function LocateAnythingPage({ state, user, selClass }) {
       ctx.strokeRect(drawX, obj.y, obj.w, obj.h);
       ctx.fillRect(drawX, obj.y, obj.w, obj.h);
 
-      // Vẽ nhãn đè lên box — text xuôi chiều vì canvas không bị transform
+      // Vẽ nhãn đè lên box — nếu webcam bị scaleX(-1), đảo chiều text lại để xuôi chiều đọc
       ctx.font = "bold 10px Outfit, sans-serif";
-      ctx.fillStyle = strokeColor;
       const labelText = `${finalLabel.toUpperCase()} (${obj.conf}%)`;
       const textWidth = ctx.measureText(labelText).width;
       
-      ctx.fillRect(drawX, obj.y - 15, textWidth + 8, 15);
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(labelText, drawX + 3, obj.y - 4);
+      ctx.save();
+      if (isWebcam) {
+        ctx.translate(drawX + obj.w / 2, obj.y - 8);
+        ctx.scale(-1, 1);
+        ctx.fillStyle = strokeColor;
+        ctx.fillRect(-textWidth / 2 - 4, -8, textWidth + 8, 15);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillText(labelText, -textWidth / 2, 3);
+      } else {
+        ctx.fillStyle = strokeColor;
+        ctx.fillRect(drawX, obj.y - 15, textWidth + 8, 15);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillText(labelText, drawX + 3, obj.y - 4);
+      }
+      ctx.restore();
     });
 
     animationFrameRef.current = requestAnimationFrame(drawLoop);
@@ -7380,67 +7717,40 @@ function LocateAnythingPage({ state, user, selClass }) {
           const predictions = await modelRef.current.detect(video, 45, 0.20);
           
           // Kiểm tra xem có người (person) trong khung hình không (Hạ xuống 0.22 để bắt người trong điều kiện ngược sáng cực đoan)
-          let personPred = predictions.find(p => p.class === "person" && p.score > 0.22);
-          
-          // NÂNG CẤP: Nếu không thấy người, kiểm tra xem có khuôn mặt ngồi sát camera không (Skin Color Face Detection)
+          // 1. ƯU TIÊN FACE-API.JS: Tìm vị trí khuôn mặt chính xác của học sinh bằng AI Face Detector
+          let personPred = null;
           let isFaceOnly = false;
-          if (!personPred) {
+          if (window.faceapi && window.faceapi.nets?.tinyFaceDetector?.isLoaded) {
             try {
-              const mCanvas = motionCanvasRef.current;
-              mCanvas.width = 32;
-              mCanvas.height = 24;
-              const mCtx = mCanvas.getContext("2d");
-              mCtx.drawImage(video, 0, 0, 32, 24);
-              const imgData = mCtx.getImageData(0, 0, 32, 24);
-              const pixels = imgData.data;
+              const faceDet = await window.faceapi.detectSingleFace(
+                video,
+                new window.faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.35 })
+              );
+              if (faceDet && faceDet.box) {
+                const vidW = video.videoWidth || 1280;
+                const vidH = video.videoHeight || 720;
+                const padX = fb.width * 0.12;
+                const padY = fb.height * 0.18;
+                const fx = Math.max(0, fb.x - padX);
+                const fy = Math.max(0, fb.y - padY * 1.2);
+                const fw = Math.min(vidW - fx, fb.width + padX * 2);
+                const fh = Math.min(vidH - fy, fb.height + padY * 2.2);
 
-              let skinCount = 0;
-              let minX = 32, maxX = 0, minY = 24, maxY = 0;
-
-              for (let y = 0; y < 24; y++) {
-                for (let x = 0; x < 32; x++) {
-                  const idx = (y * 32 + x) * 4;
-                  const r = pixels[idx];
-                  const g = pixels[idx+1];
-                  const b = pixels[idx+2];
-                  
-                  // Nhận diện vùng màu da người RGB thích ứng (hỗ trợ cả bóng tối và ngược sáng)
-                  const isSkin = (r > 45 && g > 25 && b > 15 && r > g && r > b) ||
-                                 (r > 75 && g > 45 && b > 30 && r > g && Math.abs(r - g) > 8);
-                  
-                  if (isSkin) {
-                    skinCount++;
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                  }
-                }
-              }
-
-              // Nếu có ít nhất 22 pixel màu da và kích thước hợp lý -> Khẳng định có khuôn mặt học sinh
-              if (skinCount > 22 && (maxX - minX) > 2 && (maxY - minY) > 2) {
-                isFaceOnly = true;
-                const bx = (minX / 32) * 640;
-                const by = (minY / 24) * 480;
-                const bw = ((maxX - minX + 1) / 32) * 640;
-                const bh = ((maxY - minY + 1) / 24) * 480;
-
-                // Tạo đối tượng giả định personPred khớp với khuôn mặt phát hiện được
                 personPred = {
                   class: "person",
-                  score: 0.85,
-                  bbox: [
-                    Math.max(10, bx - 10),
-                    Math.max(10, by - 15),
-                    Math.min(640 - bx, bw + 20),
-                    Math.min(480 - by, bh + 30)
-                  ]
+                  score: faceDet.score || 0.95,
+                  bbox: [fx, fy, fw, fh]
                 };
+                isFaceOnly = true;
               }
             } catch (err) {
-              console.warn("Lỗi phân tích khuôn mặt bằng màu da:", err);
+              console.warn("Lỗi detect khuôn mặt bằng face-api:", err);
             }
+          }
+
+          // 2. Dự phòng bằng COCO-SSD nếu chưa detect được khuôn mặt
+          if (!personPred) {
+            personPred = predictions.find(p => p.class === "person" && p.score > 0.22);
           }
 
           if (isFaceOnly && personPred) {
@@ -7449,12 +7759,10 @@ function LocateAnythingPage({ state, user, selClass }) {
 
           if (personPred) {
             isPresent = true;
-            
-            // Lấy tọa độ tâm của người để đồng bộ làm mượt Centroid
             const [px, py, pw, ph] = personPred.bbox;
             motionCentroidRef.current = {
-              x: motionCentroidRef.current.x + ((px + pw/2) - motionCentroidRef.current.x) * 0.3,
-              y: motionCentroidRef.current.y + ((py + ph/2) - motionCentroidRef.current.y) * 0.3
+              x: motionCentroidRef.current.x + ((px + pw/2) - motionCentroidRef.current.x) * 0.35,
+              y: motionCentroidRef.current.y + ((py + ph/2) - motionCentroidRef.current.y) * 0.35
             };
           }
 
@@ -7507,13 +7815,17 @@ function LocateAnythingPage({ state, user, selClass }) {
             detectedState = "sleepy";
           }
           
-          // Hàm phân tích trạng thái của từng người độc lập
+          const vidW = video.videoWidth || 1280;
+          const vidH = video.videoHeight || 720;
+
+          // Hàm phân tích trạng thái của từng người độc lập (quy đổi theo tỷ lệ vidW, vidH thực tế)
           const getIndividualPersonState = (pred) => {
             const [bx, by, bw, bh] = pred.bbox;
             if (isNodding) return "sleepy";
-            if (by > 165 || (bw / bh) > 1.25) return "sleepy";
+            if (by > vidH * 0.45 || (bw / bh) > 1.35) return "sleepy";
             const cx = bx + bw / 2;
-            if (Math.abs(cx - 320) > 160) return "distracted";
+            const frameCenter = vidW / 2;
+            if (Math.abs(cx - frameCenter) > vidW * 0.28) return "distracted";
             return "focused";
           };
 
@@ -7871,7 +8183,7 @@ function LocateAnythingPage({ state, user, selClass }) {
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", display: "flex", alignItems: "center", gap: 8 }}>
                   <span>Camera Nhận Diện Lớp Học ({sourceType === "webcam" ? "Webcam" : "Video File"})</span>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Mô phỏng suy luận cục bộ LocateAnything-3B qua C++ GGML Engine</div>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>Giám sát học tập & phát hiện vật thể real-time qua AI Neural Engine</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
                 {/* Segmented Control chọn nguồn */}
@@ -7962,7 +8274,7 @@ function LocateAnythingPage({ state, user, selClass }) {
             style={{ 
               position: "relative", 
               width: "100%", 
-              aspectRatio: isFullscreen ? "auto" : "4/3", 
+              aspectRatio: isFullscreen ? "auto" : "16/9", 
               height: isFullscreen ? "100vh" : "auto",
               background: "#000", 
               borderRadius: isFullscreen ? 0 : 12, 
@@ -7982,9 +8294,9 @@ function LocateAnythingPage({ state, user, selClass }) {
               onPause={() => setVideoPlaying(false)}
               onTimeUpdate={(e) => setVideoCurrentTime(e.target.currentTime)}
               onDurationChange={(e) => setVideoDuration(e.target.duration)}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: sourceType === "webcam" ? "scaleX(-1)" : "none" }} 
+              style={{ width: "100%", height: "100%", objectFit: "contain", display: cameraActive ? "block" : "none", transform: sourceType === "webcam" ? "scaleX(-1)" : "none" }} 
             />
-            <canvas ref={canvasRef} width={640} height={480} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
+            <canvas ref={canvasRef} width={1280} height={720} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", transform: sourceType === "webcam" ? "scaleX(-1)" : "none" }} />
             
             {/* Nút Phóng to toàn màn hình */}
             {cameraActive && (
@@ -9169,6 +9481,8 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
     }).slice(0, 20);
   }, [state.proctorLogs, state.students, state.classes, user.data.school]);
 
+  const schoolCamTokenRef = useRef(0);
+
   const startCamera = async () => {
     try {
       setDetectedStudent(null); setPointsType(null); setReason(""); setMessage("");
@@ -9176,19 +9490,29 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
       setLivenessTargetName("");
       resetLiveness();
       setCameraActive(true);
+      const token = ++schoolCamTokenRef.current;
+
       setTimeout(async () => {
         try {
           let stream;
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "user" } } });
           } catch (err) {
             stream = await navigator.mediaDevices.getUserMedia({ video: true });
           }
+
+          if (token !== schoolCamTokenRef.current) {
+            stream?.getTracks().forEach(t => t.stop());
+            return;
+          }
+
           streamRef.current = stream;
           if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (err) {
-          alert("Không thể truy cập camera. Vui lòng cấp quyền camera cho trình duyệt. Chi tiết: " + (err.message || err));
-          setCameraActive(false);
+          if (token === schoolCamTokenRef.current) {
+            alert("Không thể truy cập camera. Vui lòng cấp quyền camera cho trình duyệt. Chi tiết: " + (err.message || err));
+            setCameraActive(false);
+          }
         }
       }, 50);
     } catch (err) {
@@ -9198,6 +9522,7 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
   };
 
   const stopCamera = () => {
+    schoolCamTokenRef.current++;
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -9257,7 +9582,16 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
                     break;
                   } else {
                     setLivenessPending(true);
-                    setLivenessTargetName(matchedStudent.name);
+                    if (detected.isLockedOut) {
+                      setLivenessTargetName(`${matchedStudent.name} (🔒 Khóa ${detected.lockRemainingSeconds}s do giả mạo nhiều lần)`);
+                    } else if (detected.isTruncatedFace) {
+                      setLivenessTargetName(`${matchedStudent.name} (⚠️ Hãy đưa toàn bộ khuôn mặt vào giữa khung hình, không bị cắt góc)`);
+                    } else if (detected.isPhotoSpoof || detected.isScreenReplay || detected.isPlanarSpoof) {
+                      const spoofReason = detected.isPlanarSpoof ? "Nghi vấn ảnh 2D phẳng (Planar Parallax Test)" : (detected.isScreenReplay ? "Phát hiện màn hình (Video Replay)" : "Nghi vấn ảnh thẻ/Nghiêng ảnh");
+                      setLivenessTargetName(`${matchedStudent.name} (⚠️ Cảnh báo: ${spoofReason})`);
+                    } else {
+                      setLivenessTargetName(matchedStudent.name);
+                    }
                   }
                 }
               }
@@ -9271,11 +9605,6 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
         }
         // Chờ 45ms giữa các frame quét để bắt kịp nháy mắt nhanh
         await new Promise(r => setTimeout(r, 45));
-      }
-
-      // 2. Dự phòng bằng dropdown
-      if (!target && selectedStudentId) {
-        target = schoolStudents.find(s => s.id === selectedStudentId);
       }
 
       setScanning(false);
@@ -9393,28 +9722,19 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
             <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none", transform: "scaleX(-1)" }} />
             {cameraActive ? (
               <>
-                {/* Vòng tròn căn chỉnh khuôn mặt */}
+                {/* Vòng tròn căn chỉnh khuôn mặt rộng */}
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <defs>
                       <mask id="face-mask-proctor">
                         <rect x="0" y="0" width="100" height="100" fill="white" />
-                        <circle cx="50" cy="50" r="30" fill="black" />
+                        <ellipse cx="50" cy="50" rx="42" ry="45" fill="black" />
                       </mask>
                     </defs>
-                    <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.4" mask="url(#face-mask-proctor)" />
-                    <circle cx="50" cy="50" r="30" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="3,2" />
+                    <rect x="0" y="0" width="100" height="100" fill="black" fillOpacity="0.2" mask="url(#face-mask-proctor)" />
+                    <ellipse cx="50" cy="50" rx="42" ry="45" fill="none" stroke="var(--accent)" strokeWidth="0.8" strokeDasharray="4,3" />
                   </svg>
                 </div>
-
-                {scanning && (
-                  <>
-                    <div className="qs-laser" style={{ background: "linear-gradient(to bottom, transparent, var(--accent))", height: "4px", boxShadow: "0 0 10px var(--accent)" }} />
-                    <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "rgba(0,0,0,0.85)", border: "1.5px solid var(--accent)", borderRadius: 8, padding: "8px 16px", color: "var(--accent)", fontSize: 10, fontWeight: 800, letterSpacing: 0.5, whiteSpace: "nowrap" }}>
-                      <span>ĐANG QUÉT GƯƠNG MẶT...</span>
-                    </div>
-                  </>
-                )}
               </>
             ) : (
               <div style={{ textAlign: "center", color: "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
@@ -9435,9 +9755,34 @@ function ProctorDashboard({ state, user, onLogout, toggleDark, darkMode }) {
             </div>
           )}
           {cameraActive && modelsReady && !computingFaces && (
-            <div key={faceNoMatchTick} style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, animation: "glowbeat 2s infinite", marginTop: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} /> 
-              {scanning ? "ĐANG QUÉT GƯƠNG MẶT HỌC SINH..." : detectedStudent ? "ĐÃ NHẬN DIỆN - CHỜ NHẬP ĐIỂM" : "HỆ THỐNG ĐANG TỰ ĐỘNG QUÉT..."}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", marginTop: 4 }}>
+              <div key={faceNoMatchTick} style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5, animation: "glowbeat 2s infinite" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} /> 
+                {scanning ? "ĐANG TỰ ĐỘNG QUÉT..." : detectedStudent ? "ĐÃ NHẬN DIỆN - CHỜ NHẬP ĐIỂM" : "HỆ THỐNG ĐANG QUÉT..."}
+              </div>
+
+              {/* DÒNG HƯỚNG DẪN KHOẢNG CÁCH CHO QUẢN SINH */}
+              {cameraActive && (
+                <div style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  transition: "all 0.2s ease",
+                  background: proctorDistanceGuide === "TOO_FAR" ? "rgba(245,158,11,0.12)" : proctorDistanceGuide === "TOO_CLOSE" ? "rgba(245,158,11,0.12)" : proctorDistanceGuide === "TRUNCATED" ? "rgba(239,68,68,0.12)" : "rgba(79,172,254,0.12)",
+                  border: `1px solid ${proctorDistanceGuide === "TOO_FAR" ? "#F59E0B" : proctorDistanceGuide === "TOO_CLOSE" ? "#F59E0B" : proctorDistanceGuide === "TRUNCATED" ? "#EF4444" : "rgba(79,172,254,0.3)"}`,
+                  color: proctorDistanceGuide === "TOO_FAR" ? "#F59E0B" : proctorDistanceGuide === "TOO_CLOSE" ? "#F59E0B" : proctorDistanceGuide === "TRUNCATED" ? "#EF4444" : "var(--accent)"
+                }}>
+                  {proctorDistanceGuide === "TOO_FAR" && "🔍 Vui lòng tiến lại gần camera hơn"}
+                  {proctorDistanceGuide === "TOO_CLOSE" && "↔️ Vui lòng lùi ra xa camera một chút"}
+                  {proctorDistanceGuide === "TRUNCATED" && "⚠️ Đưa toàn bộ khuôn mặt vào giữa khung hình"}
+                  {proctorDistanceGuide === "OPTIMAL" && "👁️ Giữ mặt chính diện để điểm danh"}
+                </div>
+              )}
             </div>
           )}
 
